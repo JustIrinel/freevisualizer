@@ -13,6 +13,10 @@ import * as ui from './ui.js';
 import * as dialogs from './dialogs.js';
 import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
+import { aimRotation } from './aim.js';
+
+const round2 = (v) => Math.round(v * 100) / 100;
+const wrapDeg = (d) => { let v = ((d + 180) % 360 + 360) % 360 - 180; if (v === -180) v = 180; return Math.round(v * 10) / 10; };
 
 const MISSING_PROFILE = normalizeProfile({ id: '__missing', name: 'Profil lipsă', kind: 'par', channels: [{ type: 'dimmer' }] });
 
@@ -24,7 +28,7 @@ class App {
     this.states = new Map();
     this.undoStack = [];
     this.redoStack = [];
-    this.selectedId = null;
+    this.selectedIds = [];
     this.builtins = BUILTIN_PROFILES.map(normalizeProfile);
     this._profileCache = null;
     this.startedAt = performance.now();
@@ -32,16 +36,23 @@ class App {
     this.demoBpm = 126;
     this.recorder = new ClipRecorder(this);
 
-    this.vis.onSelect = (id) => this.select(id, { fromScene: true });
+    this.vis.onPick = (id, { toggle }) => {
+      if (toggle) { if (id) this.toggleSelect(id); }
+      else this.select(id);
+    };
+    this.vis.onMarquee = (ids, { add }) => this.setSelection(add ? [...this.selectedIds, ...ids] : ids);
     this.vis.onTransformStart = () => this.checkpoint();
-    this.vis.onTransform = (id, t) => {
-      const item = this.findItem(id);
-      if (!item) return;
-      item.position = t.position;
-      item.rotation = t.rotation;
-      ui.updateInspectorTransform(this, id);
+    this.vis.onTransform = (changes) => {
+      for (const t of changes) {
+        const item = this.findItem(t.id);
+        if (!item) continue;
+        item.position = t.position;
+        item.rotation = t.rotation;
+      }
+      ui.updateInspectorTransform(this);
     };
     this.vis.onTransformEnd = () => this.saveSoon();
+    this.vis.onGizmoInfo = (text) => ui.showGizmoInfo(text);
 
     // Presentation window (desktop app, 2nd monitor): no panels, follows the main window's project.
     this.presentMode = new URLSearchParams(location.search).has('present');
@@ -180,13 +191,13 @@ class App {
 
   _restore(json) {
     const camera = this.vis.getCamera();
-    const sel = this.selectedId;
+    const sel = this.selectedIds;
     this.project = normalizeProject({ ...JSON.parse(json), camera });
     this._profileCache = null;
     this._applySettings();
     this.vis.buildRoom(this.project.room);
     this._rebuildScene();
-    this.select(this.findItem(sel) ? sel : null);
+    this.setSelection(sel);
     ui.renderAll(this);
     this.saveSoon();
   }
@@ -250,13 +261,51 @@ class App {
     this.loadProject(make());
   }
 
-  // ------------------------------------------------------------------ selection & edits
-  select(id, { fromScene = false } = {}) {
-    this.selectedId = id && this.findItem(id) ? id : null;
-    if (!fromScene) this.vis.select(this.selectedId);
+  // ------------------------------------------------------------------ selection
+  /** The last selected object (shown in the inspector when only one is selected). */
+  get selectedId() {
+    return this.selectedIds[this.selectedIds.length - 1] || null;
+  }
+
+  setSelection(ids) {
+    const seen = new Set();
+    this.selectedIds = (ids || []).filter((id) => id && !seen.has(id) && seen.add(id) && this.findItem(id));
+    this.vis.setSelection(this.selectedIds);
     ui.renderSelection(this);
   }
 
+  select(id) {
+    this.setSelection(id ? [id] : []);
+  }
+
+  toggleSelect(id) {
+    if (this.selectedIds.includes(id)) this.setSelection(this.selectedIds.filter((x) => x !== id));
+    else this.setSelection([...this.selectedIds, id]);
+  }
+
+  /** Shift+click in a list: everything between the last selected item and `id`. */
+  selectRange(id, orderedIds) {
+    const anchor = this.selectedId;
+    const a = orderedIds.indexOf(anchor);
+    const b = orderedIds.indexOf(id);
+    if (a < 0 || b < 0) { this.select(id); return; }
+    const range = orderedIds.slice(Math.min(a, b), Math.max(a, b) + 1);
+    this.setSelection([...this.selectedIds.filter((x) => !range.includes(x)), ...(a <= b ? range : range.reverse())]);
+  }
+
+  selectAll() {
+    this.setSelection(this.project.fixtures.map((f) => f.id));
+  }
+
+  selectedItems() {
+    return this.selectedIds.map((id) => this.findItem(id)).filter(Boolean);
+  }
+
+  selectedFixtures() {
+    return this.selectedIds.filter((id) => this.isFixture(id)).map((id) => this.findItem(id));
+  }
+
+  // ------------------------------------------------------------------ edits
   addFixtures(list) {
     this.checkpoint();
     for (const f of list) {
@@ -265,62 +314,162 @@ class App {
     }
     this.saveSoon();
     ui.renderAll(this);
-    if (list.length) this.select(list[list.length - 1].id);
+    if (list.length) this.setSelection(list.map((f) => f.id));
   }
 
-  updateItem(id, patch, { rebuild = false, record = true } = {}) {
-    const item = this.findItem(id);
-    if (!item) return;
+  updateItem(id, patch, opts = {}) {
+    this.updateItems([id], () => patch, opts);
+  }
+
+  /** Apply `patchFor(item, index)` to several items with one undo step. */
+  updateItems(ids, patchFor, { rebuild = false, record = true, quiet = false } = {}) {
+    const items = ids.map((id) => this.findItem(id)).filter(Boolean);
+    if (!items.length) return;
     if (record) this.checkpoint();
-    Object.assign(item, patch);
-    const fixture = this.isFixture(id);
-    if (rebuild) {
-      if (fixture) this._addFixtureToScene(item);
-      else this.vis.addProp(item);
-    } else {
-      this.vis.updateTransform(item);
-      if (fixture) this.vis.refreshLabel(id);
-    }
-    if (this.selectedId === id) this.vis.select(id);
+    items.forEach((item, i) => {
+      const patch = patchFor(item, i);
+      if (!patch) return;
+      Object.assign(item, patch);
+      const fixture = this.isFixture(item.id);
+      if (rebuild) {
+        if (fixture) this._addFixtureToScene(item);
+        else this.vis.addProp(item);
+      } else {
+        this.vis.updateTransform(item);
+        if (fixture) this.vis.refreshLabel(item.id);
+      }
+    });
+    this.vis.setSelection(this.selectedIds);
     this.saveSoon();
-    ui.renderLists(this);
+    if (!quiet) ui.renderLists(this);
+    ui.updateInspectorTransform(this);
+  }
+
+  moveSelection(delta) {
+    this.updateItems(this.selectedIds, (it) => ({
+      position: {
+        x: round2(it.position.x + (delta.x || 0)),
+        y: round2(Math.max(0, it.position.y + (delta.y || 0))),
+        z: round2(it.position.z + (delta.z || 0)),
+      },
+    }));
+  }
+
+  rotateSelection(axis, deg) {
+    this.updateItems(this.selectedIds, (it) => ({ rotation: { ...it.rotation, [axis]: wrapDeg(it.rotation[axis] + deg) } }));
+  }
+
+  /** Point every selected fixture's beam at a world point. */
+  aimSelectionAt(point) {
+    const ids = this.selectedIds.filter((id) => this.isFixture(id));
+    if (!ids.length) return;
+    this.updateItems(ids, (it) => {
+      const from = this.vis.emitterOrigin(it.id) || it.position;
+      return { rotation: aimRotation(from, point) };
+    });
+    toast(ids.length > 1 ? `Am îndreptat ${ids.length} fixturi spre punctul ales.` : 'Fixtura bate acum spre punctul ales.');
+  }
+
+  /** Same value on one axis for all selected (taken from the last selected). */
+  alignSelection(axis) {
+    const ref = this.findItem(this.selectedId);
+    if (!ref) return;
+    this.updateItems(this.selectedIds, (it) => ({ position: { ...it.position, [axis]: ref.position[axis] } }));
+  }
+
+  /** Even spacing along an axis between the two outermost selected items. */
+  distributeSelection(axis) {
+    const items = this.selectedItems().sort((a, b) => a.position[axis] - b.position[axis]);
+    if (items.length < 3) { toast('Selectează cel puțin 3 elemente pentru distribuire.'); return; }
+    const min = items[0].position[axis];
+    const max = items[items.length - 1].position[axis];
+    const order = new Map(items.map((it, i) => [it.id, i]));
+    this.updateItems(items.map((it) => it.id), (it) => ({
+      position: { ...it.position, [axis]: round2(min + ((max - min) * order.get(it.id)) / (items.length - 1)) },
+    }));
+  }
+
+  /** Consecutive DMX addresses for the selected fixtures, left to right. */
+  readdressSelection(universe, start) {
+    const fixtures = this.selectedFixtures().sort((a, b) => a.position.x - b.position.x || a.position.z - b.position.z);
+    let u = universe;
+    let a = start;
+    const plan = new Map();
+    for (const f of fixtures) {
+      const ch = this.profile(f.profileId).channels.length;
+      if (a + ch - 1 > 512) { u += 1; a = 1; }
+      plan.set(f.id, { universe: u, address: a });
+      a += ch;
+    }
+    this.updateItems(fixtures.map((f) => f.id), (f) => plan.get(f.id));
+    toast(`Am re-adresat ${fixtures.length} fixturi începând cu ${universe}.${start}.`);
   }
 
   removeItem(id) {
-    if (!this.findItem(id)) return;
+    this.removeItems([id]);
+  }
+
+  removeItems(ids) {
+    const list = ids.filter((id) => this.findItem(id));
+    if (!list.length) return;
     this.checkpoint();
-    this.project.fixtures = this.project.fixtures.filter((f) => f.id !== id);
-    this.project.props = this.project.props.filter((p) => p.id !== id);
-    this.vis.removeObject(id);
-    this.runtimes.delete(id);
-    this.states.delete(id);
-    if (this.selectedId === id) this.select(null);
+    const gone = new Set(list);
+    this.project.fixtures = this.project.fixtures.filter((f) => !gone.has(f.id));
+    this.project.props = this.project.props.filter((p) => !gone.has(p.id));
+    for (const id of list) {
+      this.vis.removeObject(id);
+      this.runtimes.delete(id);
+      this.states.delete(id);
+    }
+    this.setSelection(this.selectedIds.filter((id) => !gone.has(id)));
     this.saveSoon();
     ui.renderAll(this);
   }
 
   duplicate(id) {
-    const item = this.findItem(id);
-    if (!item) return;
-    const copy = JSON.parse(JSON.stringify(item));
-    copy.position = { ...copy.position, x: copy.position.x + 0.5 };
-    if (this.isFixture(id)) {
-      copy.id = uid('fx');
-      const prof = this.profile(item.profileId);
-      copy.address = item.address + prof.channels.length;
-      if (copy.address + prof.channels.length - 1 > 512) { copy.universe += 1; copy.address = 1; }
-      copy.name = nextName(item.name, this.project.fixtures.map((f) => f.name));
-      this.addFixtures([copy]);
-    } else {
-      copy.id = uid('pr');
-      copy.name = nextName(item.name, this.project.props.map((p) => p.name));
-      this.checkpoint();
-      this.project.props.push(copy);
-      this.vis.addProp(copy);
-      this.saveSoon();
-      ui.renderAll(this);
-      this.select(copy.id);
+    this.duplicateMany([id]);
+  }
+
+  /** Copies sit 0.5 m to the right; fixtures get the next free addresses after the originals. */
+  duplicateMany(ids) {
+    const items = ids.map((id) => this.findItem(id)).filter(Boolean);
+    if (!items.length) return;
+    this.checkpoint();
+    const copies = [];
+    const fixtureNames = this.project.fixtures.map((f) => f.name);
+    const propNames = this.project.props.map((p) => p.name);
+    let nextAddr = null;
+    for (const item of items) {
+      const copy = JSON.parse(JSON.stringify(item));
+      copy.position = { ...copy.position, x: round2(copy.position.x + 0.5) };
+      if (this.isFixture(item.id)) {
+        copy.id = uid('fx');
+        const ch = this.profile(item.profileId).channels.length;
+        if (!nextAddr) {
+          const last = this.project.fixtures.filter((f) => f.universe === item.universe)
+            .reduce((m, f) => Math.max(m, f.address + this.profile(f.profileId).channels.length), 1);
+          nextAddr = { universe: item.universe, address: last };
+        }
+        if (nextAddr.address + ch - 1 > 512) { nextAddr = { universe: nextAddr.universe + 1, address: 1 }; }
+        copy.universe = nextAddr.universe;
+        copy.address = nextAddr.address;
+        nextAddr.address += ch;
+        copy.name = nextName(item.name, fixtureNames);
+        fixtureNames.push(copy.name);
+        this.project.fixtures.push(copy);
+        this._addFixtureToScene(copy);
+      } else {
+        copy.id = uid('pr');
+        copy.name = nextName(item.name, propNames);
+        propNames.push(copy.name);
+        this.project.props.push(copy);
+        this.vis.addProp(copy);
+      }
+      copies.push(copy.id);
     }
+    this.saveSoon();
+    ui.renderAll(this);
+    this.setSelection(copies);
   }
 
   addProp(type) {
@@ -380,11 +529,23 @@ class App {
       if (typing || document.getElementById('modal').open) return;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return; }
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); this.redo(); return; }
-      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); if (this.selectedId) this.duplicate(this.selectedId); return; }
+      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); this.duplicateMany(this.selectedIds); return; }
+      if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); this.selectAll(); return; }
       if (mod) return;
+      const fine = e.shiftKey;
+      const step = fine ? 0.05 : 0.25;
+      const turn = fine ? 5 : 15;
       switch (e.key) {
-        case 'Delete': case 'Backspace': if (this.selectedId) this.removeItem(this.selectedId); break;
-        case 'Escape': this.select(null); break;
+        case 'Delete': case 'Backspace': this.removeItems(this.selectedIds); break;
+        case 'Escape': this.vis.cancelAim(); this.select(null); break;
+        case 'ArrowLeft': this.moveSelection({ x: -step }); break;
+        case 'ArrowRight': this.moveSelection({ x: step }); break;
+        case 'ArrowUp': this.moveSelection({ z: -step }); break;
+        case 'ArrowDown': this.moveSelection({ z: step }); break;
+        case 'PageUp': this.moveSelection({ y: step }); break;
+        case 'PageDown': this.moveSelection({ y: -step }); break;
+        case '[': case '{': this.rotateSelection('y', -turn); break;
+        case ']': case '}': this.rotateSelection('y', turn); break;
         case 'w': case 'W': ui.setTransformMode(this, 'translate'); break;
         case 'e': case 'E': ui.setTransformMode(this, 'rotate'); break;
         case 'f': case 'F': this.vis.focusSelected(); break;

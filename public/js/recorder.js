@@ -154,7 +154,7 @@ export class ClipRecorder {
     recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
     // Prepare the scene: fixed resolution, no gizmos/labels, demo if asked.
-    const prev = { selected: app.selectedId, labels: vis.settings.showLabels, demo: app.dmx.useDemo, bpm: app.demoBpm, camera: vis.getCamera(), fov: vis.camera.fov };
+    const prev = { selected: [...app.selectedIds], labels: vis.settings.showLabels, demo: app.dmx.useDemo, bpm: app.demoBpm, camera: vis.getCamera(), fov: vis.camera.fov };
     // Narrow formats need a wider lens to show the same room.
     vis.camera.fov = opts.format === 'vertical' ? 72 : opts.format === 'square' ? 60 : prev.fov;
     app.select(null);
@@ -204,7 +204,7 @@ export class ClipRecorder {
     vis.applySettings();
     if (opts.demo) { app.demoBpm = prev.bpm; app.toggleDemo(prev.demo); }
     if (camPath) vis.setCamera(prev.camera);
-    if (prev.selected) app.select(prev.selected);
+    app.setSelection(prev.selected);
     if (audioCtx) audioCtx.close();
     this._hideBadge();
 

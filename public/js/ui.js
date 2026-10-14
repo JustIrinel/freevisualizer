@@ -69,8 +69,13 @@ export function bindStatic(app) {
   for (const [type, def] of Object.entries(PROP_TYPES)) pb.append(h('button', { onclick: () => app.addProp(type) }, def.label));
 }
 
+let rotateHintShown = false;
 export function setTransformMode(app, mode) {
   app.vis.setTransformMode(mode);
+  if (mode === 'rotate' && !rotateHintShown) {
+    rotateHintShown = true;
+    toast('Rotire: trage de cercuri – roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală. Mai simplu: sliderele din dreapta sau 🎯 Țintește.', 'info', 9000);
+  }
   document.querySelectorAll('[data-tmode]').forEach((b) => b.classList.toggle('active', b.dataset.tmode === mode));
 }
 
@@ -98,10 +103,29 @@ export function renderLists(app) {
 }
 
 export function renderSelection(app) {
-  document.querySelectorAll('.item[data-id]').forEach((el) => el.classList.toggle('selected', el.dataset.id === app.selectedId));
+  const set = new Set(app.selectedIds);
+  document.querySelectorAll('.item[data-id]').forEach((el) => el.classList.toggle('selected', set.has(el.dataset.id)));
   const sel = document.querySelector(`.item[data-id="${app.selectedId}"]`);
   if (sel) sel.scrollIntoView({ block: 'nearest' });
   renderInspector(app);
+}
+
+/** Click in a list: Ctrl/Cmd toggles, Shift selects a range, plain click selects one. */
+function listClick(app, id, e, order) {
+  if (e.ctrlKey || e.metaKey) app.toggleSelect(id);
+  else if (e.shiftKey) app.selectRange(id, order());
+  else app.select(id);
+}
+
+/** Live readout while dragging the gizmo. */
+export function showGizmoInfo(text) {
+  let el = document.getElementById('gizmoInfo');
+  if (!el) {
+    el = h('div', { id: 'gizmoInfo', class: 'gizmo-info hidden' });
+    document.getElementById('viewport').appendChild(el);
+  }
+  el.textContent = text || '';
+  el.classList.toggle('hidden', !text);
 }
 
 function renderFixtureList(app) {
@@ -123,10 +147,10 @@ function renderFixtureList(app) {
     shown++;
     const end = fixtureEnd(f, p);
     list.append(h('div', {
-      class: `item ${f.id === app.selectedId ? 'selected' : ''} ${conflicts.has(f.id) ? 'conflict' : ''}`,
+      class: `item ${app.selectedIds.includes(f.id) ? 'selected' : ''} ${conflicts.has(f.id) ? 'conflict' : ''}`,
       'data-id': f.id,
-      title: `${p.name}${conflicts.has(f.id) ? '\n⚠ Adrese suprapuse!' : ''}`,
-      onclick: () => app.select(f.id),
+      title: `${p.name}${conflicts.has(f.id) ? '\n⚠ Adrese suprapuse!' : ''}\nCtrl/Cmd+click: adaugă la selecție · Shift+click: interval`,
+      onclick: (e) => listClick(app, f.id, e, () => [...document.querySelectorAll('#fixtureList .item[data-id]')].map((x) => x.dataset.id)),
       ondblclick: () => app.vis.focusSelected(),
     },
     h('span', { class: 'swatch', 'data-swatch': f.id }),
@@ -148,7 +172,9 @@ function renderPropList(app) {
   list.innerHTML = '';
   for (const p of app.project.props) {
     list.append(h('div', {
-      class: `item ${p.id === app.selectedId ? 'selected' : ''}`, 'data-id': p.id, onclick: () => app.select(p.id),
+      class: `item ${app.selectedIds.includes(p.id) ? 'selected' : ''}`,
+      'data-id': p.id,
+      onclick: (e) => listClick(app, p.id, e, () => app.project.props.map((x) => x.id)),
     }, h('span', { class: 'name' }, p.name), h('span', { class: 'tag' }, (PROP_TYPES[p.type] || {}).label || p.type)));
   }
   if (!app.project.props.length) list.append(h('div', { class: 'muted small' }, 'Nimic adăugat.'));
@@ -206,25 +232,57 @@ function checkbox(value, onChange) {
 }
 
 // ------------------------------------------------------------------ inspector
-function xyzInputs(app, id, key, step) {
+function positionInputs(app, id) {
   const item = app.findItem(id);
-  const wrap = h('div', { class: 'xyz', 'data-xyz': key });
+  const names = { x: 'Stânga ↔ dreapta', y: 'Înălțime', z: 'Spate ↕ față' };
+  const wrap = h('div', { class: 'xyz', 'data-xyz': 'position' });
   for (const axis of ['x', 'y', 'z']) {
-    const input = numberInput(item[key][axis], (v) => app.updateItem(id, { [key]: { ...app.findItem(id)[key], [axis]: v } }), { step });
+    const input = numberInput(item.position[axis], (v) => app.updateItem(id, { position: { ...app.findItem(id).position, [axis]: v } }), { step: 0.05 });
     input.dataset.axis = axis;
-    wrap.append(h('label', {}, axis.toUpperCase(), input));
+    wrap.append(h('label', { title: names[axis] }, names[axis], input));
   }
   return wrap;
 }
 
-export function updateInspectorTransform(app, id) {
-  if (app.selectedId !== id) return;
-  const item = app.findItem(id);
-  for (const key of ['position', 'rotation']) {
-    document.querySelectorAll(`#inspector [data-xyz="${key}"] input`).forEach((input) => {
-      if (document.activeElement !== input) input.value = item[key][input.dataset.axis];
-    });
+const ROT_AXES = [
+  ['x', 'Înclinare față / spate', 'Apleacă fixtura înainte sau înapoi'],
+  ['y', 'Rotire stânga / dreapta', 'Rotește fixtura în jurul axei verticale'],
+  ['z', 'Înclinare laterală', 'Apleacă fixtura spre stânga sau spre dreapta'],
+];
+
+/** One slider per axis with a numeric field and ±15° buttons. */
+function rotationControls(app, id) {
+  const wrap = h('div', { class: 'rot-controls', 'data-xyz': 'rotation' });
+  for (const [axis, label, title] of ROT_AXES) {
+    const item = app.findItem(id);
+    const range = h('input', { type: 'range', min: -180, max: 180, step: 1, value: item.rotation[axis] });
+    const num = h('input', { type: 'number', min: -180, max: 180, step: 1, value: item.rotation[axis] });
+    range.dataset.axis = axis;
+    num.dataset.axis = axis;
+    const set = (v, record) => {
+      const val = Math.max(-180, Math.min(180, Number(v) || 0));
+      app.updateItem(id, { rotation: { ...app.findItem(id).rotation, [axis]: val } }, { record, quiet: !record });
+    };
+    range.addEventListener('pointerdown', () => app.checkpoint());
+    range.addEventListener('input', () => { num.value = range.value; set(range.value, false); });
+    range.addEventListener('change', () => app.saveSoon());
+    num.addEventListener('change', () => { range.value = num.value; set(num.value, true); });
+    const nudge = (d) => { const v = wrapDeg180(app.findItem(id).rotation[axis] + d); set(v, true); };
+    wrap.append(h('div', { class: 'rot-row', title },
+      h('div', { class: 'rot-label' }, label),
+      h('div', { class: 'rot-line' },
+        h('button', { class: 'icon', title: '−15°', onclick: () => nudge(-15) }, '−'),
+        range,
+        h('button', { class: 'icon', title: '+15°', onclick: () => nudge(15) }, '+'),
+        num, h('span', { class: 'muted small' }, '°'))));
   }
+  return wrap;
+}
+
+function wrapDeg180(d) {
+  let v = (((d + 180) % 360) + 360) % 360 - 180;
+  if (v === -180) v = 180;
+  return v;
 }
 
 const MOUNTS = [
@@ -233,6 +291,98 @@ const MOUNTS = [
   ['Spre public →', { x: 90, y: 0, z: 0 }],
   ['Spre scenă ←', { x: -90, y: 0, z: 0 }],
 ];
+
+function aimButton(app) {
+  return h('button', {
+    class: 'aim-btn',
+    title: 'Apasă, apoi dă click în scenă pe punctul spre care vrei să bată lumina (podea, perete, glob, ring…)',
+    onclick: () => {
+      toast('🎯 Dă click în scenă pe punctul spre care să bată lumina (Esc anulează).', 'info', 5000);
+      app.vis.startAim((point) => app.aimSelectionAt(point));
+    },
+  }, '🎯 Țintește un punct');
+}
+
+/** Position, rotation, mounting presets and aiming for one object. */
+function transformSection(app, item, isFixture) {
+  return [
+    h('h4', {}, 'Poziție (m)'),
+    positionInputs(app, item.id),
+    h('h4', {}, 'Orientare'),
+    isFixture ? h('div', { class: 'muted small' }, 'Săgeata galbenă din scenă arată încotro bate lumina.') : null,
+    rotationControls(app, item.id),
+    isFixture ? h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', {
+      onclick: () => app.updateItem(item.id, { rotation: { ...rot, y: app.findItem(item.id).rotation.y } }),
+    }, label))) : null,
+    isFixture ? aimButton(app) : null,
+  ];
+}
+
+export function updateInspectorTransform(app) {
+  if (app.selectedIds.length !== 1) return;
+  const item = app.findItem(app.selectedId);
+  if (!item) return;
+  for (const key of ['position', 'rotation']) {
+    document.querySelectorAll(`#inspector [data-xyz="${key}"] input`).forEach((input) => {
+      if (document.activeElement !== input) input.value = item[key][input.dataset.axis];
+    });
+  }
+}
+
+/** Several objects selected: actions that apply to all of them. */
+function renderGroupInspector(app, el) {
+  const items = app.selectedItems();
+  const fixtures = app.selectedFixtures();
+  const n = items.length;
+  const step = (label, delta) => h('button', { onclick: () => app.moveSelection(delta) }, label);
+  const universe = numberInput(fixtures[0] ? fixtures[0].universe : 1, () => {}, { min: 1, max: 32768, integer: true });
+  const start = numberInput(fixtures.length ? Math.min(...fixtures.map((f) => f.address)) : 1, () => {}, { min: 1, max: 512, integer: true });
+  const totalCh = fixtures.reduce((s, f) => s + app.profile(f.profileId).channels.length, 0);
+  el.append(
+    h('h3', {}, `${n} elemente selectate`),
+    h('div', { class: 'sub' }, fixtures.length ? `${fixtures.length} fixturi · ${totalCh} canale` : 'Elemente de scenă'),
+    h('div', { class: 'list group-list' }, items.map((it) => h('div', { class: 'item' },
+      h('span', { class: 'name' }, it.name),
+      app.isFixture(it.id) ? h('span', { class: 'meta' }, `U${it.universe} · ${it.address}`) : null,
+      h('button', { class: 'icon', title: 'Scoate din selecție', onclick: () => app.toggleSelect(it.id) }, '✕')))),
+    h('h4', {}, 'Mută tot grupul'),
+    h('div', { class: 'grid3' },
+      step('← X', { x: -0.25 }), step('↑ Sus', { y: 0.25 }), step('X →', { x: 0.25 }),
+      step('↑ Z (spate)', { z: -0.25 }), step('↓ Jos', { y: -0.25 }), step('Z (față) ↓', { z: 0.25 })),
+    h('div', { class: 'muted small' }, 'Sau trage de săgețile din scenă (W) / săgețile de la tastatură (Shift = pas fin).'),
+    h('h4', {}, 'Aliniază și distribuie'),
+    h('div', { class: 'grid2' },
+      h('button', { title: 'Toate la aceeași înălțime ca ultimul selectat', onclick: () => app.alignSelection('y') }, 'Aceeași înălțime'),
+      h('button', { title: 'Toate pe aceeași linie față/spate', onclick: () => app.alignSelection('z') }, 'Aceeași linie Z'),
+      h('button', { title: 'Toate pe aceeași linie stânga/dreapta', onclick: () => app.alignSelection('x') }, 'Aceeași linie X')),
+    h('div', { class: 'grid2' },
+      h('button', { onclick: () => app.distributeSelection('x') }, 'Distribuie egal pe X'),
+      h('button', { onclick: () => app.distributeSelection('z') }, 'Distribuie egal pe Z')),
+    h('h4', {}, 'Orientare'),
+    h('div', { class: 'grid2' },
+      h('button', { onclick: () => app.rotateSelection('y', -15) }, '⟲ Rotire −15°'),
+      h('button', { onclick: () => app.rotateSelection('y', 15) }, '⟳ Rotire +15°'),
+      h('button', { onclick: () => app.rotateSelection('x', -15) }, 'Înclinare −15°'),
+      h('button', { onclick: () => app.rotateSelection('x', 15) }, 'Înclinare +15°')),
+    fixtures.length ? h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', {
+      onclick: () => app.updateItems(fixtures.map((f) => f.id), (f) => ({ rotation: { ...rot, y: f.rotation.y } })),
+    }, label))) : null,
+    fixtures.length ? aimButton(app) : null,
+    fixtures.length ? h('h4', {}, 'Adrese DMX (de la stânga la dreapta)') : null,
+    fixtures.length ? h('div', { class: 'grid3' },
+      field('Univers', universe), field('Adresă start', start),
+      h('button', { style: { alignSelf: 'end' }, onclick: () => app.readdressSelection(Number(universe.value), Number(start.value)) }, 'Re-adresează')) : null,
+    fixtures.length ? h('button', { onclick: () => dialogs.changeProfileGroupDialog(app, fixtures) }, 'Schimbă profilul pentru toate…') : null,
+    fixtures.length ? h('h4', {}, 'Test') : null,
+    fixtures.length ? h('div', { class: 'grid2' },
+      h('button', { onclick: () => fixtures.forEach((f) => app.profile(f.profileId).channels.forEach((c, i) => app.dmx.setOverride(f.universe, f.address + i, locateValue(c)))) }, '💡 Găsește toate'),
+      h('button', { onclick: () => fixtures.forEach((f) => app.dmx.clearOverrides(f.universe, f.address, app.profile(f.profileId).channels.length)) }, 'Eliberează toate')) : null,
+    h('h4', {}, 'Acțiuni'),
+    h('div', { class: 'grid2' },
+      h('button', { onclick: () => app.duplicateMany(app.selectedIds) }, 'Duplică grupul'),
+      h('button', { class: 'danger', onclick: () => app.removeItems(app.selectedIds) }, `Șterge ${n}`)),
+  );
+}
 
 export function renderInspector(app) {
   const el = $('inspector');
@@ -243,9 +393,11 @@ export function renderInspector(app) {
   if (!item) {
     el.append(h('div', { class: 'inspector-empty' },
       h('p', {}, 'Selectează o fixtură sau un element (click în scenă sau în listă).'),
-      h('p', { class: 'small' }, 'Scurtături: W mută · E rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere')));
+      h('p', { class: 'small' }, 'Mai multe deodată: Ctrl/Cmd+click, sau Shift + trage cu mouse-ul un dreptunghi în scenă. Ctrl/Cmd+A selectează toate fixturile.'),
+      h('p', { class: 'small' }, 'Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere')));
     return;
   }
+  if (app.selectedIds.length > 1) { renderGroupInspector(app, el); return; }
   if (app.isFixture(id)) renderFixtureInspector(app, el, item);
   else renderPropInspector(app, el, item);
 }
@@ -266,11 +418,7 @@ function renderFixtureInspector(app, el, f) {
       h('div', { class: 'muted small' }, `Canale ${f.address}–${fixtureEnd(f, p)} în universul ${f.universe}`),
       conflicts.has(f.id) ? h('div', { class: 'warn-box' }, '⚠ Adresele se suprapun cu altă fixtură (sau depășesc 512).') : null,
       h('button', { onclick: () => dialogs.changeProfileDialog(app, f) }, 'Schimbă profilul…'),
-      h('h4', {}, 'Poziție (m)'),
-      xyzInputs(app, f.id, 'position', 0.05),
-      h('h4', {}, 'Rotație (°)'),
-      xyzInputs(app, f.id, 'rotation', 5),
-      h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', { onclick: () => app.updateItem(f.id, { rotation: { ...rot, y: f.rotation.y } }) }, label))),
+      ...transformSection(app, f, true),
       p.kind === 'moving' ? h('div', { class: 'grid2' },
         h('label', { class: 'inline' }, checkbox(f.invertPan, (v) => app.updateItem(f.id, { invertPan: v })), 'Inversează pan'),
         h('label', { class: 'inline' }, checkbox(f.invertTilt, (v) => app.updateItem(f.id, { invertTilt: v })), 'Inversează tilt')) : null,
@@ -345,10 +493,7 @@ function renderPropInspector(app, el, pr) {
       field('Nume', nameInput),
       h('div', { class: 'grid2' }, Object.entries(params).map(([k, v]) => field(labels[k] || k, numberInput(v, (nv) => app.updateItem(pr.id, { params: { ...params, ...app.findItem(pr.id).params, [k]: nv } }, { rebuild: true }), { min: k === 'count' ? 1 : 0.05, step: k === 'count' ? 1 : 0.1, integer: k === 'count' })))),
       pr.type === 'wall' ? field('Culoare', colorInput(pr.color || '#2a2a30', (v) => app.updateItem(pr.id, { color: v }, { rebuild: true }))) : null,
-      h('h4', {}, 'Poziție (m)'),
-      xyzInputs(app, pr.id, 'position', 0.05),
-      h('h4', {}, 'Rotație (°)'),
-      xyzInputs(app, pr.id, 'rotation', 5),
+      ...transformSection(app, pr, false),
       h('div', { class: 'grid2' },
         h('button', { onclick: () => app.duplicate(pr.id) }, 'Duplică'),
         h('button', { class: 'danger', onclick: () => app.removeItem(pr.id) }, 'Șterge')),

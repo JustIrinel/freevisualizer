@@ -54,11 +54,13 @@ export class Visualizer {
   constructor(container) {
     this.container = container;
     this.objects = new Map(); // id -> { type: 'fixture'|'prop', model, data }
-    this.selectedId = null;
-    this.onSelect = () => {};
-    this.onTransform = () => {};
+    this.selectedIds = [];
+    this.onPick = () => {};        // (id | null, { toggle }) – click in the scene
+    this.onMarquee = () => {};     // (ids, { add }) – Shift + drag rectangle
+    this.onTransform = () => {};   // ([{ id, position, rotation }]) – while dragging the gizmo
     this.onTransformStart = () => {};
     this.onTransformEnd = () => {};
+    this.onGizmoInfo = () => {};   // (text | null) – live position / rotation readout
     this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, lightPower: 1, showLabels: false, snap: true };
     this.lightsUsed = 0;
     this.fogLevel = 0;
@@ -82,6 +84,12 @@ export class Visualizer {
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 300);
     this.camera.position.set(0, 5, 15);
 
+    // Our pointerdown runs in the capture phase so Shift+drag can switch the
+    // orbit controls off before they start rotating the camera.
+    renderer.domElement.addEventListener('pointerdown', (e) => this._onPointerDown(e), { capture: true });
+    renderer.domElement.addEventListener('pointermove', (e) => this._onPointerMove(e));
+    renderer.domElement.addEventListener('pointerup', (e) => this._onPointerUp(e));
+
     this.orbit = new OrbitControls(this.camera, renderer.domElement);
     this.orbit.target.set(0, 1.8, 0);
     this.orbit.enableDamping = true;
@@ -89,17 +97,28 @@ export class Visualizer {
     this.orbit.maxPolarAngle = Math.PI * 0.495;
     this.orbit.update();
 
+    // Gizmo: attached to the object itself (one selected) or to a pivot in the
+    // middle of the group (several selected).
+    this.pivot = new THREE.Object3D();
+    this.scene.add(this.pivot);
     this.transform = new TransformControls(this.camera, renderer.domElement);
-    this.transform.setSize(0.8);
+    this.transform.setSize(1.05);
     this.transform.addEventListener('dragging-changed', (e) => {
       this.orbit.enabled = !e.value;
-      if (!this.selectedId) return;
-      if (e.value) this.onTransformStart(this.selectedId);
-      else this.onTransformEnd(this.selectedId);
+      if (!this.selectedIds.length) return;
+      if (e.value) {
+        this._dragStart = {
+          pivot: this.pivot.matrix.clone(),
+          members: this.selectedIds.filter((id) => this.objects.has(id)).map((id) => ({ id, matrix: this.objects.get(id).model.root.matrix.clone() })),
+        };
+        this.onTransformStart(this.selectedIds);
+      } else {
+        this._dragStart = null;
+        this.onGizmoInfo(null);
+        this.onTransformEnd(this.selectedIds);
+      }
     });
-    this.transform.addEventListener('objectChange', () => {
-      if (this.selectedId) this.onTransform(this.selectedId, this._readTransform(this.selectedId));
-    });
+    this.transform.addEventListener('objectChange', () => this._onGizmoChange());
     this.scene.add(this.transform.getHelper());
     this.setSnap(true);
 
@@ -127,16 +146,11 @@ export class Visualizer {
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
-    this.selBounds = new THREE.Box3();
-    this.selectionBox = new THREE.Box3Helper(this.selBounds, 0x4da3ff);
-    this.selectionBox.visible = false;
-    this.selectionBox.raycast = () => {};
-    this.scene.add(this.selectionBox);
+    // One outline box + one direction arrow per selected object.
+    this.selHelpers = [];
 
     this.raycaster = new THREE.Raycaster();
     this._pointerDown = null;
-    renderer.domElement.addEventListener('pointerdown', (e) => { this._pointerDown = { x: e.clientX, y: e.clientY }; });
-    renderer.domElement.addEventListener('pointerup', (e) => this._onPointerUp(e));
 
     this._resize = () => this.resize();
     window.addEventListener('resize', this._resize);
@@ -231,7 +245,7 @@ export class Visualizer {
     this.scene.add(model.root);
     this.objects.set(fixture.id, { type: 'fixture', model, data: fixture, profile });
     this._applyTransform(model.root, fixture);
-    if (this.selectedId === fixture.id) this.select(fixture.id);
+    if (this.selectedIds.includes(fixture.id)) this.setSelection(this.selectedIds);
     return model;
   }
 
@@ -241,7 +255,7 @@ export class Visualizer {
     this.scene.add(model.root);
     this.objects.set(prop.id, { type: 'prop', model, data: prop });
     this._applyTransform(model.root, prop);
-    if (this.selectedId === prop.id) this.select(prop.id);
+    if (this.selectedIds.includes(prop.id)) this.setSelection(this.selectedIds);
     return model;
   }
 
@@ -249,6 +263,7 @@ export class Visualizer {
     const o = this.objects.get(id);
     if (!o) return;
     if (this.transform.object === o.model.root) this.transform.detach();
+    this.selectedIds = this.selectedIds.filter((x) => x !== id);
     this.scene.remove(o.model.root);
     o.model.dispose();
     this.objects.delete(id);
@@ -256,7 +271,7 @@ export class Visualizer {
 
   clear() {
     for (const id of [...this.objects.keys()]) this.removeObject(id);
-    this.select(null);
+    this.setSelection([]);
   }
 
   updateTransform(item) {
@@ -277,57 +292,237 @@ export class Visualizer {
   }
 
   _readTransform(id) {
-    const o = this.objects.get(id);
-    const root = o.model.root;
+    const root = this.objects.get(id).model.root;
     const round = (v, n = 1000) => Math.round(v * n) / n;
     return {
+      id,
       position: { x: round(root.position.x), y: round(root.position.y), z: round(root.position.z) },
       rotation: { x: round(R2D(root.rotation.x), 10), y: round(R2D(root.rotation.y), 10), z: round(R2D(root.rotation.z), 10) },
     };
   }
 
   // ------------------------------------------------------------ selection
+  get selectedId() {
+    return this.selectedIds[this.selectedIds.length - 1] || null;
+  }
+
+  /** Shortcut: select one object (or nothing). */
   select(id) {
-    this.selectedId = id && this.objects.has(id) ? id : null;
-    if (this.selectedId) {
-      const root = this.objects.get(this.selectedId).model.root;
-      this.transform.attach(root);
-      computeBounds(root, this.selBounds);
-      this.selectionBox.visible = true;
-    } else {
-      this.transform.detach();
-      this.selectionBox.visible = false;
+    this.setSelection(id ? [id] : []);
+  }
+
+  setSelection(ids) {
+    this.selectedIds = (ids || []).filter((id) => this.objects.has(id));
+    while (this.selHelpers.length < this.selectedIds.length) {
+      const box = new THREE.Box3();
+      const helper = new THREE.Box3Helper(box, 0x4da3ff);
+      helper.raycast = () => {};
+      const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 2.5, 0xffc23d, 0.32, 0.16);
+      arrow.raycast = () => {};
+      arrow.traverse((o) => {
+        if (o.material) { o.material.depthTest = false; o.material.transparent = true; o.material.opacity = 0.9; }
+        o.raycast = () => {};
+        o.renderOrder = 20;
+      });
+      this.scene.add(helper, arrow);
+      this.selHelpers.push({ box, helper, arrow });
     }
+    this.selHelpers.forEach((h, i) => { h.helper.visible = i < this.selectedIds.length; h.arrow.visible = false; });
+    this._updateSelectionHelpers();
+    this._attachGizmo();
+  }
+
+  _attachGizmo() {
+    const ids = this.selectedIds;
+    if (!ids.length) { this.transform.detach(); return; }
+    if (ids.length === 1) {
+      this.transform.attach(this.objects.get(ids[0]).model.root);
+    } else {
+      const box = new THREE.Box3();
+      for (const id of ids) box.union(computeBounds(this.objects.get(id).model.root, new THREE.Box3()));
+      box.getCenter(this.pivot.position);
+      this.pivot.quaternion.identity();
+      this.pivot.scale.set(1, 1, 1);
+      this.pivot.updateMatrix();
+      this.pivot.updateMatrixWorld(true);
+      this.transform.attach(this.pivot);
+    }
+    this._applySpace();
+  }
+
+  /** A single object rotates around its own axes; moving stays aligned with the room. */
+  _applySpace() {
+    this.transform.setSpace(this.transform.mode === 'rotate' && this.selectedIds.length === 1 ? 'local' : 'world');
+  }
+
+  _onGizmoChange() {
+    const ids = this.selectedIds;
+    if (!ids.length) return;
+    if (ids.length > 1 && this._dragStart) {
+      // Apply the pivot's change since the drag started to every member.
+      this.pivot.updateMatrix();
+      const delta = this.pivot.matrix.clone().multiply(this._dragStart.pivot.clone().invert());
+      for (const m of this._dragStart.members) {
+        const root = this.objects.get(m.id)?.model.root;
+        if (!root) continue;
+        delta.clone().multiply(m.matrix).decompose(root.position, root.quaternion, root.scale);
+        root.scale.set(1, 1, 1);
+      }
+    }
+    this._updateSelectionHelpers();
+    const changes = ids.filter((id) => this.objects.has(id)).map((id) => this._readTransform(id));
+    this.onTransform(changes);
+    const last = changes[changes.length - 1];
+    if (!last) return;
+    const f = (v) => v.toFixed(2);
+    if (this.transform.mode === 'rotate') {
+      this.onGizmoInfo(ids.length > 1
+        ? `Rotire grup · ${ids.length} obiecte`
+        : `Înclinare ${Math.round(last.rotation.x)}° · Rotire ${Math.round(last.rotation.y)}° · Lateral ${Math.round(last.rotation.z)}°`);
+    } else {
+      this.onGizmoInfo(ids.length > 1
+        ? `Mutare grup · ${ids.length} obiecte`
+        : `X ${f(last.position.x)} m · Înălțime ${f(last.position.y)} m · Z ${f(last.position.z)} m`);
+    }
+  }
+
+  _updateSelectionHelpers() {
+    this.selectedIds.forEach((id, i) => {
+      const o = this.objects.get(id);
+      const h = this.selHelpers[i];
+      if (!o || !h) return;
+      computeBounds(o.model.root, h.box);
+      // Direction arrow: where the light goes (beam for moving heads, +Y otherwise).
+      if (o.type === 'fixture' && !['fog', 'lowfog', 'spark'].includes(o.profile.kind)) {
+        const src = o.model.beam ? o.model.beam.mesh : o.model.root;
+        src.updateWorldMatrix(true, false);
+        h.arrow.position.setFromMatrixPosition(src.matrixWorld);
+        h.arrow.setDirection(new THREE.Vector3().setFromMatrixColumn(src.matrixWorld, 1).normalize());
+        h.arrow.visible = true;
+      } else {
+        h.arrow.visible = false;
+      }
+    });
   }
 
   setTransformMode(mode) {
     this.transform.setMode(mode);
+    this._applySpace();
   }
 
   setSnap(on) {
     this.settings.snap = on;
-    this.transform.setTranslationSnap(on ? 0.25 : null);
-    this.transform.setRotationSnap(on ? D2R(15) : null);
+    this.transform.setTranslationSnap(on ? 0.1 : null);
+    this.transform.setRotationSnap(on ? D2R(5) : null);
+  }
+
+  /** The next click in the scene picks a point (floor, wall, object) and calls back with it. */
+  startAim(callback) {
+    this._aim = callback;
+    this.renderer.domElement.style.cursor = 'crosshair';
+  }
+
+  cancelAim() {
+    this._aim = null;
+    this.renderer.domElement.style.cursor = '';
+  }
+
+  _ndc(e) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  }
+
+  _onPointerDown(e) {
+    this._pointerDown = { x: e.clientX, y: e.clientY };
+    if (e.button === 0 && e.shiftKey && !this.transform.axis && !this._aim) {
+      // Rectangle selection.
+      this.orbit.enabled = false;
+      const rect = this.container.getBoundingClientRect();
+      const div = document.createElement('div');
+      div.className = 'marquee';
+      this.container.appendChild(div);
+      this._marquee = { x0: e.clientX - rect.left, y0: e.clientY - rect.top, div, add: e.ctrlKey || e.metaKey };
+      this._onPointerMove(e);
+    }
+  }
+
+  _onPointerMove(e) {
+    const m = this._marquee;
+    if (!m) return;
+    const rect = this.container.getBoundingClientRect();
+    m.x1 = e.clientX - rect.left;
+    m.y1 = e.clientY - rect.top;
+    Object.assign(m.div.style, {
+      left: `${Math.min(m.x0, m.x1)}px`,
+      top: `${Math.min(m.y0, m.y1)}px`,
+      width: `${Math.abs(m.x1 - m.x0)}px`,
+      height: `${Math.abs(m.y1 - m.y0)}px`,
+    });
+  }
+
+  /** Ids of objects whose centre lands inside a screen rectangle (container pixels). */
+  idsInRect(x0, y0, x1, y1) {
+    const w = this.container.clientWidth; const h = this.container.clientHeight;
+    const ids = [];
+    const c = new THREE.Vector3();
+    for (const [id, o] of this.objects) {
+      computeBounds(o.model.root, new THREE.Box3()).getCenter(c);
+      c.project(this.camera);
+      if (c.z > 1) continue; // behind the camera
+      const sx = ((c.x + 1) / 2) * w; const sy = ((1 - c.y) / 2) * h;
+      if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) ids.push(id);
+    }
+    // Prefer fixtures: props (walls, crowd…) only when no fixture is inside.
+    const fixtures = ids.filter((id) => this.objects.get(id).type === 'fixture');
+    return fixtures.length ? fixtures : ids;
   }
 
   _onPointerUp(e) {
+    if (this._marquee) {
+      const m = this._marquee;
+      this._marquee = null;
+      m.div.remove();
+      this.orbit.enabled = true;
+      this._pointerDown = null;
+      const x0 = Math.min(m.x0, m.x1 ?? m.x0); const x1 = Math.max(m.x0, m.x1 ?? m.x0);
+      const y0 = Math.min(m.y0, m.y1 ?? m.y0); const y1 = Math.max(m.y0, m.y1 ?? m.y0);
+      if (x1 - x0 > 4 || y1 - y0 > 4) { this.onMarquee(this.idsInRect(x0, y0, x1, y1), { add: m.add }); return; }
+    }
     if (!this._pointerDown) return;
     const moved = Math.hypot(e.clientX - this._pointerDown.x, e.clientY - this._pointerDown.y);
     this._pointerDown = null;
     if (moved > 4 || this.transform.dragging || e.button !== 0) return;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    const roots = [...this.objects.values()].map((o) => o.model.root);
-    const hits = this.raycaster.intersectObjects(roots, true);
-    let id = null;
-    for (const h of hits) {
-      let o = h.object;
-      while (o && !o.userData.objectId) o = o.parent;
-      if (o) { id = o.userData.objectId; break; }
+    this.raycaster.setFromCamera(this._ndc(e), this.camera);
+    if (this._aim) {
+      const targets = [...this.objects.values()].map((o) => o.model.root).concat(this.roomGroup.children);
+      const hit = this.raycaster.intersectObjects(targets, true).find((h) => !this.selectedIds.includes(this._objectIdOf(h.object)));
+      const cb = this._aim;
+      this.cancelAim();
+      if (hit) cb(hit.point.clone());
+      return;
     }
-    this.select(id);
-    this.onSelect(id);
+    const roots = [...this.objects.values()].map((o) => o.model.root);
+    let id = null;
+    for (const h of this.raycaster.intersectObjects(roots, true)) {
+      id = this._objectIdOf(h.object);
+      if (id) break;
+    }
+    this.onPick(id, { toggle: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+  }
+
+  _objectIdOf(obj) {
+    let o = obj;
+    while (o && !o.userData.objectId) o = o.parent;
+    return o ? o.userData.objectId : null;
+  }
+
+  /** Where the beam of an object starts (world space). */
+  emitterOrigin(id) {
+    const o = this.objects.get(id);
+    if (!o) return null;
+    const src = o.model.beam ? o.model.beam.mesh : o.model.root;
+    src.updateWorldMatrix(true, false);
+    return new THREE.Vector3().setFromMatrixPosition(src.matrixWorld);
   }
 
   // ------------------------------------------------------------ camera
@@ -345,10 +540,10 @@ export class Visualizer {
   }
 
   focusSelected() {
-    if (!this.selectedId) return;
-    const root = this.objects.get(this.selectedId).model.root;
-    const p = new THREE.Vector3();
-    root.getWorldPosition(p);
+    if (!this.selectedIds.length) return;
+    const box = new THREE.Box3();
+    for (const id of this.selectedIds) box.union(computeBounds(this.objects.get(id).model.root, new THREE.Box3()));
+    const p = box.getCenter(new THREE.Vector3());
     const dir = this.camera.position.clone().sub(this.orbit.target).normalize().multiplyScalar(4);
     this._animateCamera(p.clone().add(dir), p);
   }
@@ -436,9 +631,7 @@ export class Visualizer {
       if (o.model.needsEmitters && !emitters) emitters = this._collectEmitters();
       o.model.update(time, { dt, globals, emitters });
     }
-    if (this.selectionBox.visible && this.selectedId) {
-      computeBounds(this.objects.get(this.selectedId).model.root, this.selBounds);
-    }
+    if (this.selectedIds.length) this._updateSelectionHelpers();
     this.composer.render(dt);
     if (this.onAfterRender) this.onAfterRender(dt);
     if (this.settings.showLabels) this.labels.render(this.scene, this.camera);

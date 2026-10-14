@@ -165,3 +165,18 @@ body.recording .view-toolbar, body.recording .no-signal { display: none; }
 .rec-badge .dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3347; animation: recblink 1s infinite; }
 @keyframes recblink { 50% { opacity: .25; } }
 .brand-logo { max-height: 60px; max-width: 200px; border-radius: 6px; background: #222; padding: 4px; }
+
+/* selection & transform helpers */
+.marquee { position: absolute; z-index: 6; border: 1px dashed #8fb8ff; background: rgba(77, 163, 255, .12); pointer-events: none; }
+.gizmo-info { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6; padding: 6px 12px; border-radius: 8px; background: rgba(14, 14, 20, .88); border: 1px solid var(--line); font-variant-numeric: tabular-nums; pointer-events: none; }
+.rot-controls { display: flex; flex-direction: column; gap: 6px; }
+.rot-row .rot-label { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.rot-line { display: grid; grid-template-columns: 26px 1fr 26px 62px 10px; gap: 4px; align-items: center; }
+.rot-line input[type=number] { padding: 3px 5px; }
+.aim-btn { width: 100%; margin-top: 6px; border-color: #6b5a1d; color: #ffd36b; }
+.group-list { max-height: 150px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 2px; margin-bottom: 4px; }
+.group-list .item { cursor: default; padding: 3px 6px; }
+/* No accidental text selection while dragging in the app (Shift+drag selects fixtures). */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+.inspector button { white-space: normal; }

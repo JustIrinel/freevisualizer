@@ -126,6 +126,17 @@ export async function addFixturesDialog(app, presetProfileId) {
   toast(`Am adăugat ${list.length} × ${profile.name}`);
 }
 
+export async function changeProfileGroupDialog(app, fixtures) {
+  let chosen = null;
+  const res = await openModal(`Profil pentru ${fixtures.length} fixturi`, profilePicker(app, fixtures[0].profileId, (p) => { chosen = p; }), [
+    { label: 'Anulează', value: null }, { label: 'Aplică la toate', primary: true, value: 'ok' },
+  ]);
+  if (res === 'ok' && chosen) {
+    app.updateItems(fixtures.map((f) => f.id), () => ({ profileId: chosen.id }), { rebuild: true });
+    if (app.conflicts().size) toast('Atenție: noul profil are alt număr de canale – folosește „Re-adresează”.', 'error', 6000);
+  }
+}
+
 export async function changeProfileDialog(app, f) {
   let chosen = app.profile(f.profileId);
   const res = await openModal(`Profil pentru „${f.name}”`, profilePicker(app, f.profileId, (p) => { chosen = p; }), [
