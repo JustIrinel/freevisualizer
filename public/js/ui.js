@@ -4,6 +4,7 @@ import { KINDS, MOVING_STYLES, channelLabel } from './profiles.js';
 import { PROP_TYPES } from './props3d.js';
 import { fixtureEnd } from './project.js';
 import * as dialogs from './dialogs.js';
+import { recordDialog } from './recorder.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,6 +27,7 @@ export function bindStatic(app) {
     fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()),
     'hide-ui': () => { document.body.classList.toggle('ui-hidden'); app.vis.resize(); if (document.body.classList.contains('ui-hidden')) toast('Apasă H ca să revii la panouri.'); },
     demo: () => app.toggleDemo(),
+    record: () => recordDialog(app),
     present: () => window.freevisDesktop && window.freevisDesktop.togglePresent(),
   };
   app.actions = actions;

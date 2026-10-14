@@ -3,7 +3,7 @@
 
 import { hexToRgb } from './fixture-state.js';
 
-const BPM = 126;
+export const DEFAULT_BPM = 126;
 
 function hsv(h, s, v) {
   h = ((h % 1) + 1) % 1;
@@ -54,8 +54,8 @@ function retroLevel(scene, pixel, beat, time, bar) {
  * @param store    DmxStore
  * @param time     seconds
  */
-export function renderDemo(fixtures, store, time) {
-  const beat = (time * BPM) / 60;
+export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
+  const beat = (time * bpm) / 60;
   const bar = Math.floor(beat / 4);
   const scene = Math.floor(bar / 4) % 4; // change look every 4 bars
   const beatFrac = beat % 1;

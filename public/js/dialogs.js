@@ -5,6 +5,7 @@ import {
   channelLabel, cloneProfile, normalizeProfile, uid,
 } from './profiles.js';
 import { oflToProfile, listModes } from './ofl-import.js';
+import { loadBrand, saveBrand } from './recorder.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
 // ------------------------------------------------------------------ profile picker
@@ -488,6 +489,8 @@ export async function settingsDialog(app) {
     field('Numerotare universuri Art-Net', offset),
     field('Universuri sACN (E1.31) ascultate', sacn, 'Lista universurilor sACN multicast la care se abonează serverul'),
     info ? h('div', { class: 'muted small' }, `Server pe portul ${info.port}. IP-urile acestui calculator: ${info.interfaces.map((i) => `${i.address} (${i.name})`).join(', ') || '—'}`) : h('div', { class: 'warn-box' }, 'Serverul nu răspunde.'),
+    h('h4', {}, 'Branding pentru clipuri video'),
+    brandingForm(),
     h('h4', {}, 'Imagine'),
     field('Lumină ambientală în sală', range('ambient', 0, 1.5, 0.01)),
     field('Putere lumină pe suprafețe (podea/pereți)', range('lightPower', 0, 3, 0.05)),
@@ -505,13 +508,56 @@ export async function settingsDialog(app) {
   ]);
 }
 
+function brandingForm() {
+  const brand = loadBrand();
+  const text = h('input', { value: brand.text || '', placeholder: 'ex: DJ Matei' });
+  const sub = h('input', { value: brand.subtitle || '', placeholder: 'ex: djmatei.ro' });
+  const preview = h('div', { class: 'row' });
+  const renderPreview = () => {
+    preview.innerHTML = '';
+    if (brand.logo) {
+      preview.append(h('img', { src: brand.logo, class: 'brand-logo', alt: 'Logo' }),
+        h('button', { onclick: () => { brand.logo = null; saveBrand(brand); renderPreview(); } }, 'Șterge logo'));
+    } else {
+      preview.append(h('span', { class: 'muted small' }, 'Niciun logo încărcat.'));
+    }
+  };
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/svg+xml,image/webp' });
+  file.addEventListener('change', () => {
+    const f = file.files[0];
+    if (!f) return;
+    // Downscale so it fits comfortably in local storage.
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      brand.logo = c.toDataURL('image/png');
+      saveBrand(brand);
+      renderPreview();
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(f);
+  });
+  const save = () => { brand.text = text.value.trim(); brand.subtitle = sub.value.trim(); saveBrand(brand); };
+  text.addEventListener('change', save);
+  sub.addEventListener('change', save);
+  renderPreview();
+  return h('div', { class: 'form' },
+    h('div', { class: 'grid2' }, field('Nume', text), field('Site / Instagram', sub)),
+    field('Logo (PNG transparent recomandat)', file),
+    preview);
+}
+
 export async function helpDialog(app) {
   let ips = '';
   try { const info = await (await fetch('/api/info')).json(); ips = info.interfaces.map((i) => i.address).join(', '); } catch (_) { /* offline */ }
   const content = h('div', { class: 'form' },
     h('h4', {}, 'SoundSwitch pe același calculator'),
     h('ol', {},
-      h('li', {}, 'Pornește ', h('b', {}, 'întâi FreeVisualizer'), ' (fereastra neagră cu serverul trebuie să rămână deschisă), apoi SoundSwitch.'),
+      h('li', {}, 'Pornește ', h('b', {}, 'întâi FreeVisualizer'), ', apoi SoundSwitch.'),
       h('li', {}, 'În SoundSwitch: ', h('code', {}, 'Preferences → Hardware'), ' → bifează ', h('b', {}, 'Localhost Art-Net Node'), ' (disponibil din SoundSwitch 2.9).'),
       h('li', {}, 'Dacă nu apare imediat, repornește SoundSwitch (el caută nodurile Art-Net la pornire).'),
       h('li', {}, 'În FreeVisualizer adaugă aceleași fixturi, cu ', h('b', {}, 'același univers, aceeași adresă DMX și același mod (nr. de canale)'), ' ca în DMX Patch-ul din SoundSwitch.'),

@@ -66,7 +66,7 @@ export class Visualizer {
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.9;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
@@ -144,14 +144,23 @@ export class Visualizer {
     this.resize();
   }
 
+  /** Render at a fixed resolution (video recording); null returns to the window size. */
+  setRenderSize(size) {
+    this.fixedSize = size;
+    const ratio = size ? 1 : Math.min(window.devicePixelRatio, 2);
+    this.renderer.setPixelRatio(ratio);
+    this.composer.setPixelRatio(ratio);
+    this.resize();
+  }
+
   resize() {
-    const w = this.container.clientWidth || 1;
-    const h = this.container.clientHeight || 1;
+    const w = this.fixedSize ? this.fixedSize[0] : this.container.clientWidth || 1;
+    const h = this.fixedSize ? this.fixedSize[1] : this.container.clientHeight || 1;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    this.renderer.setSize(w, h, !this.fixedSize);
     this.composer.setSize(w, h);
-    this.labels.setSize(w, h);
+    this.labels.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
   }
 
   // ------------------------------------------------------------ room
@@ -431,6 +440,7 @@ export class Visualizer {
       computeBounds(this.objects.get(this.selectedId).model.root, this.selBounds);
     }
     this.composer.render(dt);
+    if (this.onAfterRender) this.onAfterRender(dt);
     if (this.settings.showLabels) this.labels.render(this.scene, this.camera);
   }
 }

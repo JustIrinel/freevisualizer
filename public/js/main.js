@@ -12,6 +12,7 @@ import { toast, pickFile } from './dom.js';
 import * as ui from './ui.js';
 import * as dialogs from './dialogs.js';
 import { DmxMonitor } from './dmx-monitor.js';
+import { ClipRecorder } from './recorder.js';
 
 const MISSING_PROFILE = normalizeProfile({ id: '__missing', name: 'Profil lipsă', kind: 'par', channels: [{ type: 'dimmer' }] });
 
@@ -28,6 +29,8 @@ class App {
     this._profileCache = null;
     this.startedAt = performance.now();
     this.time = 0;
+    this.demoBpm = 126;
+    this.recorder = new ClipRecorder(this);
 
     this.vis.onSelect = (id) => this.select(id, { fromScene: true });
     this.vis.onTransformStart = () => this.checkpoint();
@@ -348,7 +351,7 @@ class App {
     this.time += dt;
     const fixtures = this.project.fixtures;
     if (this.dmx.useDemo) {
-      renderDemo(fixtures.map((fixture, index) => ({ fixture, profile: this.profile(fixture.profileId), index })), this.dmx, this.time);
+      renderDemo(fixtures.map((fixture, index) => ({ fixture, profile: this.profile(fixture.profileId), index })), this.dmx, this.time, this.demoBpm);
     }
     this.dmx.beginFrame();
     for (const f of fixtures) {
