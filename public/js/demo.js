@@ -41,6 +41,14 @@ function goboValue(channel, idx) {
   return Math.round((r.from + r.to) / 2);
 }
 
+/** Retro heads: slow warm waves, a chase on the beat, full glow on the drop. */
+function retroLevel(scene, pixel, beat, time, bar) {
+  if (scene === 3) return (bar % 4) === 3 ? 1 : (Math.floor(beat * 2) % 7 === pixel ? 1 : 0.08);
+  if (scene === 2) return 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * 1.2 - pixel * 0.9));
+  if (scene === 1) return pixel === 3 ? 1 : 0.15 + 0.5 * Math.max(0, Math.sin(time * 2 - pixel));
+  return Math.floor(beat) % 7 === pixel ? 1 : 0.25;
+}
+
 /**
  * @param fixtures [{ fixture, profile, index }]
  * @param store    DmxStore
@@ -115,7 +123,11 @@ export function renderDemo(fixtures, store, time) {
       }
       const col = px || rgb;
       switch (c.type) {
-        case 'dimmer': v = (c.pixel != null && profile.kind === 'blinder') ? (scene === 3 && (bar % 4) === 3 ? 255 : 0) : dim * 255; break;
+        case 'dimmer':
+          if (c.pixel != null && profile.kind === 'blinder') v = scene === 3 && (bar % 4) === 3 ? 255 : 0;
+          else if (c.pixel != null && profile.kind === 'retro') v = retroLevel(scene, c.pixel, beat, time, bar) * 255;
+          else v = dim * 255;
+          break;
         case 'dimmerFine': v = 0; break;
         case 'red': v = col[0] * 255; break;
         case 'green': v = col[1] * 255; break;

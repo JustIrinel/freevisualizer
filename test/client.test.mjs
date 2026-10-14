@@ -97,3 +97,18 @@ test('demo project patch has no conflicts and next free address works', () => {
   assert.strictEqual(next, 55); // first gap that fits 6 channels
   assert.strictEqual(nextFreeAddress(project, byId, 2, 6), 1);
 });
+
+test('retro 7-head profiles drive each head separately', () => {
+  const p = builtin('gen-retro-9'); // D, Strobe, 7 heads
+  assert.strictEqual(p.kind, 'retro');
+  assert.strictEqual(p.channels.length, 9);
+  const s = computeState(p, dmx([255, 0, 255, 0, 0, 128, 0, 0, 0]), 1, createRuntime(), 0.016, 0);
+  assert.strictEqual(s.pixels.length, 7);
+  assert.strictEqual(s.pixels[0].intensity, 1);
+  assert.strictEqual(s.pixels[1].intensity, 0);
+  assert.ok(Math.abs(s.pixels[3].intensity - 128 / 255) < 0.01);
+  assert.deepStrictEqual(s.pixels[0].color.map((x) => Math.round(x * 100) / 100), [1, 0.7, 0.28]); // warm #ffb347
+  const rgb = builtin('gen-retro-rgb-21');
+  const s2 = computeState(rgb, dmx([0, 0, 255]), 1, createRuntime(), 0.016, 0);
+  assert.deepStrictEqual(s2.pixels[0].color, [0, 0, 1]);
+});

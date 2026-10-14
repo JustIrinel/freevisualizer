@@ -54,7 +54,7 @@ export async function addFixturesDialog(app, presetProfileId) {
     st.address = a || 1;
     addrInput.value = st.address;
   };
-  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: 'Bară LED', strobe: 'Strobe', blinder: 'Blinder', fog: 'Fum' }[p.kind] || 'Fixtură');
+  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: 'Bară LED', strobe: 'Strobe', blinder: 'Blinder', retro: 'Retro', fog: 'Fum' }[p.kind] || 'Fixtură');
   const info = () => {
     const ch = profile.channels.length;
     const last = st.address + ch * st.qty - 1;
@@ -248,7 +248,10 @@ export async function profileEditor(app, source) {
         field('Unghi max (°) – zoom', numberInput(p.beamAngle[1], (v) => { p.beamAngle[1] = v; }, { min: 1, max: 170, step: 1 })),
         p.kind === 'moving' ? h('div', { class: 'grid2' },
           field('Pan (°)', numberInput(p.panRange, (v) => { p.panRange = v; }, { min: 0, max: 720, step: 1 })),
-          field('Tilt (°)', numberInput(p.tiltRange, (v) => { p.tiltRange = v; }, { min: 0, max: 360, step: 1 }))) : h('span')),
+          field('Tilt (°)', numberInput(p.tiltRange, (v) => { p.tiltRange = v; }, { min: 0, max: 360, step: 1 })))
+          : p.kind === 'retro' ? h('label', { class: 'inline', title: 'Becurile se aprind/sting lin și se înroșesc când sunt dimate, ca filamentele adevărate' },
+            h('input', { type: 'checkbox', checked: p.tungsten !== false, onchange: (e) => { p.tungsten = e.target.checked; } }), 'Emulare bec cu filament')
+            : h('span')),
       h('h4', {}, `Canale (${p.channels.length})`),
     );
 

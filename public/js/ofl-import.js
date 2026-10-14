@@ -284,9 +284,11 @@ export function oflToProfile(fixture, modeIndex = 0, key = fixture.__key || '') 
   });
 
   const pixelCount = channels.reduce((m, c) => (c.pixel != null ? Math.max(m, c.pixel + 1) : m), 0);
-  const kind = guessKind(fixture, channels);
+  let kind = guessKind(fixture, channels);
+  // 7 heads (1 + 6) on a hexagonal plate: the popular "retro" effect lights.
+  if (pixelCount === 7 && ['par', 'bar', 'blinder'].includes(kind)) kind = 'retro';
   const lens = (fixture.physical && fixture.physical.lens && fixture.physical.lens.degreesMinMax) || null;
-  const defaults = { par: [25, 25], moving: [15, 15], bar: [25, 25], strobe: [110, 110], blinder: [60, 60], fog: [20, 20] };
+  const defaults = { par: [25, 25], moving: [15, 15], bar: [25, 25], strobe: [110, 110], blinder: [60, 60], retro: [40, 40], fog: [20, 20] };
   const beamAngle = lens ? [Math.max(1, lens[0]), Math.max(1, lens[1])] : defaults[kind];
 
   const range = (type, def) => {
@@ -320,6 +322,7 @@ export function oflToProfile(fixture, modeIndex = 0, key = fixture.__key || '') 
     kind,
     ...(style ? { style } : {}),
     pixels: Math.max(1, pixelCount || (kind === 'bar' ? 8 : kind === 'blinder' ? 2 : 1)),
+    ...(kind === 'retro' && !channels.some((c) => ['red', 'green', 'blue'].includes(c.type)) ? { defaultColor: '#ffb347' } : {}),
     beamAngle,
     panRange: range('Pan', 540),
     tiltRange: range('Tilt', 270),

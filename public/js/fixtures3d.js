@@ -353,6 +353,94 @@ class PixelModel extends BaseModel {
   }
 }
 
+// ------------------------------------------------------------------ Retro hexagonal 7 heads
+/** Head positions: rows of 2-3-2 (numbered left→right, top→bottom), in the face plane. */
+export function hex7Layout(pitch = 0.17) {
+  const h = pitch * Math.sqrt(3) / 2;
+  return [
+    [-pitch / 2, -h], [pitch / 2, -h],
+    [-pitch, 0], [0, 0], [pitch, 0],
+    [-pitch / 2, h], [pitch / 2, h],
+  ];
+}
+
+class RetroModel extends BaseModel {
+  constructor(fixture, profile, ctx) {
+    super(fixture, profile, ctx);
+    const pitch = 0.17;
+    // Hexagonal housing (flat sides left/right) with a brushed gold rim.
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.11, 6), bodyMaterial());
+    body.rotation.y = Math.PI / 6;
+    body.position.y = -0.116; // back housing; the cups sit in front of it
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.07, 6, 1, true), retroGold());
+    rim.rotation.y = Math.PI / 6;
+    rim.position.y = -0.03;
+    this.root.add(body, rim);
+    this.cells = [];
+    const n = Math.max(1, profile.pixels || 7);
+    hex7Layout(pitch).slice(0, n).forEach(([x, z]) => {
+      // Gold reflector cup that glows with the bulb, plus a small hot filament.
+      const cupMat = new THREE.MeshStandardMaterial({ color: 0xb08a40, roughness: 0.35, metalness: 0.8, side: THREE.DoubleSide, emissive: 0x000000 });
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.03, 0.06, 28, 1, true), cupMat);
+      cup.position.set(x, -0.03, z);
+      const back = new THREE.Mesh(new THREE.CircleGeometry(0.03, 20), cupMat);
+      back.rotation.x = -Math.PI / 2;
+      back.position.set(x, -0.059, z);
+      const mat = lensMaterial();
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 10), mat);
+      bulb.position.set(x, -0.03, z);
+      const beam = new Beam();
+      beam.mesh.position.set(x, 0, z);
+      this.root.add(cup, back, bulb, beam.mesh);
+      this.beams.push(beam);
+      this.cells.push({ mat, cupMat, beam, level: 0 });
+    });
+    const light = this.createLight(profile.beamAngle[1] + 15);
+    if (light) this.root.add(light);
+    this.addLabel();
+    this.label.position.y = 0.4;
+  }
+
+  update(s, g, dt) {
+    const pixels = s.pixels || this.cells.map(() => ({ color: s.color, intensity: s.intensity }));
+    const tungsten = this.profile.tungsten !== false;
+    const gain = beamGain(s.beamAngle, g.haze) * 0.5;
+    const avg = [0, 0, 0];
+    let max = 0;
+    this.cells.forEach((c, i) => {
+      const p = pixels[i] || pixels[pixels.length - 1];
+      // Incandescent look: filaments heat up fast and cool down slowly,
+      // and glow deep orange when dimmed.
+      if (tungsten) {
+        const k = p.intensity > c.level ? 14 : 5;
+        c.level += (p.intensity - c.level) * Math.min(1, dt * k);
+      } else {
+        c.level = p.intensity;
+      }
+      const lvl = c.level;
+      const color = tungsten ? warmShift(p.color, lvl) : p.color;
+      setLens(c.mat, color, lvl, 9);
+      c.cupMat.emissive.setRGB(color[0] * lvl * 0.55, color[1] * lvl * 0.55, color[2] * lvl * 0.55);
+      c.beam.set(color, lvl * gain, s.beamAngle);
+      avg[0] += color[0] * lvl; avg[1] += color[1] * lvl; avg[2] += color[2] * lvl;
+      max = Math.max(max, lvl);
+    });
+    const m = Math.max(avg[0], avg[1], avg[2]) || 1;
+    this.updateLight([avg[0] / m, avg[1] / m, avg[2] / m], max, s.beamAngle + 15, 45);
+  }
+}
+
+let goldMat = null;
+function retroGold() {
+  return goldMat || (goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a050, roughness: 0.3, metalness: 0.9, side: THREE.DoubleSide }));
+}
+
+/** Dimmed filaments shift towards deep orange/red. */
+function warmShift(color, level) {
+  const t = 1 - Math.min(1, level * 1.4);
+  return [color[0], color[1] * (1 - 0.55 * t), color[2] * (1 - 0.85 * t)];
+}
+
 // ------------------------------------------------------------------ Strobe
 class StrobeModel extends BaseModel {
   constructor(fixture, profile, ctx) {
@@ -425,6 +513,7 @@ export function createFixtureModel(fixture, profile, ctx) {
   switch (profile.kind) {
     case 'moving': return new MovingHeadModel(fixture, profile, ctx);
     case 'bar': case 'blinder': return new PixelModel(fixture, profile, ctx);
+    case 'retro': return new RetroModel(fixture, profile, ctx);
     case 'strobe': return new StrobeModel(fixture, profile, ctx);
     case 'fog': return new FogModel(fixture, profile, ctx);
     default: return new ParModel(fixture, profile, ctx);

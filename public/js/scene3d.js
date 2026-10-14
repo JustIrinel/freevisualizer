@@ -347,6 +347,7 @@ export class Visualizer {
 
   setCamera(c) {
     if (!c) return;
+    this._camAnim = null;
     this.camera.position.set(...c.position);
     this.orbit.target.set(...c.target);
     this.orbit.update();

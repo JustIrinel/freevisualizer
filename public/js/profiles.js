@@ -8,6 +8,7 @@ export const KINDS = {
   bar: 'Bară LED (pixeli)',
   strobe: 'Stroboscop',
   blinder: 'Blinder',
+  retro: 'Retro hexagonal (7 capete)',
   fog: 'Mașină de fum',
 };
 
@@ -73,6 +74,13 @@ const pixelRGB = (n) => {
   return out;
 };
 
+const pixelDimmers = (n) => Array.from({ length: n }, (_, p) => ch('dimmer', { pixel: p }));
+const pixelColors = (n, types) => {
+  const out = [];
+  for (let p = 0; p < n; p++) for (const t of types) out.push(ch(t, { pixel: p }));
+  return out;
+};
+
 const generic = (p) => ({ manufacturer: 'Generic', source: 'builtin', pixels: 1, beamAngle: [25, 25], panRange: 540, tiltRange: 270, ...p });
 
 export const BUILTIN_PROFILES = [
@@ -101,6 +109,10 @@ export const BUILTIN_PROFILES = [
   generic({ id: 'gen-strobe-2', name: 'Stroboscop LED 2ch (Dimmer, Viteză)', kind: 'strobe', beamAngle: [110, 110], channels: [ch('dimmer'), strobe()] }),
   generic({ id: 'gen-strobe-rgb-6', name: 'Stroboscop RGB 6ch (D,Strobe,R,G,B,W)', kind: 'strobe', beamAngle: [110, 110], channels: [ch('dimmer'), strobe(), ch('red'), ch('green'), ch('blue'), ch('white')] }),
   generic({ id: 'gen-blinder-2', name: 'Blinder 2 lămpi 2ch', kind: 'blinder', pixels: 2, defaultColor: '#ffb060', beamAngle: [60, 60], channels: [ch('dimmer', { pixel: 0 }), ch('dimmer', { pixel: 1 })] }),
+  generic({ id: 'gen-retro-7', name: 'Retro hexagonal 7 capete 7ch (dimmer pe cap)', kind: 'retro', pixels: 7, defaultColor: '#ffb347', beamAngle: [40, 40], channels: pixelDimmers(7) }),
+  generic({ id: 'gen-retro-9', name: 'Retro hexagonal 7 capete 9ch (Dimmer, Strobe, 7 capete)', kind: 'retro', pixels: 7, defaultColor: '#ffb347', beamAngle: [40, 40], channels: [ch('dimmer'), strobe(), ...pixelDimmers(7)] }),
+  generic({ id: 'gen-retro-rgb-21', name: 'Retro 7×60W RGB 21ch (RGB pe cap)', kind: 'retro', pixels: 7, tungsten: false, beamAngle: [40, 40], channels: pixelRGB(7) }),
+  generic({ id: 'gen-retro-rgbw-30', name: 'Retro 7 capete RGB + alb cald 30ch (D, Strobe, 7×RGBW)', kind: 'retro', pixels: 7, tungsten: false, beamAngle: [40, 40], channels: [ch('dimmer'), strobe(), ...pixelColors(7, ['red', 'green', 'blue', 'warmWhite'])] }),
   generic({ id: 'gen-fog-1', name: 'Mașină de fum 1ch', kind: 'fog', channels: [ch('fog')] }),
 ];
 
