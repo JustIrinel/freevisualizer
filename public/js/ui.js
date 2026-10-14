@@ -4,6 +4,7 @@ import { KINDS, MOVING_STYLES, channelLabel } from './profiles.js';
 import { PROP_TYPES } from './props3d.js';
 import { fixtureEnd } from './project.js';
 import * as dialogs from './dialogs.js';
+import * as ssDialog from './ss-dialog.js';
 import { recordDialog } from './recorder.js';
 
 const $ = (id) => document.getElementById(id);
@@ -21,6 +22,7 @@ export function bindStatic(app) {
     settings: () => dialogs.settingsDialog(app),
     help: () => dialogs.helpDialog(app),
     'add-fixture': () => dialogs.addFixturesDialog(app),
+    'import-soundswitch': () => ssDialog.soundSwitchImportDialog(app),
     'ofl-search': () => dialogs.oflDialog(app),
     'open-fixture-id': () => dialogs.openFixtureId(),
     'new-profile': () => dialogs.profileEditor(app, null),
@@ -38,7 +40,7 @@ export function bindStatic(app) {
     if (btn.tagName === 'A') e.preventDefault();
     actions[btn.dataset.action]();
   });
-  // Drag & drop fixture files (.d4 / .gdtf / .zip / .json) anywhere on the window.
+  // Drag & drop fixture files (.d4 / .gdtf / .zip / .json) or a SoundSwitch project anywhere on the window.
   const overlay = $('dropOverlay');
   let dragDepth = 0;
   const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -50,6 +52,19 @@ export function bindStatic(app) {
     e.preventDefault();
     dragDepth = 0;
     overlay.classList.add('hidden');
+    // A SoundSwitch project folder (.ssproj) dropped as a whole.
+    const entries = [...(e.dataTransfer.items || [])].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+    const dirs = entries.filter((en) => en.isDirectory);
+    if (dirs.length) {
+      try {
+        const source = await ssDialog.venuesFromEntry(dirs[0]);
+        if (!source) throw new Error('Folderul nu e un proiect SoundSwitch (.ssproj)');
+        await ssDialog.importSoundSwitch(app, source);
+      } catch (err) {
+        toast(err.message, 'error', 8000);
+      }
+      return;
+    }
     for (const file of e.dataTransfer.files) await dialogs.importFixtureFile(app, file);
   });
 

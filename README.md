@@ -24,6 +24,7 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - **laser** cu 5 modele (evantai, liquid sky, con, tunel, rază)
 - **Clipuri video pentru clienți**: înregistrezi show-ul în format vertical 9:16 (Reels/TikTok), 16:9 sau 1:1, cu logo-ul și textul tău, cameră cinematică automată și, opțional, melodia ta
 - **Șabloane**: „Rig nuntă” (cabină DJ cu truss, retro-uri, 12 uplight-uri, ring de dans cu scântei, glob, fum greu, laser, masa mirilor, mese rotunde) și „Rig club"
+- **Import direct din SoundSwitch**: citește proiectul `.ssproj` și pune în scenă aceleași fixturi, cu aceleași nume, moduri și adrese ca în DMX Map, cu profilele din SoundSwitch
 - **Bibliotecă**:
   - profile generice incluse
   - **o singură căutare** în „Adaugă fixturi”: profilele tale, [Open Fixture Library](https://open-fixture-library.org) (Chauvet, ADJ, Cameo, BeamZ, Stairville, Eurolite, Showtec etc., import direct) și un buton spre [Fixture.ID](https://www.fixture.id/)
@@ -107,6 +108,21 @@ Implicit, universul Art-Net 0 apare în vizualizator ca **Universul 1**, la fel 
 
 ## Cum îmi fac rigul
 
+### Cel mai simplu: direct din SoundSwitch
+
+1. În SoundSwitch salvează proiectul (**File → Save Project**).
+2. În FreeVisualizer: **Fixturi → ⇪ Importă din SoundSwitch** (sau **Nou → Din SoundSwitch**) și alege proiectul:
+   - folderul care se termină în **.ssproj**, de obicei în **Muzică → SoundSwitch**;
+   - sau o arhivă **.zip** a lui;
+   - sau tragi folderul direct peste fereastră.
+3. Vezi lista fixturilor exact ca în **DMX Map**: nume, model, mod, adresă. Apeși **Importă**.
+4. Fixturile apar așezate automat: moving heads pe truss, par-uri pe podea, retro-uri în față. Numele de tipul „stânga / dreapta / centru / POZ 1” sunt folosite ca să le pună în ordine. Le muți apoi unde sunt în sala ta.
+5. Ai schimbat ceva în SoundSwitch? Imporți din nou și alegi **Actualizează proiectul curent**: patch-ul se schimbă, pozițiile rămân.
+
+Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile SoundSwitch**, deci se comportă ca în SoundSwitch.
+
+### Manual
+
 1. **Nou → Rig nuntă** îți dă un punct de plecare complet. Îl adaptezi la sala ta.
 2. **Fixturi → + Adaugă fixturi**: alegi profilul, cantitatea, universul și adresa de start, apoi montajul (pe podea, agățat pe truss, spre public). Retro-urile sunt profilele „Retro hexagonal 7 capete”, în 4 variante de canale.
 3. Modelul tău nu e în lista generică? Scrie-l în căutarea din **Adaugă fixturi** (de exemplu „panther” sau „intimidator spot 260”):
@@ -168,6 +184,7 @@ desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereast
 public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendor)
   fixture-state.js DMX → culoare/intensitate/pan/tilt (pur, testat)
   ofl-import.js    Open Fixture Library → profil FreeVisualizer (pur, testat)
+  ss-import.js     proiect SoundSwitch (SoundSwitchVenues.bin) → fixturi + profile (pur, testat)
   d4-import.js     Avolites .d4 (Fixture.ID) → profil; gdtf-import.js / qxf-import.js la fel
   fixtures3d.js    modelele 3D și fasciculele
   scene3d.js       scena, camera, bloom, selecție

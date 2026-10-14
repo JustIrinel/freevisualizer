@@ -185,3 +185,8 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 .lib-links a:hover { text-decoration: underline; }
 .drop-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; background: rgba(20, 14, 40, .78); border: 3px dashed var(--accent); font-size: 20px; font-weight: 700; pointer-events: none; }
 .online-row .name { color: var(--accent-2); font-weight: 600; }
+.ss-btn { border-color: var(--accent); color: var(--accent-2); font-weight: 600; }
+.ss-table-wrap { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.ss-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ss-table th, .ss-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ss-table th { position: sticky; top: 0; background: var(--panel, #15151c); color: var(--muted); font-weight: 600; }

@@ -70,6 +70,58 @@ function createMainWindow() {
   });
 }
 
+const VENUES_FILE = 'SoundSwitchVenues.bin';
+
+function soundSwitchFolder() {
+  const music = app.getPath('music');
+  const ss = path.join(music, 'SoundSwitch');
+  return fs.existsSync(ss) ? ss : music;
+}
+
+/** .ssproj folders (with their venues file) directly inside a folder. */
+function projectsIn(dir) {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && fs.existsSync(path.join(dir, d.name, VENUES_FILE)))
+      .map((d) => path.join(dir, d.name));
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Native picker for a SoundSwitch project: the .ssproj folder, its .zip or SoundSwitchVenues.bin. */
+async function pickSoundSwitch() {
+  const props = isMac ? ['openDirectory', 'openFile'] : ['openDirectory'];
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: 'Alege proiectul SoundSwitch (.ssproj)',
+    defaultPath: soundSwitchFolder(),
+    properties: props,
+    filters: isMac ? [{ name: 'Proiect SoundSwitch', extensions: ['ssproj', 'zip', 'bin'] }] : undefined,
+  });
+  if (r.canceled || !r.filePaths.length) return null;
+  let target = r.filePaths[0];
+  const name = (p) => path.basename(p).replace(/\.ssproj$/i, '');
+  if (fs.statSync(target).isFile()) {
+    const data = await fs.promises.readFile(target);
+    return { name: name(path.dirname(target)), data: new Uint8Array(data), zip: /\.zip$/i.test(target) };
+  }
+  if (!fs.existsSync(path.join(target, VENUES_FILE))) {
+    const found = projectsIn(target);
+    if (!found.length) return { error: 'În folderul ales nu există un proiect SoundSwitch. Alege folderul care se termină în .ssproj (de obicei în Muzică → SoundSwitch).' };
+    if (found.length === 1) target = found[0];
+    else {
+      const list = found.slice(0, 12);
+      const pick = await dialog.showMessageBox(mainWindow, {
+        type: 'question', message: 'Ce proiect SoundSwitch import?', buttons: [...list.map(name), 'Anulează'], cancelId: list.length,
+      });
+      if (pick.response >= list.length) return null;
+      target = list[pick.response];
+    }
+  }
+  const data = await fs.promises.readFile(path.join(target, VENUES_FILE));
+  return { name: name(target), data: new Uint8Array(data) };
+}
+
 /** A fixture file downloaded in the Fixture.ID window goes straight to the import. */
 function onFixtureDownload(_event, item) {
   const name = item.getFilename();
@@ -166,6 +218,7 @@ function buildMenu() {
       label: 'Fișier',
       submenu: [
         item('Proiect nou…', 'new', 'CmdOrCtrl+N'),
+        item('Importă din SoundSwitch…', 'import-soundswitch'),
         item('Deschide…', 'open', 'CmdOrCtrl+O'),
         item('Salvează', 'save', 'CmdOrCtrl+S'),
         { type: 'separator' },
@@ -229,6 +282,7 @@ ipcMain.handle('desktop-info', () => ({
 }));
 ipcMain.on('toggle-present', () => togglePresentWindow());
 ipcMain.on('open-fixture-id', () => openFixtureIdWindow());
+ipcMain.handle('pick-soundswitch', () => pickSoundSwitch());
 
 app.whenReady().then(async () => {
   app.setAboutPanelOptions({

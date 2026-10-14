@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('freevisDesktop', {
   info: () => ipcRenderer.invoke('desktop-info'),
   togglePresent: () => ipcRenderer.send('toggle-present'),
   openFixtureId: () => ipcRenderer.send('open-fixture-id'),
+  pickSoundSwitch: () => ipcRenderer.invoke('pick-soundswitch'),
   onFixtureFile: (callback) => ipcRenderer.on('fixture-file', (_e, file) => callback(file)),
 });

@@ -9,6 +9,7 @@ import { readGdtf, listGdtfModes, gdtfToProfile } from './gdtf-import.js';
 import { parseQxf, listQxfModes, qxfToProfile } from './qxf-import.js';
 import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
+import { importSoundSwitch, venuesFromZip, soundSwitchImportDialog } from './ss-dialog.js';
 import { loadBrand, saveBrand } from './recorder.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
@@ -482,7 +483,11 @@ export async function importFixtureFile(app, file) {
   const name = file.name || '';
   const ext = name.toLowerCase().split('.').pop();
   try {
+    if (/^soundswitchvenues\.bin$/i.test(name)) return importSoundSwitch(app, { name: 'SoundSwitch', bytes: new Uint8Array(await file.arrayBuffer()) });
     if (ext === 'zip') {
+      // A zipped SoundSwitch project (.ssproj) → the whole patch.
+      const ss = await venuesFromZip(new Uint8Array(await file.arrayBuffer()));
+      if (ss) return importSoundSwitch(app, ss);
       const files = await fixtureFilesInZip(await file.arrayBuffer());
       if (!files.length) throw new Error('arhiva nu conține fișiere .d4, .gdtf sau .json');
       if (files.length === 1) return importFixtureFile(app, new File([files[0].bytes], files[0].name));
@@ -561,14 +566,17 @@ export async function newProjectDialog(app) {
   const res = await openModal('Proiect nou', h('div', { class: 'form' },
     h('p', {}, 'Alege de unde pornești. Proiectul curent rămâne salvat automat în browser până creezi altul – exportă-l sau salvează-l dacă vrei să-l păstrezi.'),
     h('ul', { class: 'small muted' },
+      h('li', {}, h('b', {}, 'Din SoundSwitch: '), 'citește proiectul tău .ssproj – aceleași fixturi, moduri și adrese ca în DMX Map.'),
       h('li', {}, h('b', {}, 'Nuntă: '), 'cabină DJ cu truss, retro-uri, uplight-uri pe pereți, ring de dans cu scântei reci, glob disco, fum greu, laser.'),
       h('li', {}, h('b', {}, 'Club: '), 'truss cu moving heads, bare LED, strobe, ecran LED.'))), [
     { label: 'Anulează', value: null },
+    { label: 'Din SoundSwitch…', value: 'soundswitch' },
     { label: 'Proiect gol', value: 'empty' },
     { label: 'Rig club', value: 'club' },
     { label: 'Rig nuntă', primary: true, value: 'wedding' },
   ]);
-  if (res) app.newProject(res);
+  if (res === 'soundswitch') soundSwitchImportDialog(app);
+  else if (res) app.newProject(res);
 }
 
 export async function openProjectDialog(app) {
@@ -708,6 +716,11 @@ export async function helpDialog(app) {
       h('li', {}, 'Ambele calculatoare în aceeași rețea, ideal prin cablu (multe routere Wi-Fi blochează Art-Net).'),
       h('li', {}, `În SoundSwitch alege nodul Art-Net „FreeVisualizer” sau IP-ul acestui calculator: `, h('code', {}, ips || 'vezi Setări')),
       h('li', {}, 'Permite aplicația Node.js în firewall (porturile UDP 6454 pentru Art-Net și 5568 pentru sACN).')),
+    h('h4', {}, 'Fixturile din SoundSwitch'),
+    h('ol', {},
+      h('li', {}, 'Fixturi → ', h('b', {}, '⇪ Importă din SoundSwitch'), ' și alegi proiectul (folderul .ssproj din Muzică → SoundSwitch). Sau tragi folderul peste fereastră.'),
+      h('li', {}, 'Primești aceleași fixturi, moduri și adrese ca în DMX Map. Le muți apoi unde sunt în sală.'),
+      h('li', {}, 'Ai schimbat ceva în SoundSwitch? Salvezi proiectul acolo și imporți din nou cu „Actualizează proiectul curent” – pozițiile rămân.')),
     h('h4', {}, 'Fixturi care nu sunt în listă'),
     h('ol', {},
       h('li', {}, 'În „Adaugă fixturi” scrie modelul: caută deodată în profilele tale, în ', h('b', {}, 'Open Fixture Library'), ' și îți dă un buton spre ', h('b', {}, 'Fixture.ID'), '.'),

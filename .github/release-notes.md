@@ -1,6 +1,14 @@
 Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 
-## Ce e nou în 1.3
+## Ce e nou în 1.4
+
+- **Importă din SoundSwitch**: alegi proiectul tău SoundSwitch (folderul `.ssproj` din Muzică → SoundSwitch, sau un `.zip` al lui) și FreeVisualizer pune în scenă **aceleași fixturi, cu aceleași nume, moduri și adrese ca în DMX Map**.
+  - Canalele, roțile de culori și strobe-ul sunt luate din definițiile SoundSwitch.
+  - Fixturile sunt așezate automat (moving heads pe truss, par-uri pe podea, retro-uri în față), în ordinea dată de nume (stânga / centru / dreapta, POZ 1, 2…).
+  - Ai schimbat ceva în SoundSwitch? Imporți din nou cu **Actualizează proiectul curent**: pozițiile rămân.
+- Butonul e în **Fixturi → ⇪ Importă din SoundSwitch**, în **Nou → Din SoundSwitch** și în meniul **Fișier**. Poți și trage folderul proiectului peste fereastră.
+
+## Ce era nou în 1.3
 
 - **O singură căutare** în „Adaugă fixturi”: scrii modelul (ex. „panther”) și vezi deodată profilele tale, rezultatele din **Open Fixture Library** (import cu un click) și butonul **🔎 Caută pe Fixture.ID**.
 - **Fișiere .d4 de pe Fixture.ID**: le tragi peste fereastră sau din **Import fișier**. Merg și arhivele .zip.
@@ -36,7 +44,7 @@ Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixt
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.3.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.4.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
@@ -45,7 +53,7 @@ Avertismentul de la pasul 2 apare doar o dată. Aplicația nu e semnată cu un c
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.3.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.4.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 
