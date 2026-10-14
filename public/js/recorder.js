@@ -22,13 +22,20 @@ export function saveBrand(brand) {
   try { localStorage.setItem(BRAND_KEY, JSON.stringify(brand)); } catch (_) { toast('Logo-ul este prea mare pentru a fi salvat.', 'error'); }
 }
 
-export function pickMimeType() {
-  const candidates = [
+/** Best container/codec this browser can record: H.264 MP4 first (plays everywhere). */
+export function pickMimeType(withAudio = false) {
+  const candidates = withAudio ? [
     ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'mp4'],
     ['video/mp4;codecs=avc1,mp4a.40.2', 'mp4'],
-    ['video/mp4', 'mp4'],
+    ['video/mp4;codecs=avc1,opus', 'mp4'],
     ['video/webm;codecs=vp9,opus', 'webm'],
     ['video/webm;codecs=vp8,opus', 'webm'],
+    ['video/webm', 'webm'],
+  ] : [
+    ['video/mp4;codecs=avc1.640028', 'mp4'],
+    ['video/mp4;codecs=avc1', 'mp4'],
+    ['video/mp4', 'mp4'],
+    ['video/webm;codecs=vp9', 'webm'],
     ['video/webm', 'webm'],
   ];
   if (typeof MediaRecorder === 'undefined') return null;
@@ -117,7 +124,7 @@ export class ClipRecorder {
   async start(opts) {
     const app = this.app;
     const vis = app.vis;
-    const mime = pickMimeType();
+    const mime = pickMimeType(!!opts.music);
     if (!mime) { toast('Browserul nu poate înregistra video. Folosește aplicația FreeVisualizer, Chrome sau Edge.', 'error', 6000); return; }
     const [W, H] = FORMATS[opts.format].size.map((v) => Math.round(v * opts.scale));
     const brand = loadBrand();
