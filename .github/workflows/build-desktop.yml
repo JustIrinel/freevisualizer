@@ -1,0 +1,88 @@
+name: Build desktop apps
+
+# Builds FreeVisualizer.dmg (macOS, Apple Silicon + Intel) and a Windows installer.
+# - every push: the installers are attached to the workflow run (Actions → run → Artifacts)
+# - a tag like v1.1.0: a GitHub Release is created with the installers
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  mac:
+    needs: test
+    runs-on: macos-latest
+    env:
+      # Optional: add these secrets to sign + notarize (Apple Developer account).
+      CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (ad-hoc signed, no Apple account)
+        if: env.CSC_LINK == ''
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac --universal --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
+      - name: Build (signed + notarized)
+        if: env.CSC_LINK != ''
+        run: npx electron-builder --mac --universal --publish never -c.mac.notarize=true
+      - name: Check the app bundle
+        run: |
+          APP="dist/mac-universal/FreeVisualizer.app"
+          lipo -archs "$APP/Contents/MacOS/FreeVisualizer"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          ls -lh dist/*.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeVisualizer-mac
+          path: dist/*.dmg
+          if-no-files-found: error
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx electron-builder --win --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeVisualizer-windows
+          path: dist/*.exe
+          if-no-files-found: error
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe

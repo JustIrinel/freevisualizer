@@ -25,11 +25,19 @@ export function bindStatic(app) {
     'import-profile': () => dialogs.importProfileFile(app),
     fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()),
     'hide-ui': () => { document.body.classList.toggle('ui-hidden'); app.vis.resize(); if (document.body.classList.contains('ui-hidden')) toast('Apasă H ca să revii la panouri.'); },
+    demo: () => app.toggleDemo(),
+    present: () => window.freevisDesktop && window.freevisDesktop.togglePresent(),
   };
+  app.actions = actions;
   document.body.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (btn && actions[btn.dataset.action]) actions[btn.dataset.action]();
   });
+  // Native menu of the desktop app (macOS / Windows).
+  if (window.freevisDesktop) {
+    document.body.classList.add('desktop');
+    window.freevisDesktop.onMenu((action) => { if (actions[action]) actions[action](); });
+  }
 
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x === b));

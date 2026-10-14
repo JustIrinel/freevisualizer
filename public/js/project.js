@@ -2,7 +2,7 @@
 import { uid } from './profiles.js';
 
 export const PROJECT_VERSION = 1;
-const AUTOSAVE_KEY = 'freevis.autosave.v1';
+export const AUTOSAVE_KEY = 'freevis.autosave.v1';
 
 export function defaultSettings() {
   return { haze: 0.5, bloom: 0.9, ambient: 0.08, lightPower: 1, showLabels: false, artnetOffset: 1 };

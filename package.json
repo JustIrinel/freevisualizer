@@ -2,15 +2,97 @@
   "name": "freevisualizer",
   "version": "1.0.0",
   "description": "Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN) – adaugi fixturi și vezi show-ul live.",
-  "main": "server/index.js",
+  "main": "desktop/main.js",
+  "author": "DJ Matei",
+  "homepage": "https://github.com/JustIrinel/freevisualizer",
   "scripts": {
     "start": "node server/index.js",
+    "app": "electron .",
     "test": "node --test",
-    "test-signal": "node tools/send-test-artnet.js"
+    "test-signal": "node tools/send-test-artnet.js",
+    "dist:mac": "electron-builder --mac --universal --publish never",
+    "dist:win": "electron-builder --win --x64 --publish never"
   },
   "engines": {
     "node": ">=18"
   },
   "license": "MIT",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "electron": "43.7.6",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "ro.djmatei.freevisualizer",
+    "productName": "FreeVisualizer",
+    "copyright": "Copyright © 2026 DJ Matei",
+    "directories": {
+      "buildResources": "desktop/build",
+      "output": "dist"
+    },
+    "files": [
+      "desktop/main.js",
+      "desktop/preload.js",
+      "server/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "desktop/build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/build/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "FreeVisualizer primește semnal Art-Net/sACN de la SoundSwitch sau de la alte calculatoare din rețea.",
+        "LSMinimumSystemVersion": "12.0"
+      },
+      "artifactName": "FreeVisualizer-${version}-mac.${ext}"
+    },
+    "dmg": {
+      "title": "FreeVisualizer ${version}",
+      "contents": [
+        {
+          "x": 150,
+          "y": 200
+        },
+        {
+          "x": 450,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 600,
+        "height": 400
+      }
+    },
+    "win": {
+      "icon": "desktop/build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "FreeVisualizer-${version}-windows-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  }
 }

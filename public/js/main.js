@@ -5,7 +5,7 @@ import { computeState, createRuntime } from './fixture-state.js';
 import { renderDemo } from './demo.js';
 import { BUILTIN_PROFILES, normalizeProfile, uid, cloneProfile } from './profiles.js';
 import {
-  demoProject, emptyProject, normalizeProject, autosave, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
+  demoProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
 } from './project.js';
 import { PROP_TYPES } from './props3d.js';
 import { toast, pickFile } from './dom.js';
@@ -40,9 +40,22 @@ class App {
     };
     this.vis.onTransformEnd = () => this.saveSoon();
 
+    // Presentation window (desktop app, 2nd monitor): no panels, follows the main window's project.
+    this.presentMode = new URLSearchParams(location.search).has('present');
+    if (this.presentMode) document.body.classList.add('ui-hidden', 'present');
+
     const restored = loadAutosave();
     this.loadProject(restored || demoProject(), { keepHistory: false });
-    if (!restored) toast('Bine ai venit! Am încărcat un rig demo – apasă ▶ Demo ca să-l vezi în acțiune.', 'info', 6000);
+    if (!restored && !this.presentMode) toast('Bine ai venit! Am încărcat un rig demo – apasă ▶ Demo ca să-l vezi în acțiune.', 'info', 6000);
+    if (this.presentMode) {
+      window.addEventListener('storage', (e) => {
+        if (e.key !== AUTOSAVE_KEY || !e.newValue) return;
+        const camera = this.vis.getCamera();
+        try { this.loadProject({ ...JSON.parse(e.newValue), camera }, { keepHistory: false }); } catch (_) { /* ignore */ }
+      });
+      window.addEventListener('storage', (e) => { if (e.key === 'freevis.demo') this.toggleDemo(e.newValue === '1'); });
+      try { if (localStorage.getItem('freevis.demo') === '1') this.dmx.useDemo = true; } catch (_) { /* ignore */ }
+    }
 
     this.dmx.connect();
     this.monitor = new DmxMonitor(this);
@@ -188,6 +201,7 @@ class App {
   }
 
   saveSoon() {
+    if (this.presentMode) return; // the presentation window only mirrors
     clearTimeout(this._saveTimer);
     this._saveTimer = setTimeout(() => {
       this.project.camera = this.vis.getCamera();
@@ -345,6 +359,7 @@ class App {
 
   toggleDemo(on = !this.dmx.useDemo) {
     this.dmx.useDemo = on;
+    try { if (!this.presentMode) localStorage.setItem('freevis.demo', on ? '1' : '0'); } catch (_) { /* ignore */ }
     if (!on) for (const b of this.dmx.demo.values()) b.fill(0);
     ui.updateStatus(this);
   }
@@ -380,10 +395,28 @@ class App {
       }
       e.preventDefault();
     });
-    window.addEventListener('beforeunload', () => { this.project.camera = this.vis.getCamera(); autosave(this.project); });
+    window.addEventListener('beforeunload', () => {
+      if (this.presentMode) return;
+      this.project.camera = this.vis.getCamera();
+      autosave(this.project);
+    });
   }
 }
 
-const app = new App();
-window.freevis = app; // handy for debugging from the console
+let app = null;
+try {
+  app = new App();
+  window.freevis = app; // handy for debugging from the console
+} catch (err) {
+  console.error(err);
+  const box = document.createElement('div');
+  box.className = 'fatal';
+  box.innerHTML = '<h2>Vizualizatorul 3D nu a putut porni</h2>'
+    + '<p>Placa video sau browserul nu permite WebGL. Încearcă Chrome / Safari actualizat, '
+    + 'pornește accelerarea hardware sau repornește calculatorul.</p>';
+  const detail = document.createElement('code');
+  detail.textContent = err.message;
+  box.appendChild(detail);
+  document.body.appendChild(box);
+}
 export { app, dialogs };
