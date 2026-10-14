@@ -502,10 +502,14 @@ export class Visualizer {
       return;
     }
     const roots = [...this.objects.values()].map((o) => o.model.root);
+    // Fixtures win over props: a fixture hanging on a truss is picked even
+    // when the ray touches the truss first.
     let id = null;
     for (const h of this.raycaster.intersectObjects(roots, true)) {
-      id = this._objectIdOf(h.object);
-      if (id) break;
+      const hitId = this._objectIdOf(h.object);
+      if (!hitId) continue;
+      if (this.objects.get(hitId)?.type === 'fixture') { id = hitId; break; }
+      id ??= hitId;
     }
     this.onPick(id, { toggle: e.ctrlKey || e.metaKey, shift: e.shiftKey });
   }
