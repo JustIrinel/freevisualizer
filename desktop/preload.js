@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('freevisDesktop', {
   onMenu: (callback) => ipcRenderer.on('menu-action', (_e, action) => callback(action)),
   info: () => ipcRenderer.invoke('desktop-info'),
   togglePresent: () => ipcRenderer.send('toggle-present'),
+  openFixtureId: () => ipcRenderer.send('open-fixture-id'),
+  onFixtureFile: (callback) => ipcRenderer.on('fixture-file', (_e, file) => callback(file)),
 });

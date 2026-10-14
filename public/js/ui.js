@@ -22,6 +22,7 @@ export function bindStatic(app) {
     help: () => dialogs.helpDialog(app),
     'add-fixture': () => dialogs.addFixturesDialog(app),
     'ofl-search': () => dialogs.oflDialog(app),
+    'open-fixture-id': () => dialogs.openFixtureId(),
     'new-profile': () => dialogs.profileEditor(app, null),
     'import-profile': () => dialogs.importProfileFile(app),
     fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()),
@@ -33,9 +34,11 @@ export function bindStatic(app) {
   app.actions = actions;
   document.body.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
-    if (btn && actions[btn.dataset.action]) actions[btn.dataset.action]();
+    if (!btn || !actions[btn.dataset.action]) return;
+    if (btn.tagName === 'A') e.preventDefault();
+    actions[btn.dataset.action]();
   });
-  // Drag & drop fixture files (.gdtf / .qxf / .json) anywhere on the window.
+  // Drag & drop fixture files (.d4 / .gdtf / .zip / .json) anywhere on the window.
   const overlay = $('dropOverlay');
   let dragDepth = 0;
   const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -54,6 +57,11 @@ export function bindStatic(app) {
   if (window.freevisDesktop) {
     document.body.classList.add('desktop');
     window.freevisDesktop.onMenu((action) => { if (actions[action]) actions[action](); });
+    // Files downloaded in the Fixture.ID window.
+    window.freevisDesktop.onFixtureFile?.((f) => {
+      toast(`Am primit „${f.name}” de pe Fixture.ID`);
+      dialogs.importFixtureFile(app, new File([f.data], f.name));
+    });
   }
 
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {

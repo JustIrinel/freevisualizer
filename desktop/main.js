@@ -2,7 +2,8 @@
 // FreeVisualizer desktop app (macOS / Windows). Runs the same server as
 // `npm start` inside Electron and shows the visualizer in a native window.
 
-const { app, BrowserWindow, Menu, dialog, shell, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, screen, ipcMain, session } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { createApp, ipv4Interfaces } = require('../server/app');
 
@@ -11,6 +12,11 @@ let server = null;
 let baseUrl = null;
 let mainWindow = null;
 let presentWindow = null;
+let fixtureIdWindow = null;
+
+const FIXTURE_ID_URL = process.env.FREEVIS_FIXTURE_ID_URL || 'https://www.fixture.id/';
+// Downloads from the Fixture.ID window that we import instead of saving.
+const FIXTURE_FILE = /\.(d4|gdtf|zip|qxf|xml)$/i;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -60,7 +66,57 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
     if (presentWindow && !presentWindow.isDestroyed()) presentWindow.close();
+    if (fixtureIdWindow && !fixtureIdWindow.isDestroyed()) fixtureIdWindow.close();
   });
+}
+
+/** A fixture file downloaded in the Fixture.ID window goes straight to the import. */
+function onFixtureDownload(_event, item) {
+  const name = item.getFilename();
+  if (!FIXTURE_FILE.test(name)) return; // anything else: normal download
+  const tmp = path.join(app.getPath('temp'), `freevis-${Date.now()}-${name}`);
+  item.setSavePath(tmp);
+  item.once('done', async (_e, state) => {
+    if (state !== 'completed') {
+      dialog.showMessageBox({ type: 'warning', message: `Descărcarea „${name}” nu s-a terminat`, detail: `Stare: ${state}` });
+      return;
+    }
+    try {
+      const data = await fs.promises.readFile(tmp);
+      fs.promises.unlink(tmp).catch(() => {});
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('fixture-file', { name, data: new Uint8Array(data) });
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    } catch (err) {
+      dialog.showErrorBox('Nu am putut citi fișierul descărcat', err.message);
+    }
+  });
+}
+
+/** Fixture.ID inside the app, with its own persistent session (stay logged in). */
+function openFixtureIdWindow() {
+  if (fixtureIdWindow && !fixtureIdWindow.isDestroyed()) {
+    if (fixtureIdWindow.isMinimized()) fixtureIdWindow.restore();
+    fixtureIdWindow.focus();
+    return;
+  }
+  const partition = 'persist:fixtureid';
+  const ses = session.fromPartition(partition);
+  if (!ses.listenerCount('will-download')) ses.on('will-download', onFixtureDownload);
+  fixtureIdWindow = new BrowserWindow({
+    width: 1200,
+    height: 860,
+    title: 'Fixture.ID – descarcă fișierul .d4, se importă singur în FreeVisualizer',
+    backgroundColor: '#ffffff',
+    webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  // Keep our title so the hint stays visible.
+  fixtureIdWindow.on('page-title-updated', (e) => e.preventDefault());
+  // Pop-ups (login, file links) stay in the same session so downloads are still caught.
+  fixtureIdWindow.webContents.setWindowOpenHandler(({ url }) => (/^https?:/i.test(url) ? { action: 'allow' } : { action: 'deny' }));
+  fixtureIdWindow.loadURL(FIXTURE_ID_URL);
+  fixtureIdWindow.on('closed', () => { fixtureIdWindow = null; });
 }
 
 /** Full-screen view without panels, on the external display when there is one. */
@@ -132,6 +188,7 @@ function buildMenu() {
         { role: 'selectAll', label: 'Selectează tot' },
         { type: 'separator' },
         item('Adaugă fixturi…', 'add-fixture', 'CmdOrCtrl+Shift+A'),
+        { label: 'Caută pe Fixture.ID…', click: openFixtureIdWindow },
       ],
     },
     {
@@ -156,6 +213,7 @@ function buildMenu() {
       label: 'Ajutor',
       submenu: [
         item('Conectare SoundSwitch', 'help'),
+        { label: 'Fixture.ID (fișiere .d4)', click: openFixtureIdWindow },
         { label: 'Open Fixture Library', click: () => shell.openExternal('https://open-fixture-library.org') },
         { label: 'Folderul cu date (proiecte)', click: () => shell.openPath(app.getPath('userData')) },
       ],
@@ -170,6 +228,7 @@ ipcMain.handle('desktop-info', () => ({
   interfaces: ipv4Interfaces().filter((i) => !i.internal).map((i) => i.address),
 }));
 ipcMain.on('toggle-present', () => togglePresentWindow());
+ipcMain.on('open-fixture-id', () => openFixtureIdWindow());
 
 app.whenReady().then(async () => {
   app.setAboutPanelOptions({

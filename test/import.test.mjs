@@ -3,13 +3,15 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { parseXml, child, children } from '../public/js/xml-lite.js';
-import { readZip } from '../public/js/zip-lite.js';
+import { readZip, fixtureFilesInZip } from '../public/js/zip-lite.js';
+import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from '../public/js/d4-import.js';
 import { readGdtf, listGdtfModes, gdtfToProfile, cieToHex } from '../public/js/gdtf-import.js';
 import { parseQxf, listQxfModes, qxfToProfile } from '../public/js/qxf-import.js';
 import { computeState, createRuntime } from '../public/js/fixture-state.js';
 import { normalizeProfile } from '../public/js/profiles.js';
 import { aimRotation, beamDirection } from '../public/js/aim.js';
 
+const d4 = (n) => fs.readFileSync(new URL(`./d4/${n}`, import.meta.url), 'utf8');
 const qxf = (n) => fs.readFileSync(new URL(`./qxf/${n}`, import.meta.url), 'utf8');
 const dmx = (values) => { const b = new Uint8Array(512); values.forEach((v, i) => { b[i] = v; }); return b; };
 
@@ -213,4 +215,46 @@ test('aimRotation points +Y at the target', () => {
   assert.ok(Math.abs(d.x - (to.x - from.x) / len) < 0.01);
   assert.ok(Math.abs(d.y - (to.y - from.y) / len) < 0.01);
   assert.ok(Math.abs(d.z - (to.z - from.z) / len) < 0.01);
+});
+
+test('Avolites .d4 moving head: 16-bit pan/tilt/dimmer, wheel, gobo, shutter, modes', () => {
+  const text = d4('Test-Spot-260.d4');
+  assert.ok(isD4Xml(text));
+  const root = parseD4(text);
+  assert.deepStrictEqual(listD4Modes(root).map((m) => [m.name, m.channels]), [['16 Channel', 13], ['8 Channel', 8]]);
+  const p = normalizeProfile(d4ToProfile(root, 0));
+  assert.strictEqual(p.kind, 'moving');
+  assert.strictEqual(p.manufacturer, 'Test Lighting');
+  assert.deepStrictEqual(p.beamAngle, [12, 25]);
+  assert.deepStrictEqual(p.channels.map((c) => c.type),
+    ['pan', 'panFine', 'tilt', 'tiltFine', 'none', 'colorWheel', 'gobo', 'none', 'prism', 'zoom', 'strobe', 'dimmer', 'dimmerFine']);
+  const wheel = p.channels[5].ranges;
+  assert.strictEqual(wheel.find((r) => r.from === 10).color, '#ff0000');
+  assert.strictEqual(wheel.find((r) => r.from === 128).mode, 'rotate');
+  const shutter = p.channels[10].ranges;
+  assert.deepStrictEqual(shutter.map((r) => r.mode), ['closed', 'open', 'strobe', 'pulse', 'random', 'open']);
+  // Full dimmer, open shutter, red slot → red light.
+  const v = new Array(13).fill(0); v[11] = 255; v[12] = 255; v[10] = 10; v[5] = 12;
+  const s = computeState(p, dmx(v), 1, createRuntime(), 0.016, 0);
+  assert.ok(s.intensity > 0.99);
+  assert.deepStrictEqual(s.color, [1, 0, 0]);
+  // 8-channel mode keeps the gap at offset 4.
+  const p8 = d4ToProfile(root, 1);
+  assert.deepStrictEqual(p8.channels.map((c) => c.type), ['pan', 'tilt', 'colorWheel', 'gobo', 'none', 'strobe', 'dimmer', 'zoom']);
+});
+
+test('Avolites .d4 with cells becomes a 7-pixel retro (offsets starting at 1)', () => {
+  const p = d4ToProfile(parseD4(d4('Test-Retro-Hex-7.d4')), 0);
+  assert.strictEqual(p.kind, 'retro');
+  assert.strictEqual(p.pixels, 7);
+  assert.strictEqual(p.channels.length, 22);
+  assert.strictEqual(p.channels[0].type, 'dimmer');
+  assert.deepStrictEqual([p.channels[1].type, p.channels[1].pixel, p.channels[21].type, p.channels[21].pixel], ['red', 0, 'blue', 6]);
+});
+
+test('.zip download: fixture files are found inside', async () => {
+  const zip = makeZip({ 'Test/Test-Spot-260.d4': d4('Test-Spot-260.d4'), 'readme.txt': 'x', '__MACOSX/._Test-Spot-260.d4': 'junk' });
+  const files = await fixtureFilesInZip(zip);
+  assert.deepStrictEqual(files.map((f) => f.name), ['Test-Spot-260.d4']);
+  assert.ok(isD4Xml(new TextDecoder().decode(files[0].bytes)));
 });

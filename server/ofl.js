@@ -8,8 +8,17 @@ const path = require('path');
 const RAW = 'https://raw.githubusercontent.com/OpenLightingProject/open-fixture-library/master';
 const TREE = 'https://api.github.com/repos/OpenLightingProject/open-fixture-library/git/trees/master?recursive=1';
 const OFL_SEARCH = 'https://open-fixture-library.org/api/v1/get-search-results';
-const KEY_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/;
+const KEY_RE = /^[a-z0-9][a-z0-9-]*\/[a-zA-Z0-9][a-zA-Z0-9-]*$/;
 const INDEX_MAX_AGE = 7 * 24 * 3600 * 1000;
+
+/** Fixture list shipped with the app (scripts/update-ofl-snapshot.sh). */
+function snapshot() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'ofl-snapshot.json'), 'utf8'));
+  } catch (_) {
+    return { keys: [], manufacturers: {} };
+  }
+}
 
 class OflService {
   constructor(cacheDir) {
@@ -42,7 +51,7 @@ class OflService {
         data = await (await this._fetch(`${RAW}/fixtures/manufacturers.json`)).json();
         fs.writeFileSync(file, JSON.stringify(data));
       } catch (err) {
-        data = this._readCache(file, 0) || {};
+        data = this._readCache(file, 0) || snapshot().manufacturers;
       }
     }
     return data;
@@ -61,7 +70,8 @@ class OflService {
           .map((p) => p.slice('fixtures/'.length, -'.json'.length));
         if (keys.length) fs.writeFileSync(file, JSON.stringify(keys));
       } catch (err) {
-        keys = this._readCache(file, 0);
+        // GitHub API unreachable or rate limited: last cached list, then the shipped one.
+        keys = this._readCache(file, 0) || snapshot().keys;
       }
     }
     if (!keys || !keys.length) return null;

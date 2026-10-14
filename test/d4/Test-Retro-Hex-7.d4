@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Fixture Name="Retro Hex 7" Company="Test Lighting">
+  <Control>
+    <Attribute ID="Dimmer" Name="Master Dimmer" Group="I"><Function Name="Dimmer" Dmx="0~255"/></Attribute>
+    <Attribute ID="Red" Name="Red" Group="C"><Function Name="Red" Dmx="0~255"/></Attribute>
+    <Attribute ID="Green" Name="Green" Group="C"><Function Name="Green" Dmx="0~255"/></Attribute>
+    <Attribute ID="Blue" Name="Blue" Group="C"><Function Name="Blue" Dmx="0~255"/></Attribute>
+  </Control>
+  <Mode Name="22 Channel">
+    <Include>
+      <Attribute ID="Dimmer" ChannelOffset="1"/>
+      <Cell Index="1">
+        <Attribute ID="Red" ChannelOffset="2"/>
+        <Attribute ID="Green" ChannelOffset="3"/>
+        <Attribute ID="Blue" ChannelOffset="4"/>
+      </Cell>
+      <Cell Index="2">
+        <Attribute ID="Red" ChannelOffset="5"/>
+        <Attribute ID="Green" ChannelOffset="6"/>
+        <Attribute ID="Blue" ChannelOffset="7"/>
+      </Cell>
+      <Cell Index="3">
+        <Attribute ID="Red" ChannelOffset="8"/>
+        <Attribute ID="Green" ChannelOffset="9"/>
+        <Attribute ID="Blue" ChannelOffset="10"/>
+      </Cell>
+      <Cell Index="4">
+        <Attribute ID="Red" ChannelOffset="11"/>
+        <Attribute ID="Green" ChannelOffset="12"/>
+        <Attribute ID="Blue" ChannelOffset="13"/>
+      </Cell>
+      <Cell Index="5">
+        <Attribute ID="Red" ChannelOffset="14"/>
+        <Attribute ID="Green" ChannelOffset="15"/>
+        <Attribute ID="Blue" ChannelOffset="16"/>
+      </Cell>
+      <Cell Index="6">
+        <Attribute ID="Red" ChannelOffset="17"/>
+        <Attribute ID="Green" ChannelOffset="18"/>
+        <Attribute ID="Blue" ChannelOffset="19"/>
+      </Cell>
+      <Cell Index="7">
+        <Attribute ID="Red" ChannelOffset="20"/>
+        <Attribute ID="Green" ChannelOffset="21"/>
+        <Attribute ID="Blue" ChannelOffset="22"/>
+      </Cell>
+    </Include>
+  </Mode>
+</Fixture>

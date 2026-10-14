@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Fixture Name="Spot 260" ShortName="Spot260" Company="Test Lighting">
+  <Control>
+    <Attribute ID="Dimmer" Name="Dimmer" Group="I">
+      <Function Name="Dimmer" Dmx="0~65535"/>
+    </Attribute>
+    <Attribute ID="Shutter" Name="Shutter" Group="I">
+      <Function Name="Closed" Dmx="0~7"/>
+      <Function Name="Open" Dmx="8~15"/>
+      <Function Name="Strobe slow-fast" Dmx="16~131"/>
+      <Function Name="Pulse" Dmx="132~195"/>
+      <Function Name="Random strobe" Dmx="196~247"/>
+      <Function Name="Open" Dmx="248~255"/>
+    </Attribute>
+    <Attribute ID="Pan" Name="Pan" Group="P">
+      <Function Name="Pan" Dmx="0~65535"/>
+    </Attribute>
+    <Attribute ID="Tilt" Name="Tilt" Group="P">
+      <Function Name="Tilt" Dmx="65535~0"/>
+    </Attribute>
+    <Attribute ID="PTSpeed" Name="Pan/Tilt Speed" Group="S">
+      <Function Name="Fast" Dmx="0~255"/>
+    </Attribute>
+    <Attribute ID="Colour" Name="Colour Wheel" Group="C">
+      <Function Name="White" Dmx="0~9"/>
+      <Function Name="Red" Dmx="10~19"/>
+      <Function Name="Light Blue" Dmx="20~29"/>
+      <Function Name="Red / Orange" Dmx="30~39"/>
+      <Function Name="CTO" Dmx="40~49"/>
+      <Function Name="Rainbow" Dmx="128~255"/>
+    </Attribute>
+    <Attribute ID="Gobo1" Name="Gobo" Group="G">
+      <Function Name="Open" Dmx="0~7"/>
+      <Function Name="Gobo 1" Dmx="8~15"/>
+      <Function Name="Gobo 2" Dmx="16~23"/>
+      <Function Name="Gobo 2 shake" Dmx="24~63"/>
+      <Function Name="Gobo scroll" Dmx="64~255"/>
+    </Attribute>
+    <Attribute ID="Gobo1Rotate" Name="Gobo Rotation" Group="G">
+      <Function Name="Rotate" Dmx="0~255"/>
+    </Attribute>
+    <Attribute ID="Prism" Name="Prism" Group="E">
+      <Function Name="Out" Dmx="0~127"/>
+      <Function Name="3 facet" Dmx="128~255"/>
+    </Attribute>
+    <Attribute ID="Zoom" Name="Zoom" Group="B">
+      <Function Name="Zoom" Dmx="0~255"/>
+    </Attribute>
+  </Control>
+  <Mode Name="16 Channel">
+    <Physical>
+      <Lens Name="Zoom" Degrees="25~12"/>
+      <Focus Type="Head" PanMax="540" TiltMax="270"/>
+    </Physical>
+    <Include>
+      <Attribute ID="Pan" ChannelOffset="0,1"/>
+      <Attribute ID="Tilt" ChannelOffset="2,3"/>
+      <Attribute ID="PTSpeed" ChannelOffset="4"/>
+      <Attribute ID="Colour" ChannelOffset="5"/>
+      <Attribute ID="Gobo1" ChannelOffset="6"/>
+      <Attribute ID="Gobo1Rotate" ChannelOffset="7"/>
+      <Attribute ID="Prism" ChannelOffset="8"/>
+      <Attribute ID="Zoom" ChannelOffset="9"/>
+      <Attribute ID="Shutter" ChannelOffset="10"/>
+      <Attribute ID="Dimmer" ChannelOffset="11,12"/>
+      <Attribute ID="Conditional"/>
+    </Include>
+  </Mode>
+  <Mode Name="8 Channel">
+    <Include>
+      <Attribute ID="Pan" ChannelOffset="0"/>
+      <Attribute ID="Tilt" ChannelOffset="1"/>
+      <Attribute ID="Colour" ChannelOffset="2"/>
+      <Attribute ID="Gobo1" ChannelOffset="3"/>
+      <Attribute ID="Shutter" ChannelOffset="5"/>
+      <Attribute ID="Dimmer" ChannelOffset="6"/>
+      <Attribute ID="Zoom" ChannelOffset="7"/>
+    </Include>
+  </Mode>
+  <Palettes/>
+</Fixture>

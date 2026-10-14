@@ -26,8 +26,9 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
 - **Șabloane**: „Rig nuntă” (cabină DJ cu truss, retro-uri, 12 uplight-uri, ring de dans cu scântei, glob, fum greu, laser, masa mirilor, mese rotunde) și „Rig club"
 - **Bibliotecă**:
   - profile generice incluse
-  - căutare și import direct din [Open Fixture Library](https://open-fixture-library.org): peste o mie de modele Chauvet, ADJ, Cameo, Stairville, Eurolite, Showtec etc.
-  - import de fișiere **GDTF (.gdtf)** și **QLC+ (.qxf)**, descărcate de pe [Fixture.ID](https://www.fixture.id/), [GDTF Share](https://gdtf-share.com/) sau din biblioteca QLC+. Le tragi peste fereastră și gata.
+  - **o singură căutare** în „Adaugă fixturi”: profilele tale, [Open Fixture Library](https://open-fixture-library.org) (Chauvet, ADJ, Cameo, BeamZ, Stairville, Eurolite, Showtec etc., import direct) și un buton spre [Fixture.ID](https://www.fixture.id/)
+  - import de fișiere **.d4** de pe Fixture.ID (format Avolites), plus **.gdtf**, **.zip** și **.json**: le tragi peste fereastră și gata
+  - în aplicația pentru Mac / Windows, Fixture.ID se deschide într-o fereastră proprie, iar fișierul descărcat se importă singur
   - editor pentru profilele tale
 - **Editare rapidă**:
   - selecție multiplă: Ctrl/Cmd+click, Shift+trage un dreptunghi, Ctrl/Cmd+A
@@ -108,16 +109,18 @@ Implicit, universul Art-Net 0 apare în vizualizator ca **Universul 1**, la fel 
 
 1. **Nou → Rig nuntă** îți dă un punct de plecare complet. Îl adaptezi la sala ta.
 2. **Fixturi → + Adaugă fixturi**: alegi profilul, cantitatea, universul și adresa de start, apoi montajul (pe podea, agățat pe truss, spre public). Retro-urile sunt profilele „Retro hexagonal 7 capete”, în 4 variante de canale.
-3. Ai fișierul fixturii de pe **Fixture.ID** / GDTF Share (`.gdtf`) sau din QLC+ (`.qxf`)? Trage-l peste fereastră (sau **Bibliotecă → Import fișier**) și alege modul DMX.
-4. Dacă modelul tău nu e în lista generică: **Bibliotecă → Caută online (OFL)**, scrii numele (de exemplu „intimidator spot 260”) și alegi **exact modul DMX** setat pe fixtură. Profilul rămâne salvat în proiect.
-5. Click pe o fixtură în scenă ca s-o selectezi.
+3. Modelul tău nu e în lista generică? Scrie-l în căutarea din **Adaugă fixturi** (de exemplu „panther” sau „intimidator spot 260”):
+   - dacă apare la **Open Fixture Library**, dai click și alegi **exact modul DMX** setat pe fixtură;
+   - dacă nu, apeși **🔎 Caută pe Fixture.ID**: textul căutat e deja copiat, îl lipești în site și descarci fișierul **.d4**. În aplicația desktop se importă singur; în browser îl tragi peste fereastră.
+   - Profilul rămâne salvat în proiect.
+4. Click pe o fixtură în scenă ca s-o selectezi.
    - Mai multe deodată: **Ctrl/Cmd+click**, sau ții **Shift** și tragi un dreptunghi peste ele.
    - **W** = mutare (tragi de săgețile colorate), **E** = rotire (roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală).
    - Săgeata galbenă arată încotro bate lumina.
    - În dreapta ai poziția și cele 3 slidere de orientare, cu butoane de ±15°.
    - Cel mai simplu e **🎯 Țintește**: apeși butonul, apoi dai click în scenă pe punctul unde vrei lumina.
-6. **Scenă**: adaugi truss, cabină DJ, boxe, ecran LED și invitați, și setezi dimensiunile sălii.
-7. **Ctrl+S** salvează proiectul. Cu **Export** iei fișierul `.json` și îl poți muta pe alt laptop.
+5. **Scenă**: adaugi truss, cabină DJ, boxe, ecran LED și invitați, și setezi dimensiunile sălii.
+6. **Ctrl+S** salvează proiectul. Cu **Export** iei fișierul `.json` și îl poți muta pe alt laptop.
 
 ### Scurtături
 
@@ -165,11 +168,13 @@ desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereast
 public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendor)
   fixture-state.js DMX → culoare/intensitate/pan/tilt (pur, testat)
   ofl-import.js    Open Fixture Library → profil FreeVisualizer (pur, testat)
+  d4-import.js     Avolites .d4 (Fixture.ID) → profil; gdtf-import.js / qxf-import.js la fel
   fixtures3d.js    modelele 3D și fasciculele
   scene3d.js       scena, camera, bloom, selecție
   particles.js     particule (scântei, fum greu, reflexii glob)
   recorder.js      înregistrare clipuri video
 tools/send-test-artnet.js   trimite un semnal Art-Net de test
+scripts/update-ofl-snapshot.sh  actualizează lista OFL inclusă în aplicație (server/ofl-snapshot.json)
 test/              teste (npm test)
 ```
 

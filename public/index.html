@@ -62,18 +62,17 @@
       </section>
       <section class="tab hidden" id="tab-library">
         <div class="row">
-          <button class="primary grow" data-action="ofl-search">🔎 Caută online (OFL)</button>
+          <button class="primary grow" data-action="ofl-search">🔎 Caută fixturi (OFL + Fixture.ID)</button>
         </div>
         <div class="row">
           <button class="grow" data-action="new-profile">+ Profil nou</button>
-          <button class="grow" data-action="import-profile" title="Fișiere .gdtf (Fixture.ID, GDTF Share), .qxf (QLC+) sau .json (Open Fixture Library)">Import fișier</button>
+          <button class="grow" data-action="import-profile" title="Fișiere .d4 (Fixture.ID / Avolites), .gdtf, .zip sau .json (Open Fixture Library)">Import fișier</button>
         </div>
         <div class="lib-links">
           <span class="muted small">Biblioteci de fixturi:</span>
-          <a href="https://www.fixture.id/" target="_blank" rel="noopener">Fixture.ID ↗</a>
-          <a href="https://gdtf-share.com/" target="_blank" rel="noopener">GDTF Share ↗</a>
-          <a href="https://www.qlcplus.org/fixtures" target="_blank" rel="noopener">QLC+ ↗</a>
-          <div class="muted small">Descarci fișierul <b>.gdtf</b> sau <b>.qxf</b> și îl tragi peste fereastra FreeVisualizer (sau „Import fișier”).</div>
+          <a href="#" data-action="open-fixture-id">Fixture.ID ↗</a>
+          <a href="https://open-fixture-library.org/" target="_blank" rel="noopener">Open Fixture Library ↗</a>
+          <div class="muted small">De pe Fixture.ID descarci fișierul <b>.d4</b> și îl tragi peste fereastra FreeVisualizer. În aplicația pentru Mac / Windows, fișierul descărcat din fereastra Fixture.ID se importă singur.</div>
         </div>
         <input type="search" id="profileFilter" placeholder="Caută profil…">
         <div id="profileList" class="list"></div>
@@ -124,7 +123,7 @@
     <aside class="panel right" id="inspector"></aside>
   </main>
 
-  <div id="dropOverlay" class="drop-overlay hidden"><div>Eliberează aici fișierul de fixtură (.gdtf, .qxf, .json)</div></div>
+  <div id="dropOverlay" class="drop-overlay hidden"><div>Eliberează aici fișierul de fixtură (.d4, .gdtf, .zip, .json)</div></div>
   <dialog id="modal"><div id="modalBody"></div></dialog>
   <div id="toast" class="toast hidden"></div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>

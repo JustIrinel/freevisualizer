@@ -77,3 +77,10 @@ test('receiver emits DMX and answers ArtPoll over UDP', async () => {
   tx.close();
   rx.stop();
 });
+
+test('the Open Fixture Library list shipped with the app is usable offline', () => {
+  const snap = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../server/ofl-snapshot.json'), 'utf8'));
+  assert.ok(snap.keys.length > 500);
+  assert.ok(snap.keys.every((k) => /^[a-z0-9][a-z0-9-]*\/[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(k)));
+  assert.strictEqual(snap.manufacturers['chauvet-dj'].name, 'Chauvet DJ');
+});

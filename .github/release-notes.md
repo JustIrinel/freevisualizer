@@ -1,6 +1,14 @@
 Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 
-## Ce e nou în 1.2
+## Ce e nou în 1.3
+
+- **O singură căutare** în „Adaugă fixturi”: scrii modelul (ex. „panther”) și vezi deodată profilele tale, rezultatele din **Open Fixture Library** (import cu un click) și butonul **🔎 Caută pe Fixture.ID**.
+- **Fișiere .d4 de pe Fixture.ID**: le tragi peste fereastră sau din **Import fișier**. Merg și arhivele .zip.
+- **Fixture.ID direct în aplicație** (Mac / Windows): se deschide într-o fereastră proprie, textul căutat e deja copiat, iar fișierul descărcat se importă singur.
+- Lista Open Fixture Library e inclusă în aplicație, deci căutarea merge din prima.
+- Click pe o fixtură agățată de truss o selectează pe ea, nu truss-ul.
+
+## Ce era nou în 1.2
 
 - **Selecție multiplă**:
   - Ctrl/Cmd+click în scenă și în listă
@@ -11,7 +19,7 @@ Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixt
   - o săgeată galbenă arată încotro bate lumina
   - orientarea se face din 3 slidere cu nume clare: înclinare față/spate, rotire stânga/dreapta, înclinare laterală
   - butonul **🎯 Țintește**: dai click pe punctul spre care să bată lumina
-- **Import GDTF (.gdtf) și QLC+ (.qxf)**: fișierele descărcate de pe **Fixture.ID**, GDTF Share sau QLC+ se trag direct peste fereastră.
+- **Import GDTF (.gdtf)**: fișierul descărcat se trage direct peste fereastră.
 
 ## Ce era nou în 1.1
 
@@ -28,7 +36,7 @@ Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixt
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.2.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.3.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
@@ -37,7 +45,7 @@ Avertismentul de la pasul 2 apare doar o dată. Aplicația nu e semnată cu un c
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.2.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.3.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 

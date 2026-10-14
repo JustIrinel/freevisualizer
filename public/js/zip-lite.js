@@ -44,3 +44,15 @@ export async function readZipText(buffer, fileName) {
   if (!key) throw new Error(`Lipsește ${fileName} din arhivă`);
   return new TextDecoder().decode(await files.get(key)());
 }
+
+const FIXTURE_EXT = /\.(d4|gdtf|qxf|json)$/i;
+
+/** Fixture files inside a downloaded .zip: [{ name, bytes }]. */
+export async function fixtureFilesInZip(buffer) {
+  const out = [];
+  for (const [name, get] of readZip(buffer)) {
+    if (!FIXTURE_EXT.test(name) || /(^|\/)(__MACOSX|\.)/.test(name)) continue;
+    out.push({ name: name.split('/').pop(), bytes: await get() });
+  }
+  return out;
+}

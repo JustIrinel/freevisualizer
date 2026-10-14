@@ -7,21 +7,108 @@ import {
 import { oflToProfile, listModes } from './ofl-import.js';
 import { readGdtf, listGdtfModes, gdtfToProfile } from './gdtf-import.js';
 import { parseQxf, listQxfModes, qxfToProfile } from './qxf-import.js';
+import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
+import { fixtureFilesInZip } from './zip-lite.js';
 import { loadBrand, saveBrand } from './recorder.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
+
+// ------------------------------------------------------------------ online search
+export const FIXTURE_ID_URL = 'https://www.fixture.id/';
+
+/** Opens Fixture.ID: in the desktop app a window whose downloads import themselves. */
+export async function openFixtureId(query = '') {
+  const q = query.trim();
+  if (q) {
+    try { await navigator.clipboard.writeText(q); } catch { /* clipboard not allowed: fine */ }
+  }
+  if (window.freevisDesktop?.openFixtureId) {
+    window.freevisDesktop.openFixtureId();
+    toast(q
+      ? `Am deschis Fixture.ID. „${q}” e copiat: lipește-l în căutarea site-ului (Ctrl/Cmd+V). Fișierul descărcat (.d4) se importă singur.`
+      : 'Am deschis Fixture.ID. Fișierul descărcat (.d4) se importă singur în FreeVisualizer.', 'info', 9000);
+  } else {
+    window.open(FIXTURE_ID_URL, '_blank', 'noopener');
+    toast(q
+      ? `„${q}” e copiat pentru căutarea pe Fixture.ID. Descarcă fișierul .d4 și trage-l peste fereastra FreeVisualizer.`
+      : 'Descarcă fișierul .d4 de pe Fixture.ID și trage-l peste fereastra FreeVisualizer.', 'info', 9000);
+  }
+}
+
+async function importOflFixture(app, key) {
+  try {
+    toast('Descarc definiția fixturii…');
+    const res = await fetch(`/api/ofl/fixture?key=${encodeURIComponent(key)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    closeModal();
+    setTimeout(() => chooseModeAndImport(app, data, key), 0);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+/**
+ * Results from the online libraries for the text typed in a search box:
+ * Open Fixture Library (live) and a row that opens Fixture.ID.
+ */
+function onlineResults(app) {
+  const el = h('div');
+  let timer = null;
+  let seq = 0;
+  let query = '';
+  const fixtureIdRow = () => h('div', { class: 'item online-row', onclick: () => openFixtureId(query) },
+    h('span', { class: 'name' }, query.length >= 2 ? `🔎 Caută „${query}” pe Fixture.ID` : '🔎 Caută pe Fixture.ID'),
+    h('span', { class: 'meta' }, '.d4 / .gdtf ↗'));
+  const render = (body) => {
+    el.innerHTML = '';
+    el.append(h('div', { class: 'group-title' }, 'Open Fixture Library (online)'));
+    if (body) el.append(body);
+    el.append(h('div', { class: 'group-title' }, 'Fixture.ID'), fixtureIdRow());
+  };
+  const note = (text, cls = 'muted') => h('div', { class: cls, style: { padding: '6px 10px' } }, text);
+  const run = async () => {
+    const my = ++seq;
+    if (query.length < 2) { render(note('Scrie cel puțin 2 caractere…')); return; }
+    render(note('Caut…'));
+    try {
+      const res = await fetch(`/api/ofl/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (my !== seq) return;
+      if (!res.ok) throw new Error(data.error || 'eroare');
+      if (!data.length) { render(note('Nimic în Open Fixture Library. Încearcă pe Fixture.ID ↓')); return; }
+      render(h('div', {}, data.slice(0, 40).map((r) => h('div', { class: 'item', onclick: () => importOflFixture(app, r.key) },
+        h('span', { class: 'name' }, `${r.manufacturer} ${r.name}`), h('span', { class: 'tag' }, 'OFL'), h('span', { class: 'meta' }, 'importă')))));
+    } catch (err) {
+      if (my !== seq) return;
+      render(note(`Open Fixture Library nu răspunde (${err.message}). Verifică internetul.`, 'warn-box'));
+    }
+  };
+  return {
+    el,
+    update(q) {
+      query = q.trim();
+      clearTimeout(timer);
+      if (query.length < 2) { seq++; render(note('Scrie cel puțin 2 caractere…')); return; }
+      timer = setTimeout(run, 300);
+    },
+  };
+}
 
 // ------------------------------------------------------------------ profile picker
 function profilePicker(app, selectedId, onPick) {
   let current = selectedId;
-  const search = h('input', { type: 'search', placeholder: 'Caută (ex: spot, par, bară, chauvet…)' });
+  const search = h('input', { type: 'search', placeholder: 'Caută model sau producător (ex: panther, intimidator, par rgbw…)' });
   const list = h('div', { class: 'pick-list' });
+  const online = onlineResults(app);
   const render = () => {
     const q = search.value.toLowerCase().trim();
     list.innerHTML = '';
     const groups = [['Profilele proiectului', app.project.profiles], ['Generice', app.builtins]];
+    let found = 0;
     for (const [title, profiles] of groups) {
       const items = profiles.filter((p) => !q || `${p.manufacturer} ${p.name} ${KINDS[p.kind]}`.toLowerCase().includes(q));
       if (!items.length) continue;
+      found += items.length;
       list.append(h('div', { class: 'group-title' }, title));
       for (const p of items) {
         list.append(h('div', {
@@ -30,12 +117,15 @@ function profilePicker(app, selectedId, onPick) {
         }, h('span', { class: 'name' }, p.manufacturer && p.source !== 'builtin' ? `${p.manufacturer} ${p.name}` : p.name), h('span', { class: 'tag' }, KINDS[p.kind]), h('span', { class: 'meta' }, `${p.channels.length}ch`)));
       }
     }
+    if (q && !found) list.append(h('div', { class: 'muted', style: { padding: '6px 10px' } }, 'Niciun profil local. Uită-te mai jos, în bibliotecile online.'));
+    list.append(online.el);
   };
-  search.addEventListener('input', render);
+  search.addEventListener('input', () => { render(); online.update(search.value); });
   render();
+  online.update('');
   setTimeout(() => search.focus(), 50);
   return h('div', { class: 'form' }, search, list,
-    h('div', { class: 'muted small' }, 'Nu găsești modelul tău? ', h('a', { href: '#', onclick: (e) => { e.preventDefault(); closeModal(); oflDialog(app); } }, 'Caută-l în Open Fixture Library'), ' (peste 1000 de modele) sau creează un profil nou.'));
+    h('div', { class: 'muted small' }, 'Ai deja fișierul (.d4, .gdtf, .json)? Trage-l peste fereastră. Poți crea și un profil nou din Bibliotecă.'));
 }
 
 // ------------------------------------------------------------------ add fixtures
@@ -369,11 +459,35 @@ function chooseModeAndImport(app, fixture, key) {
   });
 }
 
-/** Import one fixture file: .gdtf (GDTF Share, Fixture.ID), .qxf (QLC+), .json (OFL or FreeVisualizer). */
+/** Several fixture files in one .zip: let the user pick one. */
+async function pickFromArchive(app, files) {
+  let chosen = 0;
+  const list = h('div', { class: 'mode-list' }, files.map((f, i) => {
+    const radio = h('input', { type: 'radio', name: 'zipfile', checked: i === 0 });
+    radio.addEventListener('change', () => { chosen = i; });
+    return h('label', {}, radio, h('span', { class: 'grow' }, f.name));
+  }));
+  const res = await openModal('Arhiva conține mai multe fixturi', h('div', { class: 'form' }, h('p', {}, 'Alege fișierul de importat:'), list),
+    [{ label: 'Anulează', value: null }, { label: 'Continuă', primary: true, value: 'ok' }]);
+  if (!res) return null;
+  const f = files[chosen];
+  return importFixtureFile(app, new File([f.bytes], f.name));
+}
+
+/**
+ * Import one fixture file: .d4 (Fixture.ID, Avolites), .gdtf (GDTF Share),
+ * .zip with any of these inside, .json (Open Fixture Library or FreeVisualizer), .qxf.
+ */
 export async function importFixtureFile(app, file) {
   const name = file.name || '';
   const ext = name.toLowerCase().split('.').pop();
   try {
+    if (ext === 'zip') {
+      const files = await fixtureFilesInZip(await file.arrayBuffer());
+      if (!files.length) throw new Error('arhiva nu conține fișiere .d4, .gdtf sau .json');
+      if (files.length === 1) return importFixtureFile(app, new File([files[0].bytes], files[0].name));
+      return pickFromArchive(app, files);
+    }
     if (ext === 'gdtf') {
       const ft = await readGdtf(await file.arrayBuffer());
       return chooseModeAndImportGeneric(app, {
@@ -383,6 +497,14 @@ export async function importFixtureFile(app, file) {
       });
     }
     const text = await file.text();
+    if (ext === 'd4' || (ext !== 'qxf' && isD4Xml(text))) {
+      const root = parseD4(text);
+      return chooseModeAndImportGeneric(app, {
+        title: `${root.attrs.Company || ''} ${root.attrs.Name || name}`.trim(),
+        modes: listD4Modes(root),
+        convert: (i) => d4ToProfile(root, i),
+      });
+    }
     if (ext === 'qxf' || text.trimStart().startsWith('<')) {
       const root = parseQxf(text);
       return chooseModeAndImportGeneric(app, {
@@ -414,57 +536,23 @@ export async function importFixtureFile(app, file) {
   }
 }
 
+/** Library search: Open Fixture Library + Fixture.ID. */
 export async function oflDialog(app) {
-  const search = h('input', { type: 'search', placeholder: 'Model sau producător (ex: intimidator spot 260, slimpar, colorband)' });
-  const results = h('div', { class: 'pick-list' }, h('div', { class: 'muted', style: { padding: '10px' } }, 'Scrie cel puțin 2 caractere…'));
-  let timer = null;
-  let seq = 0;
-  const run = async () => {
-    const q = search.value.trim();
-    if (q.length < 2) return;
-    const my = ++seq;
-    results.innerHTML = '';
-    results.append(h('div', { class: 'muted', style: { padding: '10px' } }, 'Caut…'));
-    try {
-      const res = await fetch(`/api/ofl/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (my !== seq) return;
-      results.innerHTML = '';
-      if (!res.ok) throw new Error(data.error || 'eroare');
-      if (!data.length) results.append(h('div', { class: 'muted', style: { padding: '10px' } }, 'Niciun rezultat. Încearcă alt cuvânt (ex. doar numele modelului).'));
-      for (const r of data) {
-        results.append(h('div', { class: 'item', onclick: () => loadFixture(r.key) },
-          h('span', { class: 'name' }, `${r.manufacturer} – ${r.name}`), h('span', { class: 'meta' }, r.key)));
-      }
-    } catch (err) {
-      if (my !== seq) return;
-      results.innerHTML = '';
-      results.append(h('div', { class: 'warn-box' }, err.message));
-    }
-  };
-  const loadFixture = async (key) => {
-    try {
-      toast('Descarc definiția fixturii…');
-      const res = await fetch(`/api/ofl/fixture?key=${encodeURIComponent(key)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      closeModal();
-      setTimeout(() => chooseModeAndImport(app, data, key), 0);
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
-  search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 300); });
+  const search = h('input', { type: 'search', placeholder: 'Model sau producător (ex: panther, intimidator spot 260, slimpar)' });
+  const online = onlineResults(app);
+  const results = h('div', { class: 'pick-list' }, online.el);
+  search.addEventListener('input', () => online.update(search.value));
+  online.update('');
   setTimeout(() => search.focus(), 50);
-  await openModal('Open Fixture Library', h('div', { class: 'form' },
-    h('p', { class: 'muted' }, 'Biblioteca deschisă ', h('a', { href: 'https://open-fixture-library.org', target: '_blank', rel: 'noopener' }, 'open-fixture-library.org'), ' are profile pentru Chauvet, ADJ, Cameo, Stairville, Eurolite, Showtec, Martin și mulți alții. Ai nevoie de internet doar la import – apoi profilul e salvat în proiect.'),
-    search, results,
-    h('div', { class: 'muted small' }, 'Ai descărcat deja fișierul .json de pe site? Folosește „Import fișier” din Bibliotecă.')),
+  await openModal('Caută fixturi', h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'Caută în ', h('b', {}, 'Open Fixture Library'), ' (import direct) și pe ', h('b', {}, 'Fixture.ID'),
+      ' (fișiere .d4). Ai nevoie de internet doar la import – apoi profilul e salvat în proiect.'),
+    search, results),
   [{ label: 'Închide', value: null }]);
 }
 
 export async function importProfileFile(app) {
-  const file = await pickFile('.gdtf,.qxf,.json');
+  const file = await pickFile('.d4,.gdtf,.zip,.json,.qxf');
   if (file) await importFixtureFile(app, file);
 }
 
@@ -620,6 +708,11 @@ export async function helpDialog(app) {
       h('li', {}, 'Ambele calculatoare în aceeași rețea, ideal prin cablu (multe routere Wi-Fi blochează Art-Net).'),
       h('li', {}, `În SoundSwitch alege nodul Art-Net „FreeVisualizer” sau IP-ul acestui calculator: `, h('code', {}, ips || 'vezi Setări')),
       h('li', {}, 'Permite aplicația Node.js în firewall (porturile UDP 6454 pentru Art-Net și 5568 pentru sACN).')),
+    h('h4', {}, 'Fixturi care nu sunt în listă'),
+    h('ol', {},
+      h('li', {}, 'În „Adaugă fixturi” scrie modelul: caută deodată în profilele tale, în ', h('b', {}, 'Open Fixture Library'), ' și îți dă un buton spre ', h('b', {}, 'Fixture.ID'), '.'),
+      h('li', {}, 'De pe Fixture.ID descarci fișierul ', h('b', {}, '.d4'), '. În aplicația desktop se importă singur; în browser îl tragi peste fereastră.'),
+      h('li', {}, 'Alege ', h('b', {}, 'același mod DMX'), ' ca în SoundSwitch.')),
     h('h4', {}, 'Probleme frecvente'),
     h('ol', {},
       h('li', {}, h('b', {}, 'Universul nu se potrivește: '), 'deschide tab-ul DMX – vezi ce universuri sosesc. Poți schimba numerotarea Art-Net din Setări.'),
