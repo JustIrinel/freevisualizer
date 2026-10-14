@@ -70,6 +70,55 @@ export function demoProject() {
   return p;
 }
 
+/** Wedding venue: DJ booth with truss, retro lights, uplights on every wall,
+ *  dance floor with cold sparks, mirror ball with pinspots and low fog. */
+export function weddingProject() {
+  const p = emptyProject('Rig nuntă – sală de evenimente');
+  p.room = { ...p.room, width: 26, depth: 20, height: 5.5, floorColor: '#2b2725', wallColor: '#5c544c' };
+  const trussZ = -9;
+  const trussY = 3.35;
+  p.props.push(
+    prop('column', 'Stâlp stânga', v(-3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
+    prop('column', 'Stâlp dreapta', v(3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
+    prop('truss', 'Truss DJ', v(0, trussY, trussZ), v(0, 0, 0), { length: 7.5 }),
+    prop('booth', 'Cabină DJ', v(0, 0, -8.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
+    prop('speaker', 'Boxă stânga', v(-4.6, 0, -8.6)),
+    prop('speaker', 'Boxă dreapta', v(4.6, 0, -8.6)),
+    prop('dancefloor', 'Ring de dans', v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
+    prop('crowd', 'Invitați pe ring', v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 40 }),
+    prop('headtable', 'Masa mirilor', v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),
+    prop('mirrorball', 'Glob disco', v(0, 4.4, -3.5), v(0, 0, 0), { diameter: 0.5, drop: 0.6, rpm: 2 }),
+  );
+  let t = 1;
+  for (const x of [-8, -4, 0, 4, 8]) for (const z of [3.5, 7.5]) p.props.push(prop('table', `Masa ${t++}`, v(x, 0, z), v(0, 0, 0), { diameter: 1.8 }));
+  for (const z of [-6.5, -2]) p.props.push(prop('table', `Masa ${t++}`, v(9.5, 0, z), v(0, 0, 0), { diameter: 1.8 }));
+
+  const hang = v(180, 0, 0);
+  const face = v(90, 0, 0);
+  p.fixtures.push(
+    fixture('Spot 1', 'gen-mh-spot-11', 1, 1, v(-3.05, trussY - 0.17, trussZ), hang),
+    fixture('Spot 2', 'gen-mh-spot-11', 1, 12, v(3.05, trussY - 0.17, trussZ), hang),
+    fixture('Wash 1', 'gen-mh-wash-14', 1, 23, v(-1.7, 0, -8.6)),
+    fixture('Wash 2', 'gen-mh-wash-14', 1, 37, v(1.7, 0, -8.6)),
+  );
+  [-2.4, -0.8, 0.8, 2.4].forEach((x, i) => p.fixtures.push(fixture(`Retro ${i + 1}`, 'gen-retro-9', 1, 51 + i * 9, v(x, 2.95, trussZ + 0.25), face)));
+  const ups = [
+    [-11, -9.6, v(-12, 0, 0)], [-7, -9.6, v(-12, 0, 0)], [7, -9.6, v(-12, 0, 0)], [11, -9.6, v(-12, 0, 0)],
+    [-12.6, -6, v(0, 0, 14)], [-12.6, -1, v(0, 0, 14)], [-12.6, 4, v(0, 0, 14)], [-12.6, 8, v(0, 0, 14)],
+    [12.6, -6, v(0, 0, -14)], [12.6, -1, v(0, 0, -14)], [12.6, 4, v(0, 0, -14)], [12.6, 8, v(0, 0, -14)],
+  ];
+  ups.forEach(([x, z, r], i) => p.fixtures.push(fixture(`Uplight ${i + 1}`, 'gen-par-rgbwauv-6', 1, 101 + i * 6, v(x, 0, z), r)));
+  [[-4.2, -7], [4.2, -7], [-4.2, 0], [4.2, 0]].forEach(([x, z], i) => p.fixtures.push(fixture(`Scântei ${i + 1}`, 'gen-spark-2', 1, 181 + i * 2, v(x, 0, z))));
+  p.fixtures.push(
+    fixture('Pinspot 1', 'gen-pinspot-1', 1, 191, v(-2.5, 5.2, -3.5), v(0, 0, -107.8)),
+    fixture('Pinspot 2', 'gen-pinspot-1', 1, 192, v(2.5, 5.2, -3.5), v(0, 0, 107.8)),
+    fixture('Fum greu', 'gen-lowfog-1', 1, 195, v(0, 0, -7.3)),
+    fixture('Laser', 'gen-laser-6', 1, 201, v(0, trussY + 0.25, trussZ), v(80, 0, 0)),
+  );
+  p.camera = { position: [7, 2.8, 9.5], target: [0, 1.8, -4.5] };
+  return p;
+}
+
 /** Upgrade / repair a project loaded from disk. */
 export function normalizeProject(raw) {
   const base = emptyProject();

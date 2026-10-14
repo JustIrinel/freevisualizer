@@ -111,7 +111,12 @@ export class Visualizer {
       puffTexture: puffTexture(),
       allocateLight: () => { if (this.lightsUsed >= MAX_LIGHTS) return false; this.lightsUsed++; return true; },
       releaseLight: () => { this.lightsUsed = Math.max(0, this.lightsUsed - 1); },
+      // World-space layer for effects that must not follow the fixture's rotation (sparks, low fog, reflections).
+      world: new THREE.Group(),
+      roomBox: new THREE.Box3(new THREE.Vector3(-12, 0, -10), new THREE.Vector3(12, 6, 10)),
+      walls: true,
     };
+    this.scene.add(this.ctx.world);
 
     this.roomGroup = new THREE.Group();
     this.scene.add(this.roomGroup);
@@ -189,6 +194,9 @@ export class Visualizer {
       ceiling.position.y = hgt;
       for (const m of [back, left, right, ceiling]) { m.userData.isRoom = true; this.roomGroup.add(m); }
     }
+    this.ctx.roomBox.min.set(-w / 2, 0, -d / 2);
+    this.ctx.roomBox.max.set(w / 2, hgt, d / 2);
+    this.ctx.walls = room.walls !== false;
     if (room.walls !== false) {
       roomUniforms.uRoomMin.value.set(-w / 2, 0, -d / 2);
       roomUniforms.uRoomMax.value.set(w / 2, hgt, d / 2 + 50);
@@ -220,7 +228,7 @@ export class Visualizer {
 
   addProp(prop) {
     this.removeObject(prop.id);
-    const model = createPropModel(prop);
+    const model = createPropModel(prop, this.ctx);
     this.scene.add(model.root);
     this.objects.set(prop.id, { type: 'prop', model, data: prop });
     this._applyTransform(model.root, prop);
@@ -353,6 +361,17 @@ export class Visualizer {
     this.orbit.update();
   }
 
+  _collectEmitters() {
+    const out = [];
+    for (const o of this.objects.values()) {
+      if (o.type === 'fixture' && o.model.emitter) {
+        const e = o.model.emitter();
+        if (e && e.intensity > 0.01) out.push(e);
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------ frame
   /**
    * @param states Map(id -> fixture state) computed from DMX
@@ -378,16 +397,35 @@ export class Visualizer {
     }
     this.fogLevel = Math.min(1, Math.max(0, this.fogLevel + (fogOut > 0.05 ? dt * 0.25 * fogOut : -dt * 0.02)));
     const haze = Math.min(1.2, this.settings.haze + this.fogLevel * 0.6);
-    const globals = { haze: haze * 0.16, time };
+    // Average color of the show: tints low fog and other "lit by the room" effects.
+    const show = [0, 0, 0];
+    for (const o of this.objects.values()) {
+      if (o.type !== 'fixture') continue;
+      const s = states.get(o.data.id);
+      if (!s || !s.intensity || o.profile.kind === 'fog' || o.profile.kind === 'lowfog' || o.profile.kind === 'spark') continue;
+      show[0] += s.color[0] * s.intensity; show[1] += s.color[1] * s.intensity; show[2] += s.color[2] * s.intensity;
+    }
+    const showMax = Math.max(show[0], show[1], show[2]);
+    const globals = {
+      haze: haze * 0.16,
+      rawHaze: haze,
+      time,
+      showColor: showMax > 0 ? show.map((v) => v / showMax) : [1, 1, 1],
+      showLevel: Math.min(1, showMax / 3),
+    };
     this.scene.fog.density = 0.006 + haze * 0.012;
 
     for (const o of this.objects.values()) {
-      if (o.type === 'fixture') {
-        const s = states.get(o.data.id);
-        if (s) o.model.update(s, globals, dt);
-      } else {
-        o.model.update(time);
-      }
+      if (o.type !== 'fixture') continue;
+      const s = states.get(o.data.id);
+      if (s) o.model.update(s, globals, dt);
+    }
+    // Props after fixtures: a mirror ball needs to know which beams hit it.
+    let emitters = null;
+    for (const o of this.objects.values()) {
+      if (o.type !== 'prop') continue;
+      if (o.model.needsEmitters && !emitters) emitters = this._collectEmitters();
+      o.model.update(time, { dt, globals, emitters });
     }
     if (this.selectionBox.visible && this.selectedId) {
       computeBounds(this.objects.get(this.selectedId).model.root, this.selBounds);

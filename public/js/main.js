@@ -5,7 +5,7 @@ import { computeState, createRuntime } from './fixture-state.js';
 import { renderDemo } from './demo.js';
 import { BUILTIN_PROFILES, normalizeProfile, uid, cloneProfile } from './profiles.js';
 import {
-  demoProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
+  demoProject, weddingProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
 } from './project.js';
 import { PROP_TYPES } from './props3d.js';
 import { toast, pickFile } from './dom.js';
@@ -45,7 +45,7 @@ class App {
     if (this.presentMode) document.body.classList.add('ui-hidden', 'present');
 
     const restored = loadAutosave();
-    this.loadProject(restored || demoProject(), { keepHistory: false });
+    this.loadProject(restored || weddingProject(), { keepHistory: false });
     if (!restored && !this.presentMode) toast('Bine ai venit! Am încărcat un rig demo – apasă ▶ Demo ca să-l vezi în acțiune.', 'info', 6000);
     if (this.presentMode) {
       window.addEventListener('storage', (e) => {
@@ -240,9 +240,11 @@ class App {
     }
   }
 
-  newProject(withDemo) {
+  /** @param template 'wedding' | 'club' | 'empty' */
+  newProject(template) {
     this.checkpoint();
-    this.loadProject(withDemo ? demoProject() : emptyProject());
+    const make = { wedding: weddingProject, club: demoProject }[template] || emptyProject;
+    this.loadProject(make());
   }
 
   // ------------------------------------------------------------------ selection & edits
@@ -322,7 +324,8 @@ class App {
     const def = PROP_TYPES[type];
     if (!def) return;
     this.checkpoint();
-    const y = type === 'truss' ? 3.75 : 0;
+    const room = this.project.room;
+    const y = type === 'truss' ? 3.75 : type === 'mirrorball' ? Math.max(2.2, (room.height || 6) - 1.1) : 0;
     const prop = { id: uid('pr'), type, name: def.label, position: { x: 0, y, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, params: { ...def.params } };
     this.project.props.push(prop);
     this.vis.addProp(prop);

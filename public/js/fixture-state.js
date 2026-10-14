@@ -8,6 +8,8 @@ const ADDITIVE = {
 const SUBTRACTIVE = { cyan: 0, magenta: 1, yellow: 2 };
 const COLOR_TYPES = new Set([...Object.keys(ADDITIVE), ...Object.keys(SUBTRACTIVE)]);
 
+export const LASER_PATTERNS = 5; // fan, liquid sky, cone, tunnel, single beam
+
 export function hexToRgb(hex) {
   const h = String(hex || '#ffffff').replace('#', '');
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.padEnd(6, 'f'), 16);
@@ -160,6 +162,9 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     goboRotation: 0,
     prism: 0,
     fog: 0,
+    spark: 0,
+    laserPattern: 0,
+    laserSpin: 0,
     pixels: null,
   };
 
@@ -212,5 +217,19 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     state.prism = r ? r.prism || 0 : read(m.prism) > 127 ? 3 : 0;
   }
   if (m.fog != null) state.fog = read(m.fog) / 255;
+
+  // Cold spark machine: height channel, optionally gated by a "fire" channel.
+  if (m.sparkHeight != null || m.sparkFire != null) {
+    const height = m.sparkHeight != null ? read(m.sparkHeight) / 255 : 1;
+    const fire = m.sparkFire != null ? read(m.sparkFire) > 127 : true;
+    state.spark = fire ? height : 0;
+  }
+
+  // Laser: pattern picks one of the built-in looks, rotate = signed speed.
+  if (m.laserPattern != null) state.laserPattern = Math.min(LASER_PATTERNS - 1, Math.floor((read(m.laserPattern) / 256) * LASER_PATTERNS));
+  if (m.laserRotate != null) {
+    const v = read(m.laserRotate);
+    state.laserSpin = v < 10 ? 0 : v < 128 ? ((v - 10) / 117) * 4 : -((v - 128) / 127) * 4;
+  }
   return state;
 }

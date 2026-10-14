@@ -9,6 +9,10 @@ export const KINDS = {
   strobe: 'Stroboscop',
   blinder: 'Blinder',
   retro: 'Retro hexagonal (7 capete)',
+  pinspot: 'Pinspot (pentru glob)',
+  spark: 'Mașină scântei reci',
+  lowfog: 'Fum greu (nor jos)',
+  laser: 'Laser',
   fog: 'Mașină de fum',
 };
 
@@ -40,7 +44,11 @@ export const CHANNEL_TYPES = {
   gobo: ['Gobo', 'Fascicul'],
   prism: ['Prismă', 'Fascicul'],
   zoom: ['Zoom', 'Fascicul'],
-  fog: ['Fum (output)', 'Altele'],
+  fog: ['Fum (output)', 'Efecte'],
+  sparkHeight: ['Scântei – înălțime', 'Efecte'],
+  sparkFire: ['Scântei – declanșare', 'Efecte'],
+  laserPattern: ['Laser – model', 'Efecte'],
+  laserRotate: ['Laser – rotație', 'Efecte'],
 };
 
 export const DEFAULT_STROBE_RANGES = [
@@ -64,6 +72,11 @@ export function goboRanges(count, end = 127) {
   for (let i = 0; i < count; i++) ranges.push({ from: i * step, to: i === count - 1 ? end : (i + 1) * step - 1, gobo: i });
   if (end < 255) ranges.push({ from: end + 1, to: 255, gobo: 1, shake: true });
   return ranges;
+}
+
+function laserColors() {
+  const colors = ['#ff0000', '#00ff00', '#ffff00', '#0040ff', '#ff00ff', '#00ffff', '#ffffff'];
+  return [...wheelRanges(colors, 223).slice(0, colors.length), { from: 224, to: 255, mode: 'rotate' }];
 }
 
 const ch = (type, extra) => ({ type, ...(extra || {}) });
@@ -113,6 +126,14 @@ export const BUILTIN_PROFILES = [
   generic({ id: 'gen-retro-9', name: 'Retro hexagonal 7 capete 9ch (Dimmer, Strobe, 7 capete)', kind: 'retro', pixels: 7, defaultColor: '#ffb347', beamAngle: [40, 40], channels: [ch('dimmer'), strobe(), ...pixelDimmers(7)] }),
   generic({ id: 'gen-retro-rgb-21', name: 'Retro 7×60W RGB 21ch (RGB pe cap)', kind: 'retro', pixels: 7, tungsten: false, beamAngle: [40, 40], channels: pixelRGB(7) }),
   generic({ id: 'gen-retro-rgbw-30', name: 'Retro 7 capete RGB + alb cald 30ch (D, Strobe, 7×RGBW)', kind: 'retro', pixels: 7, tungsten: false, beamAngle: [40, 40], channels: [ch('dimmer'), strobe(), ...pixelColors(7, ['red', 'green', 'blue', 'warmWhite'])] }),
+  generic({ id: 'gen-pinspot-1', name: 'Pinspot alb 1ch (pentru glob disco)', kind: 'pinspot', defaultColor: '#fff1d6', beamAngle: [5, 5], channels: [ch('dimmer')] }),
+  generic({ id: 'gen-pinspot-rgbw-4', name: 'Pinspot RGBW 4ch', kind: 'pinspot', beamAngle: [5, 5], channels: [ch('red'), ch('green'), ch('blue'), ch('white')] }),
+  generic({ id: 'gen-spark-2', name: 'Mașină scântei reci 2ch (Înălțime, Declanșare)', kind: 'spark', channels: [ch('sparkHeight'), ch('sparkFire')] }),
+  generic({ id: 'gen-lowfog-1', name: 'Fum greu / gheață carbonică 1ch', kind: 'lowfog', channels: [ch('fog')] }),
+  generic({
+    id: 'gen-laser-6', name: 'Laser RGB 6ch (Mod, Model, Culoare, Rotație, Deschidere, Viteză)', kind: 'laser', beamAngle: [10, 90],
+    channels: [ch('dimmer', { label: 'Mod (0 = oprit)' }), ch('laserPattern'), ch('colorWheel', { ranges: laserColors() }), ch('laserRotate'), ch('zoom', { label: 'Deschidere' }), ch('none', { label: 'Viteză' })],
+  }),
   generic({ id: 'gen-fog-1', name: 'Mașină de fum 1ch', kind: 'fog', channels: [ch('fog')] }),
 ];
 

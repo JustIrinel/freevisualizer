@@ -98,7 +98,8 @@ export function renderDemo(fixtures, store, time) {
         break;
       default: { // drop: white strobes + fast chase
         const drop = (bar % 4) === 3;
-        rgb = drop ? [1, 1, 1] : hsv(0.55 + 0.1 * Math.sin(time), 0.9, 1);
+        // On the drop movers and strobes go white; uplights keep the room colored.
+        rgb = drop && profile.kind !== 'par' ? [1, 1, 1] : hsv(0.55 + 0.1 * Math.sin(time), 0.9, 1);
         const chase = Math.floor(beat * 2) % n === index;
         dim = drop ? 1 : chase ? 1 : 0.15 + 0.5 * pulse;
         strobe = drop ? 0.85 : 0;
@@ -109,6 +110,8 @@ export function renderDemo(fixtures, store, time) {
     }
 
     const fog = (bar % 16 === 0) && beat % 4 < 3 ? 1 : 0;
+    // Cold sparks on the drop, and at the end of the slow "first dance" scene.
+    const sparks = (scene === 3 && (bar % 4) === 3) || (scene === 2 && (bar % 4) === 3 && beat % 4 >= 2);
 
     profile.channels.forEach((c, i) => {
       const addr = base + i;
@@ -132,7 +135,7 @@ export function renderDemo(fixtures, store, time) {
         case 'red': v = col[0] * 255; break;
         case 'green': v = col[1] * 255; break;
         case 'blue': v = col[2] * 255; break;
-        case 'white': case 'coldWhite': v = (scene === 3 && strobe ? 255 : 0); break;
+        case 'white': case 'coldWhite': v = (scene === 3 && strobe && profile.kind !== 'par' ? 255 : 0); break;
         case 'warmWhite': case 'amber': v = scene === 2 ? 180 : 0; break;
         case 'uv': v = scene === 1 ? 120 : 0; break;
         case 'cyan': v = (1 - col[0]) * 255; break;
@@ -145,13 +148,19 @@ export function renderDemo(fixtures, store, time) {
         case 'panFine': v = Math.floor(panT * 65535) & 255; break;
         case 'tilt': v = Math.floor(tiltT * 65535) >> 8; break;
         case 'tiltFine': v = Math.floor(tiltT * 65535) & 255; break;
-        case 'zoom': v = scene === 2 ? 220 : 60; break;
+        case 'zoom': v = profile.kind === 'laser' ? 90 + 60 * Math.sin(time * 0.4) : scene === 2 ? 220 : 60; break;
         case 'prism': v = 0; break;
-        case 'fog': v = fog * 255; break;
+        case 'fog': v = profile.kind === 'lowfog' ? (scene === 2 ? 255 : 0) : fog * 255; break;
+        case 'sparkHeight': case 'sparkFire': v = sparks ? 255 : 0; break;
+        case 'laserPattern': v = ((bar >> 1) % 5) * 52 + 10; break;
+        case 'laserRotate': v = scene === 3 ? 100 : 40; break;
         default: v = 0;
       }
       // Dedicated strobes only fire during the drop.
       if (profile.kind === 'strobe' && c.type === 'dimmer') v = scene === 3 && (bar % 4) === 3 ? 255 : 0;
+      // Lasers rest during the slow dance; pinspots keep the mirror ball turning.
+      if (profile.kind === 'laser' && c.type === 'dimmer') v = scene === 2 ? 0 : 255;
+      if (profile.kind === 'pinspot' && c.type === 'dimmer') v = scene === 2 || scene === 1 ? 255 : 120;
       buf[addr] = Math.max(0, Math.min(255, Math.round(v)));
     });
   }

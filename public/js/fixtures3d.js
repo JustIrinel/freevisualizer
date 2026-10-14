@@ -1,6 +1,11 @@
 // 3D models of fixtures. Every model emits along its local +Y axis.
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { Particles } from './particles.js';
+import { LASER_PATTERNS } from './fixture-state.js';
+
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 
 const BEAM_LENGTH = 22;
 
@@ -91,7 +96,7 @@ export class Beam {
   }
 
   set(color, intensity, angleDeg, gobo = 0, goboRot = 0, length = BEAM_LENGTH) {
-    const r = Math.tan(THREE.MathUtils.degToRad(Math.max(0.5, Math.min(170, angleDeg)) / 2)) * length;
+    const r = Math.tan(THREE.MathUtils.degToRad(Math.max(0.1, Math.min(170, angleDeg)) / 2)) * length;
     this.mesh.scale.set(r, length, r);
     this.material.uniforms.uColor.value.setRGB(color[0], color[1], color[2]);
     this.material.uniforms.uIntensity.value = intensity;
@@ -159,6 +164,17 @@ class BaseModel {
     this.light.angle = THREE.MathUtils.degToRad(Math.min(80, Math.max(2, angleDeg / 2 + 1.5)));
   }
 
+  /** Where the main beam starts and points (used by the mirror ball). */
+  emitter() {
+    if (!this.beam || !this.lastState) return null;
+    const m = this.beam.mesh;
+    m.updateWorldMatrix(true, false);
+    const pos = new THREE.Vector3().setFromMatrixPosition(m.matrixWorld);
+    const dir = new THREE.Vector3().setFromMatrixColumn(m.matrixWorld, 1).normalize();
+    const s = this.lastState;
+    return { pos, dir, cosHalf: Math.cos(THREE.MathUtils.degToRad(Math.min(80, s.beamAngle / 2 + 1))), color: s.color, intensity: s.intensity };
+  }
+
   addLabel() {
     const div = document.createElement('div');
     div.className = 'fx-label';
@@ -210,6 +226,7 @@ class ParModel extends BaseModel {
   }
 
   update(s, g) {
+    this.lastState = s;
     setLens(this.lensMat, s.color, s.intensity);
     this.beam.set(s.color, s.intensity * beamGain(s.beamAngle, g.haze) * 0.8, s.beamAngle);
     this.updateLight(s.color, s.intensity, s.beamAngle, 22);
@@ -285,6 +302,7 @@ class MovingHeadModel extends BaseModel {
   }
 
   update(s, g, dt) {
+    this.lastState = s;
     // Fixtures do not move instantly: follow DMX with a fast motor-like easing.
     const k = 1 - Math.exp(-dt * 14);
     this.curPan += (s.pan - this.curPan) * k;
@@ -470,6 +488,171 @@ class StrobeModel extends BaseModel {
   }
 }
 
+// ------------------------------------------------------------------ Cold spark machine
+class SparkModel extends BaseModel {
+  constructor(fixture, profile, ctx) {
+    super(fixture, profile, ctx);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.34), bodyMaterial());
+    body.position.y = 0.12;
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.05, 16), darkMaterial());
+    top.position.y = 0.265;
+    this.root.add(body, top);
+    this.sparks = new Particles(2500, { additive: true, hard: true });
+    ctx.world.add(this.sparks.points);
+    this.carry = 0;
+    if (ctx.allocateLight()) {
+      this.glow = new THREE.PointLight(0xffb060, 0, 0, 1.6);
+      this.glow.position.y = 1;
+      this.root.add(this.glow);
+    }
+    this.addLabel();
+    this.label.position.y = 0.5;
+  }
+
+  update(s, g, dt) {
+    const level = s.spark;
+    const nozzle = this.root.localToWorld(_v1.set(0, 0.29, 0));
+    if (level > 0.02) {
+      const height = 0.6 + level * 4.4;
+      const grav = 7;
+      const v0 = Math.sqrt(2 * grav * height);
+      this.carry += dt * 900;
+      while (this.carry >= 1) {
+        this.carry -= 1;
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 0.35;
+        const v = v0 * (0.85 + Math.random() * 0.2);
+        this.sparks.spawn(nozzle.x, nozzle.y, nozzle.z, Math.cos(a) * r, v, Math.sin(a) * r, (v / grav) * (0.75 + Math.random() * 0.5), 0.03 + Math.random() * 0.025, 3.2, 2.4, 1.3);
+      }
+    } else {
+      this.carry = 0;
+    }
+    this.sparks.update(dt, { gravity: 7, drag: 0.4, floor: 0 }, (i, t, o) => {
+      o.alpha = t < 0.8 ? 1 : (1 - t) / 0.2;
+      o.size = 1 - t * 0.5;
+      o.b = 1 - t * 0.6;
+      o.g = 1 - t * 0.25;
+    });
+    if (this.glow) this.glow.intensity = level > 0.02 ? (6 + Math.random() * 4) * level * this.ctx.settings.lightPower * 6 : 0;
+  }
+
+  dispose() {
+    super.dispose();
+    this.ctx.world.remove(this.sparks.points);
+    this.sparks.dispose();
+    if (this.glow) this.ctx.releaseLight();
+  }
+}
+
+// ------------------------------------------------------------------ Low fog / dry ice
+class LowFogModel extends BaseModel {
+  constructor(fixture, profile, ctx) {
+    super(fixture, profile, ctx);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.6), bodyMaterial());
+    body.position.y = 0.175;
+    const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.1), darkMaterial());
+    nozzle.position.set(0, 0.1, 0.33);
+    this.root.add(body, nozzle);
+    this.cloud = new Particles(700, { additive: false, flat: true });
+    ctx.world.add(this.cloud.points);
+    this.carry = 0;
+    this.output = 0;
+    this.addLabel();
+    this.label.position.y = 0.6;
+  }
+
+  update(s, g, dt) {
+    this.output += (s.fog - this.output) * Math.min(1, dt * 2);
+    const out = this.output;
+    if (out > 0.03) {
+      const p = this.root.localToWorld(_v1.set(0, 0.1, 0.4));
+      const fwd = this.root.localToWorld(_v2.set(0, 0.1, 1.4)).sub(p).normalize();
+      this.carry += dt * 60 * out;
+      while (this.carry >= 1) {
+        this.carry -= 1;
+        const side = (Math.random() - 0.5) * 1.2;
+        const speed = 0.9 + Math.random() * 1.1;
+        this.cloud.spawn(p.x, 0.08 + Math.random() * 0.25, p.z,
+          fwd.x * speed - fwd.z * side, 0.02 + Math.random() * 0.03, fwd.z * speed + fwd.x * side,
+          9 + Math.random() * 6, 0.9 + Math.random() * 0.5, 1, 1, 1);
+      }
+    }
+    // Lit by the room: neutral grey mixed with the current color of the show.
+    const sc = g.showColor;
+    const lit = 0.6 + g.showLevel * 0.8;
+    const tint = [(0.45 + sc[0] * 0.55) * lit, (0.45 + sc[1] * 0.55) * lit, (0.45 + sc[2] * 0.55) * lit];
+    this.cloud.update(dt, { drag: 0.35, floor: 0.05 }, (i, t, o) => {
+      o.alpha = Math.min(1, t * 8) * (1 - t) * 0.3;
+      o.size = 1 + t * 2.6;
+      o.r = tint[0]; o.g = tint[1]; o.b = tint[2];
+    });
+  }
+
+  dispose() {
+    super.dispose();
+    this.ctx.world.remove(this.cloud.points);
+    this.cloud.dispose();
+  }
+}
+
+// ------------------------------------------------------------------ Laser
+class LaserModel extends BaseModel {
+  constructor(fixture, profile, ctx) {
+    super(fixture, profile, ctx);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.12), bodyMaterial());
+    body.position.y = -0.1;
+    this.lensMat = lensMaterial();
+    const aperture = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.03), this.lensMat);
+    aperture.rotation.x = -Math.PI / 2;
+    aperture.position.y = 0.001;
+    this.root.add(body, aperture);
+    this.lasers = [];
+    for (let i = 0; i < 24; i++) {
+      const b = new Beam();
+      b.mesh.rotation.order = 'YXZ';
+      this.root.add(b.mesh);
+      this.beams.push(b);
+      this.lasers.push(b);
+    }
+    this.phase = 0;
+    this.addLabel();
+    this.label.position.y = 0.3;
+  }
+
+  update(s, g, dt) {
+    this.phase += dt * (0.6 + s.laserSpin);
+    const on = s.intensity;
+    setLens(this.lensMat, s.color, on, 10);
+    const spread = THREE.MathUtils.degToRad(Math.max(5, s.beamAngle));
+    const gain = on * (0.25 + g.rawHaze * 2.2);
+    const ph = this.phase;
+    const pattern = s.laserPattern % LASER_PATTERNS;
+    const count = [16, 24, 18, 12, 1][pattern];
+    this.lasers.forEach((b, i) => {
+      if (i >= count || on < 0.01) { b.set(s.color, 0, 0.3); return; }
+      const k = count > 1 ? i / (count - 1) : 0.5;
+      const r = b.mesh.rotation;
+      switch (pattern) {
+        case 0: // scanning fan
+          r.set(Math.sin(ph * 1.3) * spread * 0.35, 0, (k - 0.5) * spread);
+          break;
+        case 1: // liquid sky: wavy sheet
+          r.set(Math.sin(ph * 2 + i * 0.45) * 0.06, 0, (k - 0.5) * spread);
+          break;
+        case 2: // rotating cone
+          r.set(spread * 0.5, (i / count) * Math.PI * 2 + ph, 0);
+          break;
+        case 3: // pulsing tunnel
+          r.set(spread * (0.15 + 0.12 * Math.sin(ph * 3)), (i / count) * Math.PI * 2 - ph * 1.5, 0);
+          break;
+        default: // single beam drawing a figure-8
+          r.set(Math.sin(ph * 1.7) * spread * 0.5, 0, Math.sin(ph * 0.85) * spread * 0.5);
+      }
+      b.set(s.color, gain, 0.35, 0, 0, 30);
+    });
+  }
+}
+
 // ------------------------------------------------------------------ Fog machine
 class FogModel extends BaseModel {
   constructor(fixture, profile, ctx) {
@@ -514,6 +697,9 @@ export function createFixtureModel(fixture, profile, ctx) {
     case 'moving': return new MovingHeadModel(fixture, profile, ctx);
     case 'bar': case 'blinder': return new PixelModel(fixture, profile, ctx);
     case 'retro': return new RetroModel(fixture, profile, ctx);
+    case 'spark': return new SparkModel(fixture, profile, ctx);
+    case 'lowfog': return new LowFogModel(fixture, profile, ctx);
+    case 'laser': return new LaserModel(fixture, profile, ctx);
     case 'strobe': return new StrobeModel(fixture, profile, ctx);
     case 'fog': return new FogModel(fixture, profile, ctx);
     default: return new ParModel(fixture, profile, ctx);

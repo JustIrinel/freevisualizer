@@ -112,3 +112,20 @@ test('retro 7-head profiles drive each head separately', () => {
   const s2 = computeState(rgb, dmx([0, 0, 255]), 1, createRuntime(), 0.016, 0);
   assert.deepStrictEqual(s2.pixels[0].color, [0, 0, 1]);
 });
+
+test('wedding effects: sparks need the fire channel, laser reads pattern and spin', async () => {
+  const spark = builtin('gen-spark-2');
+  assert.strictEqual(computeState(spark, dmx([200, 0]), 1, createRuntime(), 0.016, 0).spark, 0);
+  assert.ok(Math.abs(computeState(spark, dmx([255, 255]), 1, createRuntime(), 0.016, 0).spark - 1) < 1e-9);
+  const laser = builtin('gen-laser-6');
+  const s = computeState(laser, dmx([255, 120, 40, 200, 128]), 1, createRuntime(), 0.016, 0);
+  assert.strictEqual(s.intensity, 1);
+  assert.strictEqual(s.laserPattern, 2);
+  assert.ok(s.laserSpin < 0);
+  assert.deepStrictEqual(s.color, [0, 1, 0]);
+  const { weddingProject } = await import('../public/js/project.js');
+  const project = weddingProject();
+  const byId = Object.fromEntries(BUILTIN_PROFILES.map((p) => [p.id, normalizeProfile(p)]));
+  assert.ok(project.fixtures.every((f) => byId[f.profileId]), 'all wedding fixtures use built-in profiles');
+  assert.strictEqual(findConflicts(project, byId).size, 0);
+});

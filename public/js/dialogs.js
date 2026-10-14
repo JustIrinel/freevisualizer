@@ -54,7 +54,7 @@ export async function addFixturesDialog(app, presetProfileId) {
     st.address = a || 1;
     addrInput.value = st.address;
   };
-  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: 'Bară LED', strobe: 'Strobe', blinder: 'Blinder', retro: 'Retro', fog: 'Fum' }[p.kind] || 'Fixtură');
+  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: 'Bară LED', strobe: 'Strobe', blinder: 'Blinder', retro: 'Retro', pinspot: 'Pinspot', spark: 'Scântei', lowfog: 'Fum greu', laser: 'Laser', fog: 'Fum' }[p.kind] || 'Fixtură');
   const info = () => {
     const ch = profile.channels.length;
     const last = st.address + ch * st.qty - 1;
@@ -416,12 +416,17 @@ export async function importProfileFile(app) {
 
 // ------------------------------------------------------------------ projects
 export async function newProjectDialog(app) {
-  const res = await openModal('Proiect nou', h('p', {}, 'Proiectul curent rămâne salvat automat în browser până creezi altul (exportă-l sau salvează-l dacă vrei să-l păstrezi).'), [
+  const res = await openModal('Proiect nou', h('div', { class: 'form' },
+    h('p', {}, 'Alege de unde pornești. Proiectul curent rămâne salvat automat în browser până creezi altul – exportă-l sau salvează-l dacă vrei să-l păstrezi.'),
+    h('ul', { class: 'small muted' },
+      h('li', {}, h('b', {}, 'Nuntă: '), 'cabină DJ cu truss, retro-uri, uplight-uri pe pereți, ring de dans cu scântei reci, glob disco, fum greu, laser.'),
+      h('li', {}, h('b', {}, 'Club: '), 'truss cu moving heads, bare LED, strobe, ecran LED.'))), [
     { label: 'Anulează', value: null },
-    { label: 'Rig demo', value: 'demo' },
-    { label: 'Proiect gol', primary: true, value: 'empty' },
+    { label: 'Proiect gol', value: 'empty' },
+    { label: 'Rig club', value: 'club' },
+    { label: 'Rig nuntă', primary: true, value: 'wedding' },
   ]);
-  if (res) app.newProject(res === 'demo');
+  if (res) app.newProject(res);
 }
 
 export async function openProjectDialog(app) {

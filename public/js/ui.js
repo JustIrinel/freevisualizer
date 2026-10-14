@@ -335,7 +335,7 @@ function renderPropInspector(app, el, pr) {
   const def = PROP_TYPES[pr.type] || { params: {} };
   const nameInput = h('input', { value: pr.name });
   nameInput.addEventListener('change', () => app.updateItem(pr.id, { name: nameInput.value.trim() || pr.name }));
-  const labels = { length: 'Lungime (m)', width: 'Lățime (m)', height: 'Înălțime (m)', depth: 'Adâncime (m)', count: 'Număr persoane', diameter: 'Diametru (m)' };
+  const labels = { length: 'Lungime (m)', width: 'Lățime (m)', height: 'Înălțime (m)', depth: 'Adâncime (m)', count: 'Număr persoane', diameter: 'Diametru (m)', drop: 'Tijă (m)', rpm: 'Rotații / minut' };
   const params = { ...def.params, ...pr.params };
   el.append(
     h('h3', {}, def.label || pr.type),
