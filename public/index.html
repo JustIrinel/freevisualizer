@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeVisualizer</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.min.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span>FreeVisualizer</div>
+    <input id="projectName" class="project-name" title="Numele proiectului" spellcheck="false">
+    <div class="menu">
+      <button data-action="new" title="Proiect nou">Nou</button>
+      <button data-action="open" title="Deschide un proiect salvat">Deschide</button>
+      <button data-action="save" title="Salvează (Ctrl+S)">Salvează</button>
+      <button data-action="export" title="Descarcă proiectul ca fișier .json">Export</button>
+      <button data-action="import" title="Încarcă un proiect din fișier">Import</button>
+      <button data-action="undo" title="Anulează (Ctrl+Z)">↶</button>
+      <button data-action="redo" title="Refă (Ctrl+Y)">↷</button>
+    </div>
+    <div class="spacer"></div>
+    <div id="inputStatus" class="status-pill" title="Starea intrării DMX"><span class="led"></span><span class="txt">Se conectează…</span></div>
+    <button id="demoBtn" class="toggle" title="Show demo intern – testează rigul fără SoundSwitch">▶ Demo</button>
+    <button data-action="settings" class="icon" title="Setări">⚙</button>
+    <button data-action="help" class="icon" title="Ajutor: conectare SoundSwitch">?</button>
+  </header>
+
+  <main>
+    <aside class="panel left" id="leftPanel">
+      <nav class="tabs">
+        <button data-tab="fixtures" class="active">Fixturi</button>
+        <button data-tab="stage">Scenă</button>
+        <button data-tab="library">Bibliotecă</button>
+        <button data-tab="dmx">DMX</button>
+      </nav>
+      <section class="tab" id="tab-fixtures">
+        <div class="row">
+          <button class="primary grow" data-action="add-fixture">+ Adaugă fixturi</button>
+        </div>
+        <input type="search" id="fixtureFilter" placeholder="Caută în patch…">
+        <div id="fixtureList" class="list"></div>
+        <div class="foot muted" id="patchSummary"></div>
+      </section>
+      <section class="tab hidden" id="tab-stage">
+        <h4>Adaugă element</h4>
+        <div id="propButtons" class="grid2"></div>
+        <h4>Elemente în scenă</h4>
+        <div id="propList" class="list"></div>
+        <h4>Sală</h4>
+        <div id="roomForm" class="form"></div>
+      </section>
+      <section class="tab hidden" id="tab-library">
+        <div class="row">
+          <button class="primary grow" data-action="ofl-search">🔎 Caută online (OFL)</button>
+        </div>
+        <div class="row">
+          <button class="grow" data-action="new-profile">+ Profil nou</button>
+          <button class="grow" data-action="import-profile">Import fișier</button>
+        </div>
+        <input type="search" id="profileFilter" placeholder="Caută profil…">
+        <div id="profileList" class="list"></div>
+      </section>
+      <section class="tab hidden" id="tab-dmx">
+        <div class="row">
+          <label class="grow">Univers <select id="dmxUniverse"></select></label>
+        </div>
+        <canvas id="dmxCanvas" width="320" height="320"></canvas>
+        <div id="dmxHover" class="muted small">Treci cu mouse-ul peste un canal.</div>
+        <h4>Intrări active</h4>
+        <div id="dmxInputs" class="small"></div>
+      </section>
+    </aside>
+
+    <div id="viewport">
+      <div class="view-toolbar">
+        <div class="group">
+          <button data-view="perspective" title="Perspectivă (1)">3D</button>
+          <button data-view="front" title="Față (2)">Față</button>
+          <button data-view="top" title="De sus (3)">Sus</button>
+          <button data-view="side" title="Lateral (4)">Lateral</button>
+          <button data-view="dj" title="Din cabina DJ (5)">DJ</button>
+          <button data-view="crowd" title="Din public (6)">Public</button>
+        </div>
+        <div class="group">
+          <button data-tmode="translate" class="active" title="Mută (W)">✥ Mută</button>
+          <button data-tmode="rotate" title="Rotește (E)">⟳ Rotește</button>
+          <button id="snapBtn" class="active" title="Aliniere la grilă 25 cm / 15°">Snap</button>
+          <button id="labelsBtn" title="Arată numele și adresele">Etichete</button>
+        </div>
+        <div class="group sliders">
+          <label title="Cantitatea de fum/haze din sală">Haze <input type="range" id="hazeSlider" min="0" max="1" step="0.01"></label>
+          <label title="Strălucire (bloom)">Glow <input type="range" id="bloomSlider" min="0" max="2" step="0.01"></label>
+          <button data-action="fullscreen" title="Ecran complet (F11)">⛶</button>
+          <button data-action="hide-ui" title="Ascunde panourile (H)">◱</button>
+        </div>
+      </div>
+      <div id="noSignal" class="no-signal hidden">
+        <strong>Nu primesc date DMX.</strong>
+        <span>Pornește SoundSwitch cu <em>Localhost Art-Net Node</em> activat, sau apasă <b>▶ Demo</b>.</span>
+        <button data-action="help">Cum conectez SoundSwitch?</button>
+      </div>
+    </div>
+
+    <aside class="panel right" id="inspector"></aside>
+  </main>
+
+  <dialog id="modal"><div id="modalBody"></div></dialog>
+  <div id="toast" class="toast hidden"></div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "freevisualizer",
+  "version": "1.0.0",
+  "description": "Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN) – adaugi fixturi și vezi show-ul live.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test",
+    "test-signal": "node tools/send-test-artnet.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "private": true
+}

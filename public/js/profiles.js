@@ -1,0 +1,135 @@
+// Fixture profiles: channel types, built-in generic library and helpers.
+// A profile describes the DMX layout of a fixture and how it should look in 3D.
+// Every fixture emits light along its local +Y axis.
+
+export const KINDS = {
+  par: 'Par / Uplight',
+  moving: 'Moving head',
+  bar: 'Bară LED (pixeli)',
+  strobe: 'Stroboscop',
+  blinder: 'Blinder',
+  fog: 'Mașină de fum',
+};
+
+export const MOVING_STYLES = { spot: 'Spot', beam: 'Beam', wash: 'Wash' };
+
+// type -> [label, group]
+export const CHANNEL_TYPES = {
+  none: ['— (ignorat)', 'Altele'],
+  dimmer: ['Dimmer', 'Intensitate'],
+  dimmerFine: ['Dimmer fine', 'Intensitate'],
+  strobe: ['Strobe / Shutter', 'Intensitate'],
+  red: ['Roșu', 'Culoare'],
+  green: ['Verde', 'Culoare'],
+  blue: ['Albastru', 'Culoare'],
+  white: ['Alb', 'Culoare'],
+  warmWhite: ['Alb cald', 'Culoare'],
+  coldWhite: ['Alb rece', 'Culoare'],
+  amber: ['Amber', 'Culoare'],
+  uv: ['UV', 'Culoare'],
+  lime: ['Lime', 'Culoare'],
+  cyan: ['Cyan (CMY)', 'Culoare'],
+  magenta: ['Magenta (CMY)', 'Culoare'],
+  yellow: ['Galben (CMY)', 'Culoare'],
+  colorWheel: ['Roată de culori', 'Culoare'],
+  pan: ['Pan', 'Mișcare'],
+  panFine: ['Pan fine', 'Mișcare'],
+  tilt: ['Tilt', 'Mișcare'],
+  tiltFine: ['Tilt fine', 'Mișcare'],
+  gobo: ['Gobo', 'Fascicul'],
+  prism: ['Prismă', 'Fascicul'],
+  zoom: ['Zoom', 'Fascicul'],
+  fog: ['Fum (output)', 'Altele'],
+};
+
+export const DEFAULT_STROBE_RANGES = [
+  { from: 0, to: 9, mode: 'open' },
+  { from: 10, to: 255, mode: 'strobe', hzFrom: 1, hzTo: 25 },
+];
+
+export const DEFAULT_WHEEL = ['#ffffff', '#ff0000', '#ff8000', '#ffff00', '#00ff00', '#00ffff', '#0040ff', '#ff00ff', '#ff60a0'];
+
+/** Evenly divide 0..255 between colors, like most cheap color wheels. */
+export function wheelRanges(colors, end = 127) {
+  const step = Math.floor((end + 1) / colors.length);
+  const ranges = colors.map((color, i) => ({ from: i * step, to: i === colors.length - 1 ? end : (i + 1) * step - 1, color }));
+  if (end < 255) ranges.push({ from: end + 1, to: 255, mode: 'rotate' });
+  return ranges;
+}
+
+export function goboRanges(count, end = 127) {
+  const step = Math.floor((end + 1) / count);
+  const ranges = [];
+  for (let i = 0; i < count; i++) ranges.push({ from: i * step, to: i === count - 1 ? end : (i + 1) * step - 1, gobo: i });
+  if (end < 255) ranges.push({ from: end + 1, to: 255, gobo: 1, shake: true });
+  return ranges;
+}
+
+const ch = (type, extra) => ({ type, ...(extra || {}) });
+const strobe = () => ch('strobe', { ranges: DEFAULT_STROBE_RANGES.map((r) => ({ ...r })) });
+const pixelRGB = (n) => {
+  const out = [];
+  for (let p = 0; p < n; p++) out.push(ch('red', { pixel: p }), ch('green', { pixel: p }), ch('blue', { pixel: p }));
+  return out;
+};
+
+const generic = (p) => ({ manufacturer: 'Generic', source: 'builtin', pixels: 1, beamAngle: [25, 25], panRange: 540, tiltRange: 270, ...p });
+
+export const BUILTIN_PROFILES = [
+  generic({ id: 'gen-par-rgb-3', name: 'Par LED RGB 3ch', kind: 'par', beamAngle: [25, 25], channels: [ch('red'), ch('green'), ch('blue')] }),
+  generic({ id: 'gen-par-rgbw-4', name: 'Par LED RGBW 4ch', kind: 'par', channels: [ch('red'), ch('green'), ch('blue'), ch('white')] }),
+  generic({ id: 'gen-par-rgb-7', name: 'Par LED RGB 7ch (D,R,G,B,Strobe,Mod,Viteză)', kind: 'par', channels: [ch('dimmer'), ch('red'), ch('green'), ch('blue'), strobe(), ch('none', { label: 'Mod' }), ch('none', { label: 'Viteză' })] }),
+  generic({ id: 'gen-par-rgbw-8', name: 'Par LED RGBW 8ch (D,R,G,B,W,Strobe,Mod,Viteză)', kind: 'par', channels: [ch('dimmer'), ch('red'), ch('green'), ch('blue'), ch('white'), strobe(), ch('none', { label: 'Mod' }), ch('none', { label: 'Viteză' })] }),
+  generic({ id: 'gen-par-rgbwauv-6', name: 'Uplight RGBWA+UV 6ch', kind: 'par', beamAngle: [30, 30], channels: [ch('red'), ch('green'), ch('blue'), ch('white'), ch('amber'), ch('uv')] }),
+  generic({ id: 'gen-par-rgbwauv-10', name: 'Uplight RGBWA+UV 10ch (D,R,G,B,W,A,UV,Strobe,Mod,Viteză)', kind: 'par', beamAngle: [30, 30], channels: [ch('dimmer'), ch('red'), ch('green'), ch('blue'), ch('white'), ch('amber'), ch('uv'), strobe(), ch('none', { label: 'Mod' }), ch('none', { label: 'Viteză' })] }),
+  generic({ id: 'gen-dimmer-1', name: 'Dimmer / Par halogen 1ch', kind: 'par', defaultColor: '#ffc27a', beamAngle: [20, 20], channels: [ch('dimmer')] }),
+  generic({
+    id: 'gen-mh-spot-11', name: 'Moving Head Spot 11ch', kind: 'moving', style: 'spot', beamAngle: [14, 14],
+    channels: [ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('colorWheel', { ranges: wheelRanges(DEFAULT_WHEEL) }), ch('gobo', { ranges: goboRanges(8) }), strobe(), ch('dimmer'), ch('none', { label: 'Viteză P/T' }), ch('none', { label: 'Auto' }), ch('none', { label: 'Reset' })],
+  }),
+  generic({
+    id: 'gen-mh-beam-16', name: 'Moving Head Beam 16ch', kind: 'moving', style: 'beam', beamAngle: [3, 3],
+    channels: [ch('colorWheel', { ranges: wheelRanges(['#ffffff', '#ff0000', '#ff8000', '#ffff00', '#00ff00', '#00ffff', '#0040ff', '#ff00ff', '#b0ffb0', '#ff60a0', '#8000ff', '#ffd090', '#40a0ff', '#ff4000']) }), strobe(), ch('dimmer'), ch('gobo', { ranges: goboRanges(14) }), ch('prism', { ranges: [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 8 }] }), ch('none', { label: 'Rotație prismă' }), ch('none', { label: 'Frost' }), ch('none', { label: 'Focus' }), ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('none', { label: 'Viteză P/T' }), ch('none', { label: 'Reset' }), ch('none', { label: 'Lampă' }), ch('none', { label: 'Funcții' })],
+  }),
+  generic({
+    id: 'gen-mh-wash-14', name: 'Moving Head Wash RGBW Zoom 14ch', kind: 'moving', style: 'wash', beamAngle: [8, 45],
+    channels: [ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('none', { label: 'Viteză P/T' }), ch('dimmer'), strobe(), ch('red'), ch('green'), ch('blue'), ch('white'), ch('zoom'), ch('none', { label: 'Macro culori' }), ch('none', { label: 'Reset' })],
+  }),
+  generic({ id: 'gen-bar-8x-rgb-24', name: 'Bară LED 8 pixeli RGB 24ch', kind: 'bar', pixels: 8, beamAngle: [25, 25], channels: pixelRGB(8) }),
+  generic({ id: 'gen-bar-8x-rgb-26', name: 'Bară LED 8 pixeli RGB 26ch (D,Strobe + 8×RGB)', kind: 'bar', pixels: 8, beamAngle: [25, 25], channels: [ch('dimmer'), strobe(), ...pixelRGB(8)] }),
+  generic({ id: 'gen-bar-rgb-3', name: 'Bară LED RGB 3ch (fără pixeli)', kind: 'bar', pixels: 8, beamAngle: [25, 25], channels: [ch('red'), ch('green'), ch('blue')] }),
+  generic({ id: 'gen-strobe-2', name: 'Stroboscop LED 2ch (Dimmer, Viteză)', kind: 'strobe', beamAngle: [110, 110], channels: [ch('dimmer'), strobe()] }),
+  generic({ id: 'gen-strobe-rgb-6', name: 'Stroboscop RGB 6ch (D,Strobe,R,G,B,W)', kind: 'strobe', beamAngle: [110, 110], channels: [ch('dimmer'), strobe(), ch('red'), ch('green'), ch('blue'), ch('white')] }),
+  generic({ id: 'gen-blinder-2', name: 'Blinder 2 lămpi 2ch', kind: 'blinder', pixels: 2, defaultColor: '#ffb060', beamAngle: [60, 60], channels: [ch('dimmer', { pixel: 0 }), ch('dimmer', { pixel: 1 })] }),
+  generic({ id: 'gen-fog-1', name: 'Mașină de fum 1ch', kind: 'fog', channels: [ch('fog')] }),
+];
+
+export function channelCount(profile) {
+  return profile.channels.length;
+}
+
+export function channelLabel(c) {
+  const base = (CHANNEL_TYPES[c.type] || [c.type])[0];
+  const label = c.label && c.type === 'none' ? c.label : c.label ? `${base} (${c.label})` : base;
+  return c.pixel != null ? `${label} · px ${c.pixel + 1}` : label;
+}
+
+export function cloneProfile(p) {
+  return JSON.parse(JSON.stringify(p));
+}
+
+export function uid(prefix = 'id') {
+  return `${prefix}-${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-3)}`;
+}
+
+/** Make sure a (possibly hand-edited or imported) profile has every field we rely on. */
+export function normalizeProfile(p) {
+  const out = { pixels: 1, beamAngle: [25, 25], panRange: 540, tiltRange: 270, manufacturer: '', ...p };
+  if (!KINDS[out.kind]) out.kind = 'par';
+  if (out.kind === 'moving' && !MOVING_STYLES[out.style]) out.style = 'spot';
+  if (!Array.isArray(out.beamAngle)) out.beamAngle = [Number(out.beamAngle) || 25, Number(out.beamAngle) || 25];
+  out.channels = (out.channels || []).map((c) => ({ ...c, type: CHANNEL_TYPES[c.type] ? c.type : 'none' }));
+  const maxPixel = out.channels.reduce((m, c) => (c.pixel != null ? Math.max(m, c.pixel + 1) : m), 0);
+  out.pixels = Math.max(out.pixels || 1, maxPixel || 1);
+  return out;
+}
