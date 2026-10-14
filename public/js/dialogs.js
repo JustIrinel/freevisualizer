@@ -5,6 +5,8 @@ import {
   channelLabel, cloneProfile, normalizeProfile, uid,
 } from './profiles.js';
 import { oflToProfile, listModes } from './ofl-import.js';
+import { readGdtf, listGdtfModes, gdtfToProfile } from './gdtf-import.js';
+import { parseQxf, listQxfModes, qxfToProfile } from './qxf-import.js';
 import { loadBrand, saveBrand } from './recorder.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
@@ -324,18 +326,21 @@ function groupedTypeOptions() {
 }
 
 // ------------------------------------------------------------------ OFL
-async function chooseModeAndImport(app, fixture, key) {
-  const modes = listModes(fixture);
-  if (!modes.length) { toast('Fixtura nu are moduri definite', 'error'); return null; }
-  let chosen = modes.length - 1;
-  // Prefer the mode with most channels that is a typical "full" mode.
-  chosen = modes.reduce((best, m) => (m.channels > modes[best].channels ? m.index : best), 0);
+/**
+ * Pick a DMX mode and import it as a profile.
+ * @param source { title, modes: [{ index, name, channels }], convert(index) → profile }
+ */
+async function chooseModeAndImportGeneric(app, source) {
+  const { modes } = source;
+  if (!modes.length) { toast('Fixtura nu are moduri DMX definite', 'error'); return null; }
+  // Preselect the mode with the most channels (usually the "full" mode).
+  let chosen = modes.reduce((best, m) => (m.channels > best.channels ? m : best), modes[0]).index;
   const list = h('div', { class: 'mode-list' }, modes.map((m) => {
-    const radio = h('input', { type: 'radio', name: 'oflmode', value: m.index, checked: m.index === chosen });
+    const radio = h('input', { type: 'radio', name: 'importmode', value: m.index, checked: m.index === chosen });
     radio.addEventListener('change', () => { chosen = m.index; });
     return h('label', {}, radio, h('span', { class: 'grow' }, m.name), h('span', { class: 'muted' }, `${m.channels} canale`));
   }));
-  const res = await openModal(`${fixture.__manufacturer || ''} ${fixture.name}`.trim(), h('div', { class: 'form' },
+  const res = await openModal(source.title, h('div', { class: 'form' },
     h('p', {}, 'Alege modul DMX ', h('b', {}, 'identic'), ' cu cel setat pe fixtură și în SoundSwitch:'),
     list), [
     { label: 'Anulează', value: null },
@@ -344,7 +349,7 @@ async function chooseModeAndImport(app, fixture, key) {
   ]);
   if (!res) return null;
   try {
-    const profile = oflToProfile(fixture, chosen, key);
+    const profile = source.convert(chosen);
     const existing = app.project.profiles.find((p) => p.id === profile.id);
     const saved = app.saveProfile(existing ? { ...profile, id: existing.id } : profile);
     toast(`Profil importat: ${saved.name}`);
@@ -352,6 +357,59 @@ async function chooseModeAndImport(app, fixture, key) {
     return saved;
   } catch (err) {
     toast(`Import eșuat: ${err.message}`, 'error');
+    return null;
+  }
+}
+
+function chooseModeAndImport(app, fixture, key) {
+  return chooseModeAndImportGeneric(app, {
+    title: `${fixture.__manufacturer || ''} ${fixture.name}`.trim(),
+    modes: listModes(fixture),
+    convert: (i) => oflToProfile(fixture, i, key),
+  });
+}
+
+/** Import one fixture file: .gdtf (GDTF Share, Fixture.ID), .qxf (QLC+), .json (OFL or FreeVisualizer). */
+export async function importFixtureFile(app, file) {
+  const name = file.name || '';
+  const ext = name.toLowerCase().split('.').pop();
+  try {
+    if (ext === 'gdtf') {
+      const ft = await readGdtf(await file.arrayBuffer());
+      return chooseModeAndImportGeneric(app, {
+        title: `${ft.attrs.Manufacturer || ''} ${ft.attrs.LongName || ft.attrs.Name || name}`.trim(),
+        modes: listGdtfModes(ft),
+        convert: (i) => gdtfToProfile(ft, i),
+      });
+    }
+    const text = await file.text();
+    if (ext === 'qxf' || text.trimStart().startsWith('<')) {
+      const root = parseQxf(text);
+      return chooseModeAndImportGeneric(app, {
+        title: `${root.children.find((c) => c.name === 'Manufacturer')?.text || ''} ${root.children.find((c) => c.name === 'Model')?.text || name}`.trim(),
+        modes: listQxfModes(root),
+        convert: (i) => qxfToProfile(root, i),
+      });
+    }
+    const data = JSON.parse(text);
+    if (data.availableChannels && data.modes) return chooseModeAndImport(app, data, data.__key || '');
+    if (Array.isArray(data.channels)) {
+      const { freevisProfile, ...p } = data;
+      p.id = app.profilesById[p.id] ? uid('prof') : (p.id || uid('prof'));
+      p.source = 'custom';
+      const saved = app.saveProfile(p);
+      toast(`Profil importat: ${saved.name}`);
+      return saved;
+    }
+    if (Array.isArray(data.fixtures)) {
+      app.checkpoint();
+      app.loadProject(data);
+      toast(`Proiect deschis: „${app.project.name}”`);
+      return null;
+    }
+    throw new Error('format necunoscut');
+  } catch (err) {
+    toast(`Nu am putut importa „${name}”: ${err.message}`, 'error', 6000);
     return null;
   }
 }
@@ -406,24 +464,8 @@ export async function oflDialog(app) {
 }
 
 export async function importProfileFile(app) {
-  const file = await pickFile('.json');
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    if (data.availableChannels && data.modes) {
-      await chooseModeAndImport(app, data, data.__key || '');
-    } else if (Array.isArray(data.channels)) {
-      const { freevisProfile, ...p } = data;
-      p.id = app.profilesById[p.id] ? uid('prof') : (p.id || uid('prof'));
-      p.source = 'custom';
-      const saved = app.saveProfile(p);
-      toast(`Profil importat: ${saved.name}`);
-    } else {
-      throw new Error('fișierul nu e un profil FreeVisualizer sau Open Fixture Library');
-    }
-  } catch (err) {
-    toast(`Import eșuat: ${err.message}`, 'error');
-  }
+  const file = await pickFile('.gdtf,.qxf,.json');
+  if (file) await importFixtureFile(app, file);
 }
 
 // ------------------------------------------------------------------ projects
@@ -584,7 +626,7 @@ export async function helpDialog(app) {
       h('li', {}, h('b', {}, 'Culorile/mișcarea sunt greșite: '), 'modul DMX al profilului diferă de cel din SoundSwitch. Folosește „Test canale” din inspector ca să verifici fiecare canal.'),
       h('li', {}, h('b', {}, 'Portul 6454 e ocupat: '), 'închide alte vizualizatoare / SoundSwitch, pornește FreeVisualizer, apoi SoundSwitch.')),
     h('h4', {}, 'Scurtături'),
-    h('p', { class: 'small' }, 'W mută · E rotește · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere'),
+    h('p', { class: 'small' }, 'Ctrl/Cmd+click sau Shift+trage = selecție multiplă · Ctrl/Cmd+A toate · W mută · E rotește · săgeți/PageUp/PageDown mută · [ ] rotesc · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere'),
   );
   await openModal('Conectare SoundSwitch', content, [{ label: 'Am înțeles', primary: true, value: null }]);
 }

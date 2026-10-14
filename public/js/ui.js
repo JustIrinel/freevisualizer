@@ -35,6 +35,21 @@ export function bindStatic(app) {
     const btn = e.target.closest('[data-action]');
     if (btn && actions[btn.dataset.action]) actions[btn.dataset.action]();
   });
+  // Drag & drop fixture files (.gdtf / .qxf / .json) anywhere on the window.
+  const overlay = $('dropOverlay');
+  let dragDepth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; overlay.classList.remove('hidden'); });
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) overlay.classList.add('hidden'); });
+  window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.add('hidden');
+    for (const file of e.dataTransfer.files) await dialogs.importFixtureFile(app, file);
+  });
+
   // Native menu of the desktop app (macOS / Windows).
   if (window.freevisDesktop) {
     document.body.classList.add('desktop');

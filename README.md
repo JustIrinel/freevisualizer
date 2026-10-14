@@ -24,7 +24,17 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - **laser** cu 5 modele (evantai, liquid sky, con, tunel, rază)
 - **Clipuri video pentru clienți**: înregistrezi show-ul în format vertical 9:16 (Reels/TikTok), 16:9 sau 1:1, cu logo-ul și textul tău, cameră cinematică automată și, opțional, melodia ta
 - **Șabloane**: „Rig nuntă” (cabină DJ cu truss, retro-uri, 12 uplight-uri, ring de dans cu scântei, glob, fum greu, laser, masa mirilor, mese rotunde) și „Rig club"
-- **Bibliotecă**: profile generice incluse, căutare și import direct din [Open Fixture Library](https://open-fixture-library.org) (peste o mie de modele Chauvet, ADJ, Cameo, Stairville, Eurolite, Showtec etc.) și un editor pentru profilele tale.
+- **Bibliotecă**:
+  - profile generice incluse
+  - căutare și import direct din [Open Fixture Library](https://open-fixture-library.org): peste o mie de modele Chauvet, ADJ, Cameo, Stairville, Eurolite, Showtec etc.
+  - import de fișiere **GDTF (.gdtf)** și **QLC+ (.qxf)**, descărcate de pe [Fixture.ID](https://www.fixture.id/), [GDTF Share](https://gdtf-share.com/) sau din biblioteca QLC+. Le tragi peste fereastră și gata.
+  - editor pentru profilele tale
+- **Editare rapidă**:
+  - selecție multiplă: Ctrl/Cmd+click, Shift+trage un dreptunghi, Ctrl/Cmd+A
+  - mutare și rotire pe grup
+  - aliniere și distribuire egală
+  - re-adresare DMX automată de la stânga la dreapta
+  - **🎯 Țintește**: dai click pe punctul spre care să bată lumina, iar fixtura (sau grupul) se orientează singură
 - **Scenă**: truss, stâlpi, cabină DJ, boxe, subwoofere, podium, ring de dans, ecran LED, pereți, masa mirilor, mese rotunde și public animat.
 - **Patch**:
   - univers și adresă pentru fiecare fixtură
@@ -98,20 +108,28 @@ Implicit, universul Art-Net 0 apare în vizualizator ca **Universul 1**, la fel 
 
 1. **Nou → Rig nuntă** îți dă un punct de plecare complet. Îl adaptezi la sala ta.
 2. **Fixturi → + Adaugă fixturi**: alegi profilul, cantitatea, universul și adresa de start, apoi montajul (pe podea, agățat pe truss, spre public). Retro-urile sunt profilele „Retro hexagonal 7 capete”, în 4 variante de canale.
-3. Dacă modelul tău nu e în lista generică: **Bibliotecă → Caută online (OFL)**, scrii numele (de exemplu „intimidator spot 260”) și alegi **exact modul DMX** setat pe fixtură. Profilul rămâne salvat în proiect.
-4. Click pe o fixtură în scenă ca s-o selectezi. Apoi:
-   - **W** sau **E** comută între mutare și rotire cu gizmo-ul
-   - poziția și rotația se pot scrie și exact în inspector
-5. **Scenă**: adaugi truss, cabină DJ, boxe, ecran LED și invitați, și setezi dimensiunile sălii.
-6. **Ctrl+S** salvează proiectul. Cu **Export** iei fișierul `.json` și îl poți muta pe alt laptop.
+3. Ai fișierul fixturii de pe **Fixture.ID** / GDTF Share (`.gdtf`) sau din QLC+ (`.qxf`)? Trage-l peste fereastră (sau **Bibliotecă → Import fișier**) și alege modul DMX.
+4. Dacă modelul tău nu e în lista generică: **Bibliotecă → Caută online (OFL)**, scrii numele (de exemplu „intimidator spot 260”) și alegi **exact modul DMX** setat pe fixtură. Profilul rămâne salvat în proiect.
+5. Click pe o fixtură în scenă ca s-o selectezi.
+   - Mai multe deodată: **Ctrl/Cmd+click**, sau ții **Shift** și tragi un dreptunghi peste ele.
+   - **W** = mutare (tragi de săgețile colorate), **E** = rotire (roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală).
+   - Săgeata galbenă arată încotro bate lumina.
+   - În dreapta ai poziția și cele 3 slidere de orientare, cu butoane de ±15°.
+   - Cel mai simplu e **🎯 Țintește**: apeși butonul, apoi dai click în scenă pe punctul unde vrei lumina.
+6. **Scenă**: adaugi truss, cabină DJ, boxe, ecran LED și invitați, și setezi dimensiunile sălii.
+7. **Ctrl+S** salvează proiectul. Cu **Export** iei fișierul `.json` și îl poți muta pe alt laptop.
 
 ### Scurtături
 
 | Tastă | Acțiune |
 | --- | --- |
+| Ctrl/Cmd+click · Shift+trage | Selecție multiplă · dreptunghi de selecție |
+| Ctrl/Cmd+A | Selectează toate fixturile |
 | W / E | Mută / rotește selecția |
+| Săgeți · PageUp/PageDown | Mută 25 cm (Shift = 5 cm) · sus/jos |
+| [ / ] | Rotește ±15° (Shift = ±5°) |
 | F | Centrează camera pe selecție |
-| Ctrl+D | Duplică (cu adresa următoare) |
+| Ctrl+D | Duplică selecția (cu adresele următoare) |
 | Del | Șterge |
 | Ctrl+Z / Ctrl+Y | Anulează / refă |
 | Ctrl+S | Salvează |
