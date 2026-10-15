@@ -1,7 +1,7 @@
 // GDTF (General Device Type Format, .gdtf) → FreeVisualizer profile.
 // A .gdtf file is a ZIP with description.xml; see https://gdtf.eu for the spec.
 import { parseXml, child, children, descendants } from './xml-lite.js';
-import { readZipText } from './zip-lite.js';
+import { readZip, readZipText } from './zip-lite.js';
 
 const COLOR_ADD = {
   ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_W: 'white',
@@ -39,6 +39,52 @@ function dmxValue(s) {
 export async function readGdtf(buffer) {
   const xml = await readZipText(buffer, 'description.xml');
   return parseGdtfXml(xml);
+}
+
+/** GDTF Position "{a,b,c,d}{e,f,g,h}{…}{…}" (row major, metres) → 16 numbers. */
+function parseMatrix(str) {
+  const nums = String(str || '').match(/-?\d+(\.\d+)?(e-?\d+)?/gi);
+  if (!nums || nums.length < 16) return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  return nums.slice(0, 16).map(Number);
+}
+
+/**
+ * 3D description of a GDTF fixture: model files and the geometry tree
+ * (Base → Axis (pan) → Axis (tilt) → Beam …).
+ */
+export function gdtfGeometry(ft) {
+  const models = {};
+  for (const m of children(child(ft, 'Models'), 'Model')) {
+    models[m.attrs.Name] = {
+      file: m.attrs.File || '', length: Number(m.attrs.Length) || 0, width: Number(m.attrs.Width) || 0, height: Number(m.attrs.Height) || 0,
+      primitive: m.attrs.PrimitiveType || '',
+    };
+  }
+  const walk = (node) => ({
+    tag: node.name, name: node.attrs.Name || '', model: node.attrs.Model || '', matrix: parseMatrix(node.attrs.Position),
+    children: node.children.filter((c) => c.name && c.name !== '#text').map(walk),
+  });
+  const geos = child(ft, 'Geometries');
+  return { models, tree: geos ? geos.children.filter((c) => c.name).map(walk) : [] };
+}
+
+/** Model files (glb preferred, then 3ds) and the thumbnail inside a .gdtf archive. */
+export async function gdtfAssets(buffer, ft) {
+  const files = readZip(buffer);
+  const find = (re) => [...files.keys()].find((k) => re.test(k));
+  const geometry = gdtfGeometry(ft);
+  const out = { geometry, files: {}, thumbnail: null };
+  for (const [name, m] of Object.entries(geometry.models)) {
+    if (!m.file) continue;
+    const esc = m.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const glb = find(new RegExp(`(^|/)models/gltf/${esc}\\.glb$`, 'i'));
+    const tds = find(new RegExp(`(^|/)models/3ds/${esc}\\.3ds$`, 'i'));
+    const key = glb || tds;
+    if (key) out.files[name] = { ext: glb ? 'glb' : '3ds', bytes: await files.get(key)() };
+  }
+  const thumb = find(/(^|\/)thumbnail\.png$/i);
+  if (thumb) out.thumbnail = await files.get(thumb)();
+  return out;
 }
 
 export function parseGdtfXml(xml) {

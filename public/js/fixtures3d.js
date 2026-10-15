@@ -7,6 +7,7 @@ import {
   housing, trim, steel, alu, rubber, grille, glass, lens, setGlow, rbox, cyl, controlPanel, handle, feet,
   movingBase, yokeArms, roundHead, spotHead, parBracket, hexBody, reflector, isShared,
 } from './fixture-parts.js';
+import { applyModel } from './models3d.js';
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -194,6 +195,7 @@ class BaseModel {
   }
 
   dispose() {
+    this.disposed = true;
     for (const b of this.beams) b.dispose();
     if (this.light) this.ctx.releaseLight();
     this.root.traverse((o) => {
@@ -810,6 +812,12 @@ class FogModel extends BaseModel {
 }
 
 export function createFixtureModel(fixture, profile, ctx) {
+  const model = createProcedural(fixture, profile, ctx);
+  if (profile.model) applyModel(model, profile).catch((err) => console.warn('Model 3D:', err.message));
+  return model;
+}
+
+function createProcedural(fixture, profile, ctx) {
   switch (profile.kind) {
     case 'moving': return new MovingHeadModel(fixture, profile, ctx);
     case 'bar': case 'blinder': return new PixelModel(fixture, profile, ctx);

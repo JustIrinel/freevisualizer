@@ -34,3 +34,18 @@ test('falls back to the next free port when the preferred one is busy', async ()
   await app.stop();
   blocker.close();
 });
+
+test('3D models: upload, content-hash name, served back; bad names rejected', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'freevis-'));
+  const app = createApp({ dataDir, port: rnd(), artnetPort: rnd(), sacnPort: rnd(), host: '127.0.0.1' });
+  const { port } = await app.start();
+  const body = Buffer.from('glTF fake model bytes');
+  const up = await fetch(`http://127.0.0.1:${port}/api/models?ext=glb`, { method: 'POST', body });
+  const { file } = await up.json();
+  assert.match(file, /^[a-f0-9]{40}\.glb$/);
+  const back = Buffer.from(await (await fetch(`http://127.0.0.1:${port}/api/models/${file}`)).arrayBuffer());
+  assert.deepStrictEqual(back, body);
+  assert.strictEqual((await fetch(`http://127.0.0.1:${port}/api/models?ext=exe`, { method: 'POST', body })).status, 400);
+  assert.strictEqual((await fetch(`http://127.0.0.1:${port}/api/models/..%2Fsettings.json`)).status, 400);
+  await app.stop();
+});

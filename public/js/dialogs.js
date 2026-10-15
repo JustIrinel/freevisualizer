@@ -5,7 +5,8 @@ import {
   channelLabel, cloneProfile, normalizeProfile, uid,
 } from './profiles.js';
 import { oflToProfile, listModes } from './ofl-import.js';
-import { readGdtf, listGdtfModes, gdtfToProfile } from './gdtf-import.js';
+import { readGdtf, listGdtfModes, gdtfToProfile, gdtfAssets } from './gdtf-import.js';
+import { uploadAsset } from './models3d.js';
 import { parseQxf, listQxfModes, qxfToProfile } from './qxf-import.js';
 import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
@@ -325,6 +326,44 @@ function defaultRanges(type) {
   return undefined;
 }
 
+/** "Model 3D" block of the profile editor: the real look of the fixture. */
+function modelSection(p, rerender) {
+  const box = h('div', { class: 'model-box' });
+  const info = p.model
+    ? (p.model.type === 'gdtf' ? `Model 3D din GDTF (${Object.keys(p.model.files).length} piese)` : 'Model 3D încărcat (.glb)')
+    : 'Model desenat de FreeVisualizer după tipul fixturii.';
+  const upload = h('button', {
+    onclick: async () => {
+      const f = await pickFile('.glb');
+      if (!f) return;
+      try {
+        toast('Încarc modelul 3D…');
+        const file = await uploadAsset(new Uint8Array(await f.arrayBuffer()), 'glb');
+        p.model = { type: 'glb', file, rotX: 0 };
+        toast('Model încărcat. Se vede după „Salvează”.');
+        rerender();
+      } catch (err) { toast(`Nu am putut încărca modelul: ${err.message}`, 'error'); }
+    },
+  }, p.model ? 'Schimbă modelul (.glb)…' : 'Încarcă model 3D (.glb)…');
+  const orient = h('select', {}, [[0, 'Normal'], [180, 'Întors'], [90, 'Culcat (față în sus)'], [-90, 'Culcat (spate în sus)']]
+    .map(([v, l]) => h('option', { value: v, selected: Number(p.model?.rotX || 0) === v }, l)));
+  orient.addEventListener('change', () => { p.model.rotX = Number(orient.value); });
+  const query = encodeURIComponent(`${p.manufacturer || ''} ${p.name.replace(/\(.*\)/, '')}`.trim());
+  box.append(
+    h('h4', {}, 'Aspect 3D'),
+    h('div', { class: 'model-row' },
+      p.thumbnail ? h('img', { class: 'thumb', src: `/api/models/${p.thumbnail}`, alt: '' }) : null,
+      h('div', { class: 'grow' },
+        h('div', { class: 'small' }, info),
+        h('div', { class: 'row' }, upload,
+          p.model ? h('button', { onclick: () => { delete p.model; rerender(); } }, 'Folosește modelul desenat') : null,
+          h('a', { href: `https://www.google.com/search?tbm=isch&q=${query}`, target: '_blank', rel: 'noopener', class: 'small' }, '🔍 Poze cu aparatul')),
+        p.model ? field('Orientare model', orient, 'Dacă modelul apare culcat sau cu capul în jos') : null,
+        h('div', { class: 'muted small' }, 'Modelele .glb cu piese numite Base / Yoke / Head se mișcă pe pan/tilt. Modelele din fișierele GDTF se iau automat.'))),
+  );
+  return box;
+}
+
 export async function profileEditor(app, source) {
   const p = source ? cloneProfile(source) : normalizeProfile({ id: uid('prof'), name: 'Profil nou', manufacturer: '', kind: 'par', source: 'custom', channels: [{ type: 'dimmer' }, { type: 'red' }, { type: 'green' }, { type: 'blue' }] });
   if (p.source === 'builtin') { p.id = uid('prof'); p.source = 'custom'; p.name = `${p.name} (copie)`; p.manufacturer = ''; }
@@ -361,6 +400,7 @@ export async function profileEditor(app, source) {
           : p.kind === 'retro' ? h('label', { class: 'inline', title: 'Becurile se aprind/sting lin și se înroșesc când sunt dimate, ca filamentele adevărate' },
             h('input', { type: 'checkbox', checked: p.tungsten !== false, onchange: (e) => { p.tungsten = e.target.checked; } }), 'Emulare bec cu filament')
             : h('span')),
+      modelSection(p, render),
       h('h4', {}, `Canale (${p.channels.length})`),
     );
 
@@ -498,11 +538,23 @@ export async function importFixtureFile(app, file) {
       return pickFromArchive(app, files);
     }
     if (ext === 'gdtf') {
-      const ft = await readGdtf(await file.arrayBuffer());
+      const buffer = await file.arrayBuffer();
+      const ft = await readGdtf(buffer);
+      // The manufacturer's 3D model and photo, when the file has them.
+      const extra = {};
+      try {
+        const assets = await gdtfAssets(buffer, ft);
+        const files = {};
+        for (const [modelName, f] of Object.entries(assets.files)) files[modelName] = await uploadAsset(f.bytes, f.ext);
+        if (Object.keys(files).length) extra.model = { type: 'gdtf', files, geometry: assets.geometry };
+        if (assets.thumbnail) extra.thumbnail = await uploadAsset(assets.thumbnail, 'png');
+      } catch (err) {
+        console.warn('GDTF 3D:', err.message);
+      }
       return chooseModeAndImportGeneric(app, {
         title: `${ft.attrs.Manufacturer || ''} ${ft.attrs.LongName || ft.attrs.Name || name}`.trim(),
         modes: listGdtfModes(ft),
-        convert: (i) => gdtfToProfile(ft, i),
+        convert: (i) => ({ ...gdtfToProfile(ft, i), ...extra }),
       });
     }
     const text = await file.text();

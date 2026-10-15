@@ -6,6 +6,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { ArtNetReceiver, ipv4Interfaces } = require('./artnet');
 const { SacnReceiver } = require('./sacn');
 const { OflService } = require('./ofl');
@@ -29,6 +30,24 @@ function sendJson(res, code, obj) {
   res.writeHead(code, { 'content-type': MIME['.json'], 'cache-control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
+
+/** Raw request body as a Buffer (3D models, images). */
+function readRaw(req, limit = 60 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { reject(new Error('Fișier prea mare')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+const MODEL_EXT = { glb: 'model/gltf-binary', '3ds': 'application/octet-stream', png: 'image/png', jpg: 'image/jpeg' };
+const MODEL_FILE = /^[a-f0-9]{40}\.(glb|3ds|png|jpg)$/;
 
 function readBody(req, limit = 20 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
@@ -91,6 +110,8 @@ function createApp(opts = {}) {
   const DATA = opts.dataDir;
   const portAttempts = opts.portAttempts ?? 20;
   fs.mkdirSync(path.join(DATA, 'projects'), { recursive: true });
+  const MODELS = path.join(DATA, 'models');
+  fs.mkdirSync(MODELS, { recursive: true });
 
   // -------------------------------------------------------------- DMX state
   const latest = new Map(); // "artnet:0" -> { data, source, dirty }
@@ -205,6 +226,28 @@ function createApp(opts = {}) {
         if (fs.existsSync(file)) fs.unlinkSync(file);
         return sendJson(res, 200, { ok: true });
       }
+    }
+
+    // 3D models and thumbnails for profiles (from .glb uploads and GDTF files), stored by content hash.
+    if (p === '/api/models' && req.method === 'POST') {
+      const ext = String(url.searchParams.get('ext') || '').toLowerCase();
+      if (!MODEL_EXT[ext]) return sendJson(res, 400, { error: 'Format nesuportat' });
+      const buf = await readRaw(req);
+      if (!buf.length) return sendJson(res, 400, { error: 'Fișier gol' });
+      const file = `${crypto.createHash('sha1').update(buf).digest('hex')}.${ext}`;
+      const dest = path.join(MODELS, file);
+      if (!fs.existsSync(dest)) fs.writeFileSync(dest, buf);
+      return sendJson(res, 200, { file });
+    }
+    const modelMatch = /^\/api\/models\/([^/]+)$/.exec(p);
+    if (modelMatch && req.method === 'GET') {
+      const file = modelMatch[1];
+      if (!MODEL_FILE.test(file)) return sendJson(res, 400, { error: 'Nume invalid' });
+      const full = path.join(MODELS, file);
+      if (!fs.existsSync(full)) return sendJson(res, 404, { error: 'Modelul nu există' });
+      res.writeHead(200, { 'content-type': MODEL_EXT[file.split('.').pop()], 'cache-control': 'max-age=31536000, immutable' });
+      fs.createReadStream(full).pipe(res);
+      return undefined;
     }
 
     if (p === '/api/ofl/search') {

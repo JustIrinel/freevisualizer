@@ -5,7 +5,8 @@ import zlib from 'node:zlib';
 import { parseXml, child, children } from '../public/js/xml-lite.js';
 import { readZip, fixtureFilesInZip } from '../public/js/zip-lite.js';
 import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from '../public/js/d4-import.js';
-import { readGdtf, listGdtfModes, gdtfToProfile, cieToHex } from '../public/js/gdtf-import.js';
+import { readGdtf, listGdtfModes, gdtfToProfile, cieToHex, gdtfGeometry, gdtfAssets } from '../public/js/gdtf-import.js';
+import { gdtfDescription, boxGlb, PNG_1PX } from './helpers/glb.mjs';
 import { parseQxf, listQxfModes, qxfToProfile } from '../public/js/qxf-import.js';
 import { computeState, createRuntime } from '../public/js/fixture-state.js';
 import { normalizeProfile } from '../public/js/profiles.js';
@@ -257,4 +258,24 @@ test('.zip download: fixture files are found inside', async () => {
   const files = await fixtureFilesInZip(zip);
   assert.deepStrictEqual(files.map((f) => f.name), ['Test-Spot-260.d4']);
   assert.ok(isD4Xml(new TextDecoder().decode(files[0].bytes)));
+});
+
+test('GDTF 3D: geometry tree, model files and thumbnail are found', async () => {
+  const zip = makeZip({
+    'description.xml': gdtfDescription(),
+    'models/gltf/base.glb': boxGlb(), 'models/gltf/yoke.glb': boxGlb(), 'models/3ds/head.3ds': Buffer.from('3ds'),
+    'thumbnail.png': PNG_1PX,
+  });
+  const ft = await readGdtf(zip);
+  const geo = gdtfGeometry(ft);
+  assert.deepStrictEqual(Object.keys(geo.models), ['Base', 'Yoke', 'Head']);
+  assert.strictEqual(geo.tree[0].name, 'Base');
+  const yoke = geo.tree[0].children[0];
+  assert.deepStrictEqual([yoke.tag, yoke.name, yoke.matrix[11]], ['Axis', 'Yoke', -0.2]);
+  assert.strictEqual(yoke.children[0].children[0].tag, 'Beam');
+  const assets = await gdtfAssets(zip, ft);
+  assert.deepStrictEqual(Object.fromEntries(Object.entries(assets.files).map(([k, v]) => [k, v.ext])), { Base: 'glb', Yoke: 'glb', Head: '3ds' });
+  assert.ok(assets.thumbnail && assets.thumbnail.length === PNG_1PX.length);
+  const p = gdtfToProfile(ft, 0);
+  assert.strictEqual(p.kind, 'moving');
 });

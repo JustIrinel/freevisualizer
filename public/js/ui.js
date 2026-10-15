@@ -248,7 +248,8 @@ export function renderProfileList(app) {
     for (const p of items) {
       const used = app.project.fixtures.filter((f) => f.profileId === p.id).length;
       list.append(h('div', { class: 'item', title: `${p.manufacturer ? p.manufacturer + ' · ' : ''}${p.name}\n${p.channels.length} canale · ${KINDS[p.kind]}`, onclick: () => dialogs.profileActions(app, p) },
-        h('span', { class: 'name' }, p.manufacturer && p.source !== 'builtin' ? `${p.manufacturer} ${p.name}` : p.name),
+        h('span', { class: 'name' }, p.thumbnail ? h('img', { class: 'profile-thumb', src: `/api/models/${p.thumbnail}`, alt: '' }) : null, p.manufacturer && p.source !== 'builtin' ? `${p.manufacturer} ${p.name}` : p.name),
+        p.model ? h('span', { class: 'tag', title: 'Are model 3D real' }, '3D') : null,
         used ? h('span', { class: 'tag' }, `×${used}`) : null,
         h('span', { class: 'meta' }, `${p.channels.length}ch`)));
     }
