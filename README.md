@@ -39,10 +39,13 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - **pad de mutare și rotire**: stânga/dreapta, departe/spre tine, sus/jos, relativ la cum privești scena; ții apăsat și se repetă
   - selecție multiplă: Ctrl/Cmd+click, Shift+trage un dreptunghi, Ctrl/Cmd+A
   - mutare și rotire pe grup
+  - **grupuri** (Ctrl+G): click pe un obiect selectează tot grupul, Alt+click doar obiectul
+  - **🔒 blocare** (K): obiectele așezate nu mai pot fi mutate sau șterse din greșeală; la hover se vede un contur (roșu dacă e blocat)
   - aliniere și distribuire egală
   - re-adresare DMX automată de la stânga la dreapta
   - **🎯 Țintește**: dai click pe punctul spre care să bată lumina, iar fixtura (sau grupul) se orientează singură
-- **Scenă**: truss, stâlpi, cabină DJ, boxe, subwoofere, podium, ring de dans, ecran LED, pereți, masa mirilor, mese rotunde și public animat.
+- **Gobo-uri și prisme reale**: proiectate pe podea, pereți și invitați, cu rotație gobo, 2 roți de gobo, prismă circulară și liniară, rotație prismă, 2 prisme pe același aparat și frost
+- **Scenă**: caseuri (flight case), stative trepied cu bară T, truss, stâlpi, cabină DJ, boxe, subwoofere, podium, ring de dans, ecran LED, pereți, masa mirilor, mese rotunde și public animat.
 - **Patch**:
   - univers și adresă pentru fiecare fixtură
   - adresa următoare liberă se completează automat
@@ -152,6 +155,8 @@ Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile
 | --- | --- |
 | Ctrl/Cmd+click · Shift+trage | Selecție multiplă · dreptunghi de selecție |
 | Ctrl/Cmd+A | Selectează toate fixturile |
+| Ctrl/Cmd+G · Ctrl/Cmd+Shift+G | Grupează · desface grupul (Alt+click = un singur obiect din grup) |
+| K | Blochează / deblochează selecția |
 | W / E | Mută / rotește selecția |
 | Săgeți · PageUp/PageDown | Mută 25 cm (Shift = 5 cm) relativ la cameră · sus/jos |
 | [ / ] | Rotește ±15° (Shift = ±5°) |
@@ -241,6 +246,9 @@ It runs as a **Mac app** (Apple Silicon and Intel), on Windows, or in the browse
 - **Venues**: a realistic **event venue** (parquet, wainscoting, curtains, coffered ceiling, chandeliers, a white drape behind the DJ), an **empty room** or a **dark club**. The **Room** slider sets the house lights; **💡** turns on work lights.
 - **Import from SoundSwitch**: reads your `.ssproj` project and builds the same fixtures, names, modes and addresses as the SoundSwitch DMX Map, with the SoundSwitch fixture definitions.
 - **Library**: built-in generic profiles, **one search** across your profiles and the [Open Fixture Library](https://open-fixture-library.org) (one-click import), a [Fixture.ID](https://www.fixture.id/) button, and import of **.d4**, **.gdtf**, **.zip** and **.json** files (just drop them on the window).
+- **Real gobos and prisms**: projected onto the floor, walls and guests, with gobo rotation, 2 gobo wheels, circular and linear prisms, prism rotation, 2 prisms in one fixture and frost.
+- **Groups and lock**: Ctrl+G groups objects (a click selects the whole group, Alt+click one object); K locks them so they can't be moved or deleted by mistake; hovering shows an outline (red when locked).
+- **Stage**: road cases, tripod stands with a T-bar, truss, DJ booth, speakers, LED screen, tables and a realistic crowd.
 - **Fast editing**: **place with the mouse** (truss, floor or wall – the fixture points the right way by itself), a **move & rotate pad** relative to your view, multi-select, group move/rotate, align and distribute, automatic left-to-right DMX re-addressing and **🎯 Aim** (click the spot the light should hit).
 - **✨ Claude assistant**: tell it “Put 4 BeamZ Panther 60 on the truss from address 200” and it finds the profile, adds and places the fixtures and tells you the DMX mode and addresses. It uses your own Anthropic API key.
 - **Patch**: universe and address per fixture, next free address filled in automatically, overlaps flagged, DMX monitor for all 512 channels.
@@ -267,7 +275,7 @@ On another computer: put both on the same network (cable preferred), pick the �
 
 1. Create an API key at <https://console.anthropic.com> (Settings → API Keys). Usage is billed by Anthropic.
 2. **⚙ Settings → Claude assistant**: paste the key and press **Save**. The default model is **Claude Opus 5.5**; Sonnet 5.5 and Haiku 5.5 are faster options.
-3. Press **✨ Assistant** in the top bar and type what you want, e.g. “Add 6 RGBW pars on the back wall” or “Raise the spots by 30 cm and aim them at the dance floor”.
+3. Tick **Show the ✨ Assistant button** if needed, press **✨ Assistant** in the top bar and type what you want, e.g. “Add 6 RGBW pars on the back wall” or “Raise the spots by 30 cm and aim them at the dance floor”.
 
 Everything one message does is undone with a single **Ctrl+Z**. The key stays on your computer (in the app's data folder) and is never sent to the page. The `ANTHROPIC_API_KEY` environment variable works too.
 
@@ -277,6 +285,8 @@ Everything one message does is undone with a single **Ctrl+Z**. The key stays on
 | --- | --- |
 | Ctrl/Cmd+click · Shift+drag | Multi-select · selection box |
 | Ctrl/Cmd+A | Select all fixtures |
+| Ctrl/Cmd+G · Ctrl/Cmd+Shift+G | Group · ungroup (Alt+click = one object in a group) |
+| K | Lock / unlock the selection |
 | W / E | Move / rotate the selection |
 | Arrows · PageUp/PageDown | Move 25 cm (Shift = 5 cm) relative to the camera · up/down |
 | [ / ] | Rotate ±15° (Shift = ±5°) |
