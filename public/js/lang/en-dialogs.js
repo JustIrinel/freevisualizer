@@ -223,4 +223,6 @@ export default {
   'Am înțeles': 'Got it',
   'Folosit de o fixtură în proiect.': 'Used by one fixture in the project.',
   'Folosit de {n} fixturi în proiect.': 'Used by {n} fixtures in the project.',
+  'Limba interfeței': 'Interface language',
+  'Aplicația se reîncarcă în limba aleasă': 'The app reloads in the chosen language',
 };

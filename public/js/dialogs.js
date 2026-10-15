@@ -12,7 +12,7 @@ import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
 import { importSoundSwitch, venuesFromZip, soundSwitchImportDialog } from './ss-dialog.js';
 import { loadBrand, saveBrand } from './recorder.js';
-import { tr, tp, lang } from './i18n.js';
+import { tr, tp, lang, LANGS, setLang } from './i18n.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
 // ------------------------------------------------------------------ online search
@@ -690,7 +690,11 @@ export async function settingsDialog(app) {
     el.addEventListener('input', () => app.setSetting(key, parseFloat(el.value)));
     return el;
   };
+  const language = h('select', { onchange: (e) => setLang(e.target.value) },
+    Object.entries(LANGS).map(([k, label]) => h('option', { value: k, selected: k === lang }, label)));
   const content = h('div', { class: 'form' },
+    h('h4', {}, 'Limbă / Language'),
+    field(tr('Limba interfeței'), language, tr('Aplicația se reîncarcă în limba aleasă')),
     h('h4', {}, tr('Intrare DMX')),
     field(tr('Numerotare universuri Art-Net'), offset),
     field(tr('Universuri sACN (E1.31) ascultate'), sacn, tr('Lista universurilor sACN multicast la care se abonează serverul')),
