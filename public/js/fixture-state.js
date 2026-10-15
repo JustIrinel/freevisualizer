@@ -245,7 +245,7 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     if (ch(m.zoom).invert) z = 1 - z;
     state.beamAngle = profile.beamAngle[0] + (profile.beamAngle[1] - profile.beamAngle[0]) * z;
   }
-  computeBeamShaping(c, m, ch, read, rt, dt, state);
+  computeBeamShaping(m, ch, read, rt, dt, state);
   if (m.fog != null) state.fog = read(m.fog) / 255;
 
   // Cold spark machine: height channel, optionally gated by a "fire" channel.
@@ -265,7 +265,7 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
 }
 
 /** Gobo wheels, gobo / prism rotation and frost → state.gobos, state.prisms, state.frost. */
-function computeBeamShaping(c, m, ch, read, rt, dt, state) {
+function computeBeamShaping(m, ch, read, rt, dt, state) {
   if (!rt.gobos) rt.gobos = [{ angle: 0, shake: 0, scroll: 0 }, { angle: 0, shake: 0, scroll: 0 }];
   if (!rt.prisms) rt.prisms = [{ angle: 0 }, { angle: 0 }];
   const wheels = [['gobo', 'goboRot'], ['gobo2', 'gobo2Rot']];

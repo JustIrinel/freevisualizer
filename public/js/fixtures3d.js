@@ -97,12 +97,12 @@ const beamFragment = /* glsl */ `
       }
       float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       float sum = 0.0;
-      for (int i = 0; i < 12; i++) {
-        float t = mix(t0, t1, (float(i) + n) / 12.0);
+      for (int i = 0; i < 8; i++) {
+        float t = mix(t0, t1, (float(i) + n) / 8.0);
         sum += sampleProj(ro + rd * t);
       }
       // One face instead of two: twice the old per-face brightness.
-      g = 2.0 * sum / 12.0;
+      g = 2.0 * sum / 8.0;
     }
     vec3 col = uColor * uIntensity * fall * start * edge * g * clip;
     gl_FragColor = vec4(col, 1.0);
@@ -438,7 +438,8 @@ class MovingHeadModel extends BaseModel {
     });
     const angle = this.projActive ? THREE.MathUtils.radToDeg(Math.atan(layout.fieldTan)) * 2 : s.beamAngle;
     // A gobo blocks part of the light, and a projection must not burn out to a white blob.
-    this.updateLight(s.color, s.intensity * (this.projActive ? 0.22 : 1), angle, this.profile.style === 'wash' ? 130 : 170);
+    const share = !this.projActive ? 1 : layout.wheels.length ? 0.22 : layout.copies.length > 1 ? 0.45 : 0.6;
+    this.updateLight(s.color, s.intensity * share, angle, this.profile.style === 'wash' ? 130 : 170);
     // The projection draws the edge itself; the cone must cover the whole texture.
     if (this.light && this.projActive) this.light.angle = Math.min(Math.PI / 2.2, Math.atan(layout.fieldTan));
   }

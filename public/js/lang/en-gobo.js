@@ -14,7 +14,6 @@ export default {
   'Rotație ↻': 'Rotation ↻',
   'Rotație ↺': 'Rotation ↺',
   'Viteza scade în interval (rapid → lent)': 'Speed decreases across the range (fast → slow)',
-  'rapid → lent': 'fast → slow',
-  'Rotație gobo': 'Gobo rotation',
-  'Gobo 2': 'Gobo 2',
+  'rapid→lent': 'fast→slow',
+  'Stop': 'Stop',
 };

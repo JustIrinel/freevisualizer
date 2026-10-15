@@ -312,7 +312,7 @@ function rangesEditor(c, onChange) {
           onChange(); render();
         });
         if (r.rotate) {
-          extra1 = h('label', { class: 'inline', title: tr('Viteza scade în interval (rapid → lent)') }, h('input', { type: 'checkbox', checked: !!r.fastToSlow, onchange: (e) => { if (e.target.checked) r.fastToSlow = true; else delete r.fastToSlow; onChange(); } }), tr('rapid → lent'));
+          extra1 = h('label', { class: 'inline', title: tr('Viteza scade în interval (rapid → lent)') }, h('input', { type: 'checkbox', checked: !!r.fastToSlow, onchange: (e) => { if (e.target.checked) r.fastToSlow = true; else delete r.fastToSlow; onChange(); } }), tr('rapid→lent'));
         }
       }
       const del = h('button', { class: 'icon', title: tr('Șterge interval'), onclick: () => { c.ranges.splice(i, 1); onChange(); render(); } }, '✕');

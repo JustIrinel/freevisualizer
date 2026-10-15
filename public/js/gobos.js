@@ -239,7 +239,9 @@ const quadFragment = /* glsl */ `
   float wheel(vec4 c, vec2 rot, vec2 v) {
     if (c.w < 0.5) return 1.0;
     vec2 r = vec2(rot.x * v.x - rot.y * v.y, rot.y * v.x + rot.x * v.y);
-    return texture2D(uAtlas, c.xy + (r * 0.5 + 0.5) * c.z, uFrost * 3.5).r;
+    // Frost: a much blurrier mip level, fading towards the gobo's average light.
+    float g = texture2D(uAtlas, c.xy + (r * 0.5 + 0.5) * c.z, uFrost * 6.0).r;
+    return mix(g, 0.45, uFrost * 0.55);
   }
   void main() {
     vec2 q = (vUv * 2.0 - 1.0) * uField;
@@ -315,13 +317,13 @@ export class ProjectionTexture {
     this.key = null;
     this.layout = null;
     this.dirty = false;
+    this.waiting = false;
   }
 
   request(layout) {
     this.layout = layout;
-    // Custom images may still be loading: keep redrawing until they are in the atlas.
-    const pending = layout.wheels.some((w) => w.image && typeof imageCells.get(w.image) !== 'number' && imageCells.get(w.image) !== undefined);
-    if (layout.key !== this.key || pending) this.dirty = true;
+    // A custom image still loading was drawn with a stand-in design: redraw until it is in the atlas.
+    if (layout.key !== this.key || this.waiting) this.dirty = true;
   }
 
   render(renderer) {
@@ -329,6 +331,7 @@ export class ProjectionTexture {
     this.dirty = false;
     const L = this.layout;
     this.key = L.key;
+    this.waiting = false;
     const q = getQuad();
     const u = q.material.uniforms;
     u.uField.value = L.fieldTan;
@@ -341,6 +344,7 @@ export class ProjectionTexture {
       const cell = u.uCell.value[w];
       if (!wheel) { cell.set(0, 0, 0, 0); continue; }
       const index = cellFor(wheel);
+      if (wheel.image && typeof imageCells.get(wheel.image) !== 'number') this.waiting = true;
       const [x, y] = cellOrigin(index);
       cell.set((x + PAD) / ATLAS, (y + PAD) / ATLAS, (CELL - PAD * 2) / ATLAS, 1);
       u.uRot.value[w].set(Math.cos(wheel.angle), Math.sin(wheel.angle));

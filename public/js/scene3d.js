@@ -18,7 +18,7 @@ import { GoboLightManager } from './gobos.js';
 const MAX_LIGHTS = 40;
 // Spot lights that can project a gobo / prism texture (each costs a texture unit
 // and a varying in every lit material).
-export const MAX_GOBO_LIGHTS = 6;
+export const MAX_GOBO_LIGHTS = 8;
 const D2R = THREE.MathUtils.degToRad;
 const R2D = THREE.MathUtils.radToDeg;
 
