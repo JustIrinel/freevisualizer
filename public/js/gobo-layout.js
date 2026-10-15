@@ -71,8 +71,8 @@ export function prismCopies(prisms, beamAngleDeg) {
     const step = copies.length / MAX_COPIES;
     copies = Array.from({ length: MAX_COPIES }, (_, i) => copies[Math.floor(i * step)]);
   }
-  // Each copy carries 1/n of the light; a bit more so 8 facets stay visible.
-  const w = copies.length > 1 ? Math.min(1, 1.8 / copies.length) : 1;
+  // Each copy carries about 1/n of the light (a bit more, so 8–12 copies stay visible).
+  const w = copies.length > 1 ? Math.min(1, 2 / Math.pow(copies.length, 0.9)) : 1;
   return copies.map((c) => ({ ...c, w }));
 }
 

@@ -129,7 +129,7 @@ export function weddingProject() {
     p.props.push(stand);
     barSlots(1.2, 2).forEach((off, j) => {
       const at = tripodMount(stand, off).position;
-      p.fixtures.push(fixture(`Par ${k * 2 + j + 1}`, 'gen-par-rgbwauv-6', 1, 211 + (k * 2 + j) * 6, at, aimRotation(at, v(side * 1.6, 1.2, -3.5))));
+      p.fixtures.push(fixture(`Par ${k * 2 + j + 1}`, 'gen-par-rgbwauv-6', 1, 211 + (k * 2 + j) * 6, at, aimRotation(at, v(side * 2.2, 0, -4.4))));
     });
   });
   p.camera = { position: [8.5, 4.4, 10.5], target: [0, 1.8, -4.5] };
