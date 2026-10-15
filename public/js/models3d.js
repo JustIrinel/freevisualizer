@@ -8,13 +8,14 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TDSLoader } from 'three/addons/loaders/TDSLoader.js';
+import { tr } from './i18n.js';
 
 const loaded = new Map();
 
 export async function uploadAsset(bytes, ext) {
   const res = await fetch(`/api/models?ext=${ext}`, { method: 'POST', body: bytes });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'upload eșuat');
+  if (!res.ok) throw new Error(data.error || tr('upload eșuat'));
   return data.file;
 }
 
@@ -23,7 +24,7 @@ export async function loadAsset(file) {
   if (!loaded.has(file)) {
     loaded.set(file, (async () => {
       const res = await fetch(`/api/models/${file}`);
-      if (!res.ok) throw new Error(`modelul ${file} lipsește`);
+      if (!res.ok) throw new Error(tr('modelul {file} lipsește', { file }));
       const buf = await res.arrayBuffer();
       if (file.endsWith('.3ds')) return new TDSLoader().parse(buf, '');
       const gltf = await new GLTFLoader().parseAsync(buf, '');

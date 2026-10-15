@@ -1,6 +1,7 @@
 // DMX tab: 512-channel grid for one universe with patch overlay and hover info.
 import { channelLabel } from './profiles.js';
 import { h } from './dom.js';
+import { tr } from './i18n.js';
 
 const COLS = 16;
 const ROWS = 32;
@@ -33,7 +34,7 @@ export class DmxMonitor {
     const list = [...set].sort((a, b) => a - b);
     const cur = this.universe;
     this.select.innerHTML = '';
-    for (const u of list) this.select.append(h('option', { value: u }, `Univers ${u}`));
+    for (const u of list) this.select.append(h('option', { value: u }, tr('Univers {u}', { u })));
     this.universe = list.includes(cur) ? cur : list[0];
     this.select.value = this.universe;
   }
@@ -92,16 +93,17 @@ export class DmxMonitor {
     if (this.hover >= 0 && this.hover < 512) {
       const m = map[this.hover];
       const v = buf ? buf[this.hover] : 0;
-      this.hoverEl.textContent = `Canal ${this.hover + 1} = ${v}${m ? ` · ${m.f.name} → ${channelLabel(m.c)} (ch ${m.i + 1})${m.conflict ? ' ⚠ suprapus' : ''}` : ' · nepatchuit'}`;
+      const where = m ? `${m.f.name} → ${channelLabel(m.c)} (ch ${m.i + 1})${m.conflict ? ` ${tr('⚠ suprapus')}` : ''}` : tr('nepatchuit');
+      this.hoverEl.textContent = `${tr('Canal {ch} = {v}', { ch: this.hover + 1, v })} · ${where}`;
     }
 
     const now = Date.now();
     const inputs = [...this.app.dmx.activeInputs.values()].filter((a) => now - a.at < 5000);
     this.inputsEl.innerHTML = '';
-    if (this.app.dmx.useDemo) this.inputsEl.append(h('div', {}, '● Demo intern activ (suprascrie intrarea live)'));
-    if (!inputs.length) this.inputsEl.append(h('div', { class: 'muted' }, 'Nicio intrare Art-Net/sACN în ultimele secunde.'));
+    if (this.app.dmx.useDemo) this.inputsEl.append(h('div', {}, tr('● Demo intern activ (suprascrie intrarea live)')));
+    if (!inputs.length) this.inputsEl.append(h('div', { class: 'muted' }, tr('Nicio intrare Art-Net/sACN în ultimele secunde.')));
     for (const a of inputs) {
-      this.inputsEl.append(h('div', {}, `● ${a.protocol === 'artnet' ? 'Art-Net' : 'sACN'} univers ${a.universe} → afișat ca Univers ${a.display}`));
+      this.inputsEl.append(h('div', {}, tr('● {proto} univers {u} → afișat ca Univers {d}', { proto: a.protocol === 'artnet' ? 'Art-Net' : 'sACN', u: a.universe, d: a.display })));
     }
   }
 }

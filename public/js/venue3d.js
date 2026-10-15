@@ -4,8 +4,9 @@ import * as THREE from 'three';
 import {
   parquetTexture, concreteTexture, plasterTexture, wainscotTexture, curtainTexture, windowTexture, cofferTexture, repeated,
 } from './textures.js';
+import { tr } from './i18n.js';
 
-export const ROOM_STYLES = { banquet: 'Sală de evenimente (nuntă)', plain: 'Sală goală', dark: 'Club (întunecat)' };
+export const ROOM_STYLES = { banquet: tr('Sală de evenimente (nuntă)'), plain: tr('Sală goală'), dark: tr('Club (întunecat)') };
 
 const room = (mesh) => { mesh.userData.isRoom = true; return mesh; };
 

@@ -15,12 +15,12 @@ import { AssistantPanel } from './assistant.js';
 import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
 import { aimRotation } from './aim.js';
-import { translatePage } from './i18n.js';
+import { translatePage, tr, tp } from './i18n.js';
 
 const round2 = (v) => Math.round(v * 100) / 100;
 const wrapDeg = (d) => { let v = ((d + 180) % 360 + 360) % 360 - 180; if (v === -180) v = 180; return Math.round(v * 10) / 10; };
 
-const MISSING_PROFILE = normalizeProfile({ id: '__missing', name: 'Profil lipsă', kind: 'par', channels: [{ type: 'dimmer' }] });
+const MISSING_PROFILE = normalizeProfile({ id: '__missing', name: tr('Profil lipsă'), kind: 'par', channels: [{ type: 'dimmer' }] });
 
 class App {
   constructor() {
@@ -63,7 +63,7 @@ class App {
 
     const restored = loadAutosave();
     this.loadProject(restored || weddingProject(), { keepHistory: false });
-    if (!restored && !this.presentMode) toast('Bine ai venit! Am încărcat un rig demo – apasă ▶ Demo ca să-l vezi în acțiune.', 'info', 6000);
+    if (!restored && !this.presentMode) toast(tr('Bine ai venit! Am încărcat un rig demo – apasă ▶ Demo ca să-l vezi în acțiune.'), 'info', 6000);
     if (this.presentMode) {
       window.addEventListener('storage', (e) => {
         if (e.key !== AUTOSAVE_KEY || !e.newValue) return;
@@ -117,7 +117,7 @@ class App {
 
   deleteProfile(id) {
     const used = this.project.fixtures.filter((f) => f.profileId === id).length;
-    if (used) { toast(`Profilul este folosit de ${used} fixturi. Șterge-le sau schimbă-le profilul întâi.`, 'error'); return false; }
+    if (used) { toast(tp(used, 'Profilul este folosit de o fixtură. Șterge-o sau schimbă-i profilul întâi.', 'Profilul este folosit de {n} fixturi. Șterge-le sau schimbă-le profilul întâi.'), 'error'); return false; }
     this.checkpoint();
     this.project.profiles = this.project.profiles.filter((p) => p.id !== id);
     this._profileCache = null;
@@ -217,13 +217,13 @@ class App {
   }
 
   undo() {
-    if (!this.undoStack.length) { toast('Nimic de anulat'); return; }
+    if (!this.undoStack.length) { toast(tr('Nimic de anulat')); return; }
     this.redoStack.push(this._snapshot());
     this._restore(this.undoStack.pop());
   }
 
   redo() {
-    if (!this.redoStack.length) { toast('Nimic de refăcut'); return; }
+    if (!this.redoStack.length) { toast(tr('Nimic de refăcut')); return; }
     this.undoStack.push(this._snapshot());
     this._restore(this.redoStack.pop());
   }
@@ -242,9 +242,9 @@ class App {
     try {
       await saveServerProject(this.project);
       autosave(this.project);
-      toast(`Proiect salvat: „${this.project.name}”`);
+      toast(tr('Proiect salvat: „{name}”', { name: this.project.name }));
     } catch (err) {
-      toast(`Nu am putut salva pe server (${err.message}). Folosește Export.`, 'error');
+      toast(tr('Nu am putut salva pe server ({err}). Folosește Export.', { err: err.message }), 'error');
     }
   }
 
@@ -259,12 +259,12 @@ class App {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      if (!Array.isArray(data.fixtures)) throw new Error('fișierul nu este un proiect FreeVisualizer');
+      if (!Array.isArray(data.fixtures)) throw new Error(tr('fișierul nu este un proiect FreeVisualizer'));
       this.checkpoint();
       this.loadProject(data);
-      toast(`Proiect importat: „${this.project.name}”`);
+      toast(tr('Proiect importat: „{name}”', { name: this.project.name }));
     } catch (err) {
-      toast(`Import eșuat: ${err.message}`, 'error');
+      toast(tr('Import eșuat: {err}', { err: err.message }), 'error');
     }
   }
 
@@ -394,7 +394,7 @@ class App {
   placeFixtures(list) {
     if (!list.length) return;
     let i = 0;
-    const next = () => toast(`Plasează ${list[i].name} (${i + 1} din ${list.length}): click pe podea, truss, perete sau tavan. Esc = gata.`, 'info', 60000);
+    const next = () => toast(tr('Plasează {name} ({i} din {n}): click pe podea, truss, perete sau tavan. Esc = gata.', { name: list[i].name, i: i + 1, n: list.length }), 'info', 60000);
     next();
     this.vis.startPlacement((at) => {
       const f = { ...list[i], position: at.position, rotation: at.rotation };
@@ -403,12 +403,12 @@ class App {
       if (i >= list.length) {
         this.vis.cancelPlacement(false);
         this.setSelection(list.map((x) => x.id));
-        toast(`Am plasat ${list.length} fixturi.`);
+        toast(tp(list.length, 'Am plasat o fixtură.', 'Am plasat {n} fixturi.'));
       } else {
         this.setSelection([]);
         next();
       }
-    }, () => toast(i ? `Am plasat ${i} din ${list.length} fixturi.` : 'Plasare anulată.'));
+    }, () => toast(i ? tr('Am plasat {i} din {n} fixturi.', { i, n: list.length }) : tr('Plasare anulată.')));
   }
 
   /** Point every selected fixture's beam at a world point. */
@@ -419,7 +419,7 @@ class App {
       const from = this.vis.emitterOrigin(it.id) || it.position;
       return { rotation: aimRotation(from, point) };
     });
-    toast(ids.length > 1 ? `Am îndreptat ${ids.length} fixturi spre punctul ales.` : 'Fixtura bate acum spre punctul ales.');
+    toast(ids.length > 1 ? tr('Am îndreptat {n} fixturi spre punctul ales.', { n: ids.length }) : tr('Fixtura bate acum spre punctul ales.'));
   }
 
   /** Same value on one axis for all selected (taken from the last selected). */
@@ -432,7 +432,7 @@ class App {
   /** Even spacing along an axis between the two outermost selected items. */
   distributeSelection(axis) {
     const items = this.selectedItems().sort((a, b) => a.position[axis] - b.position[axis]);
-    if (items.length < 3) { toast('Selectează cel puțin 3 elemente pentru distribuire.'); return; }
+    if (items.length < 3) { toast(tr('Selectează cel puțin 3 elemente pentru distribuire.')); return; }
     const min = items[0].position[axis];
     const max = items[items.length - 1].position[axis];
     const order = new Map(items.map((it, i) => [it.id, i]));
@@ -454,7 +454,7 @@ class App {
       a += ch;
     }
     this.updateItems(fixtures.map((f) => f.id), (f) => plan.get(f.id));
-    toast(`Am re-adresat ${fixtures.length} fixturi începând cu ${universe}.${start}.`);
+    toast(tp(fixtures.length, 'Am re-adresat o fixtură începând cu {a}.', 'Am re-adresat {n} fixturi începând cu {a}.', { a: `${universe}.${start}` }));
   }
 
   removeItem(id) {
@@ -632,9 +632,8 @@ try {
   console.error(err);
   const box = document.createElement('div');
   box.className = 'fatal';
-  box.innerHTML = '<h2>Vizualizatorul 3D nu a putut porni</h2>'
-    + '<p>Placa video sau browserul nu permite WebGL. Încearcă Chrome / Safari actualizat, '
-    + 'pornește accelerarea hardware sau repornește calculatorul.</p>';
+  box.innerHTML = `<h2>${tr('Vizualizatorul 3D nu a putut porni')}</h2>`
+    + `<p>${tr('Placa video sau browserul nu permite WebGL. Încearcă Chrome / Safari actualizat, pornește accelerarea hardware sau repornește calculatorul.')}</p>`;
   const detail = document.createElement('code');
   detail.textContent = err.message;
   box.appendChild(detail);

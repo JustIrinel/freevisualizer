@@ -2,21 +2,22 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Particles } from './particles.js';
+import { tr } from './i18n.js';
 
 export const PROP_TYPES = {
-  truss: { label: 'Truss (orizontal)', params: { length: 6 } },
-  column: { label: 'Stâlp truss (vertical)', params: { length: 3.5 } },
-  booth: { label: 'Cabină DJ', params: { width: 2, height: 1.1, depth: 0.7 } },
-  speaker: { label: 'Boxă', params: { width: 0.5, height: 1.0, depth: 0.45 } },
+  truss: { label: tr('Truss (orizontal)'), params: { length: 6 } },
+  column: { label: tr('Stâlp truss (vertical)'), params: { length: 3.5 } },
+  booth: { label: tr('Cabină DJ'), params: { width: 2, height: 1.1, depth: 0.7 } },
+  speaker: { label: tr('Boxă'), params: { width: 0.5, height: 1.0, depth: 0.45 } },
   sub: { label: 'Subwoofer', params: { width: 0.7, height: 0.6, depth: 0.7 } },
-  platform: { label: 'Podium / scenă', params: { width: 4, height: 0.4, depth: 2 } },
-  screen: { label: 'Ecran LED', params: { width: 3, height: 1.7 } },
-  wall: { label: 'Perete / backdrop', params: { width: 8, height: 4 } },
-  table: { label: 'Masă rotundă', params: { diameter: 1.6 } },
-  headtable: { label: 'Masa mirilor', params: { width: 4, depth: 0.9 } },
-  dancefloor: { label: 'Ring de dans', params: { width: 7, depth: 7 } },
-  mirrorball: { label: 'Glob disco', params: { diameter: 0.5, drop: 0.8, rpm: 2 } },
-  crowd: { label: 'Public (invitați)', params: { width: 8, depth: 6, count: 60 } },
+  platform: { label: tr('Podium / scenă'), params: { width: 4, height: 0.4, depth: 2 } },
+  screen: { label: tr('Ecran LED'), params: { width: 3, height: 1.7 } },
+  wall: { label: tr('Perete / backdrop'), params: { width: 8, height: 4 } },
+  table: { label: tr('Masă rotundă'), params: { diameter: 1.6 } },
+  headtable: { label: tr('Masa mirilor'), params: { width: 4, depth: 0.9 } },
+  dancefloor: { label: tr('Ring de dans'), params: { width: 7, depth: 7 } },
+  mirrorball: { label: tr('Glob disco'), params: { diameter: 0.5, drop: 0.8, rpm: 2 } },
+  crowd: { label: tr('Public (invitați)'), params: { width: 8, depth: 6, count: 60 } },
 };
 
 const metal = () => new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.35, metalness: 0.85 });

@@ -11,6 +11,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildVenue } from './venue3d.js';
 import { createFixtureModel, roomUniforms } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
+import { tr } from './i18n.js';
 
 const MAX_LIGHTS = 40;
 const D2R = THREE.MathUtils.degToRad;
@@ -419,12 +420,12 @@ export class Visualizer {
     const f = (v) => v.toFixed(2);
     if (this.transform.mode === 'rotate') {
       this.onGizmoInfo(ids.length > 1
-        ? `Rotire grup · ${ids.length} obiecte`
-        : `Înclinare ${Math.round(last.rotation.x)}° · Rotire ${Math.round(last.rotation.y)}° · Lateral ${Math.round(last.rotation.z)}°`);
+        ? tr('Rotire grup · {n} obiecte', { n: ids.length })
+        : tr('Înclinare {x}° · Rotire {y}° · Lateral {z}°', { x: Math.round(last.rotation.x), y: Math.round(last.rotation.y), z: Math.round(last.rotation.z) }));
     } else {
       this.onGizmoInfo(ids.length > 1
-        ? `Mutare grup · ${ids.length} obiecte`
-        : `X ${f(last.position.x)} m · Înălțime ${f(last.position.y)} m · Z ${f(last.position.z)} m`);
+        ? tr('Mutare grup · {n} obiecte', { n: ids.length })
+        : tr('X {x} m · Înălțime {y} m · Z {z} m', { x: f(last.position.x), y: f(last.position.y), z: f(last.position.z) }));
     }
   }
 
@@ -490,7 +491,7 @@ export class Visualizer {
     const origin = this.transform.object.getWorldPosition(new THREE.Vector3());
     const dist = origin.distanceTo(this.camera.position);
     const len = dist * 0.16;
-    const labels = this.hintLabels || { x: '⟷ stânga / dreapta', y: '↕ sus / jos', z: '⤢ față / spate' };
+    const labels = this.hintLabels || { x: tr('⟷ stânga / dreapta'), y: tr('↕ sus / jos'), z: tr('⤢ față / spate') };
     const w = this.container.clientWidth; const h = this.container.clientHeight;
     ['x', 'y', 'z'].forEach((axis, i) => {
       const p = origin.clone();

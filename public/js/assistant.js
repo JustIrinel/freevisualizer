@@ -6,6 +6,7 @@ import { KINDS, uid } from './profiles.js';
 import { nextFreeAddress } from './project.js';
 import { oflToProfile, listModes } from './ofl-import.js';
 import { aimRotation } from './aim.js';
+import { tr, tp } from './i18n.js';
 
 const MAX_STEPS = 14;
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -59,15 +60,15 @@ function getRig(app) {
 async function resolveProfile(app, { profile_id: profileId, ofl_key: oflKey, mode }) {
   if (profileId) {
     const p = app.profilesById[profileId];
-    if (!p) throw new Error(`Profilul ${profileId} nu există. Folosește search_fixtures.`);
+    if (!p) throw new Error(tr('Profilul {id} nu există. Folosește search_fixtures.', { id: profileId }));
     return p;
   }
-  if (!oflKey) throw new Error('Dă profile_id sau ofl_key (din search_fixtures).');
+  if (!oflKey) throw new Error(tr('Dă profile_id sau ofl_key (din search_fixtures).'));
   const res = await fetch(`/api/ofl/fixture?key=${encodeURIComponent(oflKey)}`);
   const fixture = await res.json();
-  if (!res.ok) throw new Error(fixture.error || 'nu pot descărca fixtura');
+  if (!res.ok) throw new Error(fixture.error || tr('nu pot descărca fixtura'));
   const modes = listModes(fixture);
-  if (!modes.length) throw new Error('Fixtura nu are moduri DMX.');
+  if (!modes.length) throw new Error(tr('Fixtura nu are moduri DMX.'));
   let chosen = modes.reduce((best, m) => (m.channels > best.channels ? m : best), modes[0]);
   if (mode) {
     const want = String(mode).toLowerCase();
@@ -108,7 +109,7 @@ export function placementFor(app, n, placement) {
   switch (surface) {
     case 'truss': {
       const t = mainTruss(app, placement.truss_id);
-      if (!t) throw new Error('Nu există truss în scenă. Folosește alt surface.');
+      if (!t) throw new Error(tr('Nu există truss în scenă. Folosește alt surface.'));
       const half = ((t.params?.length || 6) / 2) * 0.85;
       return line(t.position.x, half).map((x) => ({ position: v(x, t.position.y - 0.17, t.position.z), rotation: { x: 180, y: 0, z: 0 } }));
     }
@@ -176,7 +177,7 @@ function idsFrom(app, list) {
     const f = app.project.fixtures.find((it) => it.id === x) || app.project.fixtures.find((it) => it.name === x);
     if (f) out.push(f.id); else missing.push(x);
   }
-  if (!out.length) throw new Error(`Nu găsesc fixturile: ${missing.join(', ')}. Folosește id-urile din get_rig.`);
+  if (!out.length) throw new Error(tr('Nu găsesc fixturile: {list}. Folosește id-urile din get_rig.', { list: missing.join(', ') }));
   return { ids: out, missing };
 }
 
@@ -212,16 +213,16 @@ export async function runTool(app, name, input) {
     case 'add_fixtures': return addFixtures(app, input);
     case 'move_fixtures': return moveFixtures(app, input);
     case 'remove_fixtures': return removeFixtures(app, input);
-    default: throw new Error(`Instrument necunoscut: ${name}`);
+    default: throw new Error(tr('Instrument necunoscut: {name}', { name }));
   }
 }
 
 const TOOL_LABEL = {
-  search_fixtures: (i) => `🔎 Caut „${i.query}”`,
-  get_rig: () => '📋 Citesc rigul',
-  add_fixtures: (i) => `➕ Adaug ${i.quantity} fixturi`,
-  move_fixtures: (i) => `↔ Mut / rotesc ${(i.fixture_ids || []).length} fixturi`,
-  remove_fixtures: (i) => `🗑 Șterg ${(i.fixture_ids || []).length} fixturi`,
+  search_fixtures: (i) => tr('🔎 Caut „{q}”', { q: i.query }),
+  get_rig: () => tr('📋 Citesc rigul'),
+  add_fixtures: (i) => tp(i.quantity || 1, '➕ Adaug o fixtură', '➕ Adaug {n} fixturi'),
+  move_fixtures: (i) => tp((i.fixture_ids || []).length, '↔ Mut / rotesc o fixtură', '↔ Mut / rotesc {n} fixturi'),
+  remove_fixtures: (i) => tp((i.fixture_ids || []).length, '🗑 Șterg o fixtură', '🗑 Șterg {n} fixturi'),
 };
 
 // ------------------------------------------------------------------ panel
@@ -265,7 +266,7 @@ export class AssistantPanel {
     if (!this.status.configured) this.setup.append(setupForm(this));
     this.setup.classList.toggle('hidden', !!this.status.configured);
     if (!this.log.children.length && this.status.configured) {
-      this.bubble('assistant', 'Salut! Spune-mi ce să adaug sau să mut. De exemplu: „Pune 4 BeamZ Panther 60 pe truss, de la adresa 200” sau „Adaugă 6 par-uri RGBW pe peretele din spate”.');
+      this.bubble('assistant', tr('Salut! Spune-mi ce să adaug sau să mut. De exemplu: „Pune 4 BeamZ Panther 60 pe truss, de la adresa 200” sau „Adaugă 6 par-uri RGBW pe peretele din spate”.'));
     }
   }
 
@@ -293,14 +294,14 @@ export class AssistantPanel {
   async send() {
     const text = this.input.value.trim();
     if (!text || this.busy) return;
-    if (!this.status?.configured) { toast('Adaugă întâi cheia API Claude.', 'error'); return; }
+    if (!this.status?.configured) { toast(tr('Adaugă întâi cheia API Claude.'), 'error'); return; }
     this.input.value = '';
     this.bubble('user', text);
     const startLen = this.messages.length;
     this.messages.push({ role: 'user', content: text });
     this.busy = true;
     this.sendBtn.disabled = true;
-    const thinking = this.note('Claude lucrează…', 'as-wait');
+    const thinking = this.note(tr('Claude lucrează…'), 'as-wait');
     // Everything Claude changes in this message is one undo step.
     this.app.beginBatch();
     try {
@@ -310,14 +311,14 @@ export class AssistantPanel {
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         if (data.stop_reason === 'refusal') {
           this.messages.length = startLen;
-          this.note('Claude a refuzat această cerere. Reformulează, te rog.', 'as-error');
+          this.note(tr('Claude a refuzat această cerere. Reformulează, te rog.'), 'as-error');
           break;
         }
         // Keep the assistant turn exactly as returned (thinking blocks included).
         this.messages.push({ role: 'assistant', content: data.content });
         for (const b of data.content) if (b.type === 'text' && b.text.trim()) this.bubble('assistant', b.text.trim());
         const calls = data.content.filter((b) => b.type === 'tool_use');
-        if (data.stop_reason === 'max_tokens') this.note('Răspunsul a fost tăiat (prea lung).', 'as-error');
+        if (data.stop_reason === 'max_tokens') this.note(tr('Răspunsul a fost tăiat (prea lung).'), 'as-error');
         if (!calls.length) break;
         const results = [];
         for (const call of calls) {
@@ -334,7 +335,7 @@ export class AssistantPanel {
         }
         // All results of this turn go back in one message.
         this.messages.push({ role: 'user', content: results });
-        if (step === MAX_STEPS - 1) this.note('M-am oprit după prea mulți pași. Spune-mi dacă să continui.', 'as-error');
+        if (step === MAX_STEPS - 1) this.note(tr('M-am oprit după prea mulți pași. Spune-mi dacă să continui.'), 'as-error');
       }
     } catch (err) {
       // Drop this exchange so the history stays valid for the next message.
@@ -354,14 +355,14 @@ function setupForm(panel) {
   const model = h('select', {}, Object.entries(panel.status.models || {}).map(([id, label]) => h('option', { value: id, selected: id === panel.status.model }, label)));
   const save = h('button', { class: 'primary', onclick: async () => {
     const res = await fetch('/api/assistant/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: key.value, model: model.value }) });
-    if (res.ok) { toast('Cheia a fost salvată pe acest calculator.'); panel.refreshStatus(); }
-  } }, 'Salvează');
+    if (res.ok) { toast(tr('Cheia a fost salvată pe acest calculator.')); panel.refreshStatus(); }
+  } }, tr('Salvează'));
   for (const el of [key]) el.addEventListener('keydown', (e) => e.stopPropagation());
   return h('div', { class: 'form' },
-    h('p', { class: 'small' }, 'Asistentul folosește Claude cu cheia ta API (plătești direct la Anthropic, după consum). Cheia rămâne doar pe acest calculator.'),
-    h('label', {}, 'Cheie API Claude', key),
+    h('p', { class: 'small' }, tr('Asistentul folosește Claude cu cheia ta API (plătești direct la Anthropic, după consum). Cheia rămâne doar pe acest calculator.')),
+    h('label', {}, tr('Cheie API Claude'), key),
     h('label', {}, 'Model', model),
-    h('div', { class: 'row' }, save, h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener', class: 'small' }, 'Obține o cheie ↗')));
+    h('div', { class: 'row' }, save, h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener', class: 'small' }, tr('Obține o cheie ↗'))));
 }
 
 export { setupForm };

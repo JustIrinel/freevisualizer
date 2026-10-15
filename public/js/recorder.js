@@ -1,13 +1,14 @@
 // Records the 3D show as a video clip (MP4 when the browser supports it, WebM
 // otherwise) with the DJ's logo and text on top and optional music.
 import { h, openModal, toast, numberInput, field } from './dom.js';
+import { tr } from './i18n.js';
 
 const BRAND_KEY = 'freevis.brand.v1';
 
 export const FORMATS = {
-  vertical: { label: 'Vertical 9:16 (Reels, TikTok, Stories)', size: [1080, 1920] },
-  landscape: { label: 'Orizontal 16:9 (YouTube, ofertă, WhatsApp)', size: [1920, 1080] },
-  square: { label: 'Pătrat 1:1 (postare Instagram)', size: [1080, 1080] },
+  vertical: { label: tr('Vertical 9:16 (Reels, TikTok, Stories)'), size: [1080, 1920] },
+  landscape: { label: tr('Orizontal 16:9 (YouTube, ofertă, WhatsApp)'), size: [1920, 1080] },
+  square: { label: tr('Pătrat 1:1 (postare Instagram)'), size: [1080, 1080] },
 };
 
 export function loadBrand() {
@@ -19,7 +20,7 @@ export function loadBrand() {
 }
 
 export function saveBrand(brand) {
-  try { localStorage.setItem(BRAND_KEY, JSON.stringify(brand)); } catch (_) { toast('Logo-ul este prea mare pentru a fi salvat.', 'error'); }
+  try { localStorage.setItem(BRAND_KEY, JSON.stringify(brand)); } catch (_) { toast(tr('Logo-ul este prea mare pentru a fi salvat.'), 'error'); }
 }
 
 /** Best container/codec this browser can record: H.264 MP4 first (plays everywhere). */
@@ -125,7 +126,7 @@ export class ClipRecorder {
     const app = this.app;
     const vis = app.vis;
     const mime = pickMimeType(!!opts.music);
-    if (!mime) { toast('Browserul nu poate înregistra video. Folosește aplicația FreeVisualizer, Chrome sau Edge.', 'error', 6000); return; }
+    if (!mime) { toast(tr('Browserul nu poate înregistra video. Folosește aplicația FreeVisualizer, Chrome sau Edge.'), 'error', 6000); return; }
     const [W, H] = FORMATS[opts.format].size.map((v) => Math.round(v * opts.scale));
     const brand = loadBrand();
     const logo = await loadImage(brand.logo);
@@ -209,7 +210,7 @@ export class ClipRecorder {
     this._hideBadge();
 
     const blob = new Blob(chunks, { type: mime.type.split(';')[0] });
-    if (!blob.size) { toast('Înregistrarea a eșuat (fișier gol).', 'error'); return; }
+    if (!blob.size) { toast(tr('Înregistrarea a eșuat (fișier gol).'), 'error'); return; }
     const name = `${(app.project.name || 'show').replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'show'} – clip ${opts.format === 'vertical' ? '9x16' : opts.format === 'square' ? '1x1' : '16x9'}.${mime.ext}`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -217,7 +218,7 @@ export class ClipRecorder {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-    toast(`Clip salvat: ${name} (${(blob.size / 1048576).toFixed(1)} MB)`, 'info', 6000);
+    toast(tr('Clip salvat: {file} ({mb} MB)', { file: name, mb: (blob.size / 1048576).toFixed(1) }), 'info', 6000);
     this.lastBlob = blob;
   }
 
@@ -231,7 +232,7 @@ export class ClipRecorder {
     let b = document.getElementById('recBadge');
     if (!b) {
       b = h('div', { id: 'recBadge', class: 'rec-badge' }, h('span', { class: 'dot' }), h('span', { class: 'txt' }, 'REC'),
-        h('button', { onclick: () => this.stop() }, 'Oprește'));
+        h('button', { onclick: () => this.stop() }, tr('Oprește')));
       document.body.appendChild(b);
     }
     b.classList.remove('hidden');
@@ -254,7 +255,7 @@ export async function recordDialog(app) {
   const mime = pickMimeType();
   const st = {
     format: 'vertical', duration: 30, camera: 'cinematic', overlay: true, demo: !app.dmx.receiving, bpm: app.demoBpm || 126,
-    music: null, caption: app.project.name && !/^Rig |^Proiect nou/.test(app.project.name) ? app.project.name : '', scale: 1, fps: 30,
+    music: null, caption: app.project.name && !/^Rig |^Proiect nou/.test(app.project.name) && ![tr('Proiect nou'), tr('Rig demo – nuntă / club'), tr('Rig nuntă – sală de evenimente')].includes(app.project.name) ? app.project.name : '', scale: 1, fps: 30,
   };
   const select = (value, options, onChange) => {
     const el = h('select', {}, Object.entries(options).map(([k, v]) => h('option', { value: k }, v)));
@@ -264,30 +265,30 @@ export async function recordDialog(app) {
   };
   const musicInput = h('input', { type: 'file', accept: 'audio/*' });
   musicInput.addEventListener('change', () => { st.music = musicInput.files[0] || null; });
-  const caption = h('input', { value: st.caption, placeholder: 'ex: Nuntă Ana & Mihai · Salon Diamond' });
+  const caption = h('input', { value: st.caption, placeholder: tr('ex: Nuntă Ana & Mihai · Salon Diamond') });
   caption.addEventListener('input', () => { st.caption = caption.value.trim(); });
   const brand = loadBrand();
 
   const content = h('div', { class: 'form' },
-    !mime ? h('div', { class: 'warn-box' }, 'Acest browser nu poate înregistra video. Folosește aplicația FreeVisualizer, Chrome sau Edge.') : null,
+    !mime ? h('div', { class: 'warn-box' }, tr('Acest browser nu poate înregistra video. Folosește aplicația FreeVisualizer, Chrome sau Edge.')) : null,
     h('div', { class: 'grid2' },
-      field('Format', select(st.format, Object.fromEntries(Object.entries(FORMATS).map(([k, v]) => [k, v.label])), (v) => { st.format = v; })),
-      field('Durată', select(String(st.duration), { 15: '15 secunde', 30: '30 secunde', 60: '60 secunde' }, (v) => { st.duration = Number(v); }))),
+      field(tr('Format'), select(st.format, Object.fromEntries(Object.entries(FORMATS).map(([k, v]) => [k, v.label])), (v) => { st.format = v; })),
+      field(tr('Durată'), select(String(st.duration), { 15: tr('{n} secunde', { n: 15 }), 30: tr('{n} secunde', { n: 30 }), 60: tr('{n} secunde', { n: 60 }) }, (v) => { st.duration = Number(v); }))),
     h('div', { class: 'grid2' },
-      field('Cameră', select(st.camera, { cinematic: 'Mișcare cinematică automată', fixed: 'Fixă / o mișc eu' }, (v) => { st.camera = v; })),
-      field('Calitate', select('1', { 1: 'Full HD (recomandat)', 0.6667: 'HD 720p (laptop mai slab)' }, (v) => { st.scale = Number(v); }))),
-    field('Text sub logo (opțional)', caption),
-    field('Muzică (opțional, fișier audio)', musicInput),
+      field(tr('Cameră'), select(st.camera, { cinematic: tr('Mișcare cinematică automată'), fixed: tr('Fixă / o mișc eu') }, (v) => { st.camera = v; })),
+      field(tr('Calitate'), select('1', { 1: tr('Full HD (recomandat)'), 0.6667: tr('HD 720p (laptop mai slab)') }, (v) => { st.scale = Number(v); }))),
+    field(tr('Text sub logo (opțional)'), caption),
+    field(tr('Muzică (opțional, fișier audio)'), musicInput),
     h('div', { class: 'grid2' },
-      h('label', { class: 'inline' }, h('input', { type: 'checkbox', checked: st.demo, onchange: (e) => { st.demo = e.target.checked; } }), 'Folosește show-ul Demo'),
-      field('BPM pentru demo', numberInput(st.bpm, (v) => { st.bpm = v; }, { min: 60, max: 200, integer: true }))),
-    h('label', { class: 'inline' }, h('input', { type: 'checkbox', checked: st.overlay, onchange: (e) => { st.overlay = e.target.checked; } }), `Logo și text: „${brand.text}${brand.subtitle ? ' · ' + brand.subtitle : ''}”`),
-    h('div', { class: 'muted small' }, 'Logo-ul și textul le schimbi din ⚙ Setări → Branding. Cu SoundSwitch pornit, debifează Demo ca să înregistrezi show-ul real pe melodia care rulează.'),
-    mime ? h('div', { class: 'muted small' }, `Fișierul va fi salvat ca .${mime.ext}.`) : null,
+      h('label', { class: 'inline' }, h('input', { type: 'checkbox', checked: st.demo, onchange: (e) => { st.demo = e.target.checked; } }), tr('Folosește show-ul Demo')),
+      field(tr('BPM pentru demo'), numberInput(st.bpm, (v) => { st.bpm = v; }, { min: 60, max: 200, integer: true }))),
+    h('label', { class: 'inline' }, h('input', { type: 'checkbox', checked: st.overlay, onchange: (e) => { st.overlay = e.target.checked; } }), tr('Logo și text: „{text}”', { text: `${brand.text}${brand.subtitle ? ' · ' + brand.subtitle : ''}` })),
+    h('div', { class: 'muted small' }, tr('Logo-ul și textul le schimbi din ⚙ Setări → Branding. Cu SoundSwitch pornit, debifează Demo ca să înregistrezi show-ul real pe melodia care rulează.')),
+    mime ? h('div', { class: 'muted small' }, tr('Fișierul va fi salvat ca .{ext}.', { ext: mime.ext })) : null,
   );
-  const res = await openModal('● Înregistrează clip video', content, [
-    { label: 'Anulează', value: null },
-    { label: '● Pornește înregistrarea', primary: true, value: 'go' },
+  const res = await openModal(tr('● Înregistrează clip video'), content, [
+    { label: tr('Anulează'), value: null },
+    { label: tr('● Pornește înregistrarea'), primary: true, value: 'go' },
   ]);
   if (res !== 'go' || !mime) return;
   await app.recorder.start({ ...st, bitrate: st.scale < 1 ? 8e6 : 14e6 });
