@@ -228,7 +228,7 @@ test('Avolites .d4 moving head: 16-bit pan/tilt/dimmer, wheel, gobo, shutter, mo
   assert.strictEqual(p.manufacturer, 'Test Lighting');
   assert.deepStrictEqual(p.beamAngle, [12, 25]);
   assert.deepStrictEqual(p.channels.map((c) => c.type),
-    ['pan', 'panFine', 'tilt', 'tiltFine', 'none', 'colorWheel', 'gobo', 'none', 'prism', 'zoom', 'strobe', 'dimmer', 'dimmerFine']);
+    ['pan', 'panFine', 'tilt', 'tiltFine', 'none', 'colorWheel', 'gobo', 'goboRot', 'prism', 'zoom', 'strobe', 'dimmer', 'dimmerFine']);
   const wheel = p.channels[5].ranges;
   assert.strictEqual(wheel.find((r) => r.from === 10).color, '#ff0000');
   assert.strictEqual(wheel.find((r) => r.from === 128).mode, 'rotate');
@@ -278,4 +278,130 @@ test('GDTF 3D: geometry tree, model files and thumbnail are found', async () => 
   assert.ok(assets.thumbnail && assets.thumbnail.length === PNG_1PX.length);
   const p = gdtfToProfile(ft, 0);
   assert.strictEqual(p.kind, 'moving');
+});
+
+// Gobo wheels with images, gobo index/rotation, a second wheel, two prisms and frost.
+const GDTF_GOBO = `<?xml version="1.0" encoding="UTF-8"?>
+<GDTF DataVersion="1.2">
+  <FixtureType Name="Gobo Spot" LongName="Gobo Spot 400" Manufacturer="Acme" FixtureTypeID="2">
+    <Wheels>
+      <Wheel Name="Gobo1"><Slot Name="Open"/><Slot Name="Dots" MediaFileName="dots"/><Slot Name="Star" MediaFileName="star"/></Wheel>
+      <Wheel Name="Gobo2"><Slot Name="Open"/><Slot Name="Bars"/></Wheel>
+      <Wheel Name="Prism1">
+        <Slot Name="Open"/>
+        <Slot Name="3-Facet"><Facet Color="0.3127,0.3290,100" Rotation="{1,0,0}{0,1,0}{0,0,1}"/><Facet Color="0.3127,0.3290,100" Rotation="{1,0,0}{0,1,0}{0,0,1}"/><Facet Color="0.3127,0.3290,100" Rotation="{1,0,0}{0,1,0}{0,0,1}"/></Slot>
+      </Wheel>
+      <Wheel Name="Prism2"><Slot Name="Open"/><Slot Name="Linear 4"/></Wheel>
+    </Wheels>
+    <Geometries><Geometry Name="Base"><Axis Name="Yoke"><Axis Name="Head"><Beam Name="Beam" BeamAngle="16"/></Axis></Axis></Geometry></Geometries>
+    <DMXModes>
+      <DMXMode Name="Gobo" Geometry="Base">
+        <DMXChannels>
+          <DMXChannel DMXBreak="1" Offset="1" Geometry="Yoke"><LogicalChannel Attribute="Pan"><ChannelFunction Attribute="Pan" DMXFrom="0/1" PhysicalFrom="-270" PhysicalTo="270"/></LogicalChannel></DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="2" Geometry="Head"><LogicalChannel Attribute="Tilt"><ChannelFunction Attribute="Tilt" DMXFrom="0/1" PhysicalFrom="-135" PhysicalTo="135"/></LogicalChannel></DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="3" Geometry="Beam"><LogicalChannel Attribute="Dimmer"><ChannelFunction Attribute="Dimmer" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="4" Geometry="Beam">
+            <LogicalChannel Attribute="Gobo1">
+              <ChannelFunction Name="Select" Attribute="Gobo1" DMXFrom="0/1" Wheel="Gobo1">
+                <ChannelSet Name="Open" DMXFrom="0/1" WheelSlotIndex="1"/><ChannelSet Name="Dots" DMXFrom="10/1" WheelSlotIndex="2"/><ChannelSet Name="Star" DMXFrom="20/1" WheelSlotIndex="3"/>
+              </ChannelFunction>
+              <ChannelFunction Name="Shake" Attribute="Gobo1SelectShake" DMXFrom="64/1" Wheel="Gobo1">
+                <ChannelSet Name="Dots shake" DMXFrom="64/1" WheelSlotIndex="2"/><ChannelSet Name="Star shake" DMXFrom="96/1" WheelSlotIndex="3"/>
+              </ChannelFunction>
+              <ChannelFunction Name="Spin" Attribute="Gobo1WheelSpin" DMXFrom="128/1" PhysicalFrom="-1" PhysicalTo="1"/>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="5" Geometry="Beam">
+            <LogicalChannel Attribute="Gobo1Pos">
+              <ChannelFunction Name="Index" Attribute="Gobo1Pos" DMXFrom="0/1" PhysicalFrom="0" PhysicalTo="360"/>
+              <ChannelFunction Name="CW" Attribute="Gobo1PosRotate" DMXFrom="128/1" PhysicalFrom="200" PhysicalTo="5"/>
+              <ChannelFunction Name="Stop" Attribute="Gobo1PosRotate" DMXFrom="190/1" PhysicalFrom="0" PhysicalTo="0"/>
+              <ChannelFunction Name="CCW" Attribute="Gobo1PosRotate" DMXFrom="194/1" PhysicalFrom="-5" PhysicalTo="-200"/>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="6" Geometry="Beam">
+            <LogicalChannel Attribute="Gobo2">
+              <ChannelFunction Name="Select" Attribute="Gobo2" DMXFrom="0/1" Wheel="Gobo2">
+                <ChannelSet Name="Open" DMXFrom="0/1" WheelSlotIndex="1"/><ChannelSet Name="Bars" DMXFrom="20/1" WheelSlotIndex="2"/>
+              </ChannelFunction>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="7" Geometry="Beam">
+            <LogicalChannel Attribute="Prism1">
+              <ChannelFunction Name="Prism" Attribute="Prism1" DMXFrom="0/1" Wheel="Prism1">
+                <ChannelSet Name="Open" DMXFrom="0/1" WheelSlotIndex="1"/><ChannelSet Name="3-Facet" DMXFrom="128/1" WheelSlotIndex="2"/>
+              </ChannelFunction>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="8" Geometry="Beam">
+            <LogicalChannel Attribute="Prism1Pos">
+              <ChannelFunction Name="Index" Attribute="Prism1Pos" DMXFrom="0/1" PhysicalFrom="0" PhysicalTo="360"/>
+              <ChannelFunction Name="Rotate" Attribute="Prism1PosRotate" DMXFrom="128/1" PhysicalFrom="5" PhysicalTo="200"/>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="9" Geometry="Beam">
+            <LogicalChannel Attribute="Prism2">
+              <ChannelFunction Name="Off" Attribute="Prism2" DMXFrom="0/1" Wheel="Prism2"/>
+              <ChannelFunction Name="Linear" Attribute="Prism2" DMXFrom="128/1" Wheel="Prism2"/>
+            </LogicalChannel>
+          </DMXChannel>
+          <DMXChannel DMXBreak="1" Offset="10" Geometry="Beam"><LogicalChannel Attribute="Frost1"><ChannelFunction Attribute="Frost1" DMXFrom="0/1"/></LogicalChannel></DMXChannel>
+        </DMXChannels>
+      </DMXMode>
+    </DMXModes>
+  </FixtureType>
+</GDTF>`;
+
+test('GDTF gobos and prisms: two wheels, index/rotation, two prisms, frost, gobo images', async () => {
+  const zip = makeZip({ 'description.xml': GDTF_GOBO, 'wheels/dots.png': PNG_1PX, 'wheels/star.png': PNG_1PX, 'wheels/unused.png': PNG_1PX });
+  const ft = await readGdtf(zip);
+  const assets = await gdtfAssets(zip, ft);
+  assert.deepStrictEqual(Object.keys(assets.wheels), ['Gobo1']);
+  assert.deepStrictEqual(Object.keys(assets.wheels.Gobo1), ['2', '3']);
+  assert.strictEqual(assets.wheels.Gobo1[2].ext, 'png');
+  assert.strictEqual(assets.wheels.Gobo1[2].bytes.length, PNG_1PX.length);
+
+  const p = normalizeProfile(gdtfToProfile(ft, 0, { goboFiles: { Gobo1: { 2: 'aaa.png', 3: 'bbb.png' } } }));
+  assert.deepStrictEqual(p.channels.map((c) => c.type), ['pan', 'tilt', 'dimmer', 'gobo', 'goboRot', 'gobo2', 'prism', 'prismRot', 'prism2', 'frost']);
+  assert.deepStrictEqual(p.gobos[0], [null, 'aaa.png', 'bbb.png']);
+  assert.ok(p.channels.every((c) => c.wheel === undefined));
+  const gobo = p.channels[3].ranges;
+  assert.deepStrictEqual(gobo.find((r) => r.from === 96), { from: 96, to: 127, gobo: 2, shake: true });
+  assert.ok(gobo.find((r) => r.from === 128).rotate === true);
+  const rot = p.channels[4].ranges;
+  assert.deepStrictEqual(rot.map((r) => (r.index ? 'index' : r.stop ? 'stop' : `${r.rotate}${r.fastToSlow ? 'f' : ''}`)), ['index', '1f', 'stop', '-1']);
+  assert.deepStrictEqual(p.channels[6].ranges.map((r) => r.prism), [0, 3]);
+  assert.deepStrictEqual(p.channels[8].ranges.map((r) => [r.prism, r.shape]), [[0, undefined], [4, 'linear']]);
+
+  const values = [128, 128, 255, 20, 64, 20, 200, 255, 200, 128];
+  const rt = createRuntime();
+  let s;
+  for (let i = 0; i < 5; i++) s = computeState(p, dmx(values), 1, rt, 0.1, i * 0.1);
+  assert.deepStrictEqual(s.gobos.map((g) => g.slot), [2, 1]);
+  assert.ok(Math.abs(s.gobos[0].angle - (64 / 127) * Math.PI * 2) < 1e-6);
+  assert.deepStrictEqual(s.prisms.map((x) => [x.facets, x.shape]), [[3, 'circular'], [4, 'linear']]);
+  assert.ok(s.prisms[0].angle > 0);
+  assert.ok(Math.abs(s.frost - 128 / 255) < 1e-6);
+});
+
+test('D4 and QLC+ gobo rotation channels are no longer ignored', () => {
+  const d = normalizeProfile(d4ToProfile(parseD4(d4('Test-Spot-260.d4')), 0));
+  const rot = d.channels[7];
+  assert.strictEqual(rot.type, 'goboRot');
+  const v = new Array(13).fill(0); v[11] = 255; v[12] = 255; v[10] = 10; v[6] = 10; v[7] = 64;
+  const s = computeState(d, dmx(v), 1, createRuntime(), 0.016, 0);
+  assert.strictEqual(s.gobos[0].slot, 1);
+  assert.ok(s.gobos[0].angle > 0);
+
+  const root = parseQxf(qxf('Chauvet-Intimidator-Spot-255-IRC.qxf'));
+  const q = normalizeProfile(qxfToProfile(root, listQxfModes(root).find((m) => m.channels === 13).index));
+  const qr = q.channels.find((c) => c.type === 'goboRot');
+  assert.ok(qr, 'Gobo Rotation → goboRot');
+  assert.deepStrictEqual(qr.ranges.map((r) => (r.stop ? 'stop' : r.rotate)), ['stop', 1, -1, 'stop']);
+  const idx = q.channels.indexOf(qr);
+  const vals = new Array(13).fill(0); vals[idx] = 200;
+  const rt = createRuntime();
+  let st;
+  for (let i = 0; i < 3; i++) st = computeState(q, dmx(vals), 1, rt, 0.1, i);
+  assert.ok(st.gobos[0].angle < 0, 'counter-clockwise');
 });

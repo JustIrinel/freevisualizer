@@ -1,6 +1,6 @@
 // QLC+ fixture definition (.qxf) → FreeVisualizer profile.
 import { parseXml, child, children } from './xml-lite.js';
-import { DEFAULT_STROBE_RANGES } from './profiles.js';
+import { DEFAULT_STROBE_RANGES, rotationRanges } from './profiles.js';
 import { tr } from './i18n.js';
 
 const PRESETS = {
@@ -45,6 +45,19 @@ function strobeRanges(caps) {
   });
 }
 
+/** QLC+ capability of a rotation channel → index / rotate / stop. */
+function qxfRotation(cap) {
+  const preset = cap.attrs.Preset || '';
+  const text = (cap.text || '').toLowerCase();
+  if (/RotationStop/.test(preset) || /stop|no rot|no function|^off/.test(text)) return { stop: true };
+  if (/RotationIndexed/i.test(preset) || /index|position|angle/.test(text)) return { index: true };
+  if (/^Rotation/.test(preset) || /rotat|spin|cw|clockwise/.test(text)) {
+    const ccw = /CounterClockwise/.test(preset) || /ccw|counter|reverse|anti/.test(text);
+    return { rotate: ccw ? -1 : 1, ...(/FastToSlow/.test(preset) || /fast.*slow/.test(text) ? { fastToSlow: true } : {}) };
+  }
+  return { stop: true };
+}
+
 /** One QLC+ <Channel> definition → our channel. */
 function convertChannel(def, fixtureType) {
   const name = def.attrs.Name || '';
@@ -81,6 +94,13 @@ function convertChannel(def, fixtureType) {
     });
     return ranges.length ? { type: 'colorWheel', label: name, ranges } : { type: 'none', label: name };
   }
+  if ((group === 'Gobo' || group === 'Prism') && /rotat|index|spin/.test(lname) && !/speed|macro/.test(lname)) {
+    const prism = group === 'Prism' || /prism/.test(lname);
+    const two = /(gobo|prism|wheel) ?2/.test(lname);
+    const ranges = caps.map((c) => ({ from: Number(c.attrs.Min), to: Number(c.attrs.Max), ...qxfRotation(c) }));
+    return { type: prism ? (two ? 'prism2Rot' : 'prismRot') : two ? 'gobo2Rot' : 'goboRot', label: name, ranges: ranges.length > 1 ? ranges : rotationRanges() };
+  }
+  if (/frost|diffus/.test(lname) || preset === 'BeamFrost') return { type: 'frost', label: name };
   if (group === 'Gobo' && !/rotat|index|speed|shake/.test(lname)) {
     let idx = 0;
     const ranges = caps.map((c) => {
@@ -93,11 +113,20 @@ function convertChannel(def, fixtureType) {
       const g = m ? Number(m[1]) : ++idx;
       return { from, to, gobo: g, ...(/Shake/i.test(preset) || /shake/.test(text) ? { shake: true } : {}) };
     });
-    return ranges.length ? { type: 'gobo', label: name, ranges } : { type: 'none', label: name };
+    return ranges.length ? { type: /(gobo|wheel) ?2|static/.test(lname) ? 'gobo2' : 'gobo', label: name, ranges } : { type: 'none', label: name };
   }
   if (group === 'Prism' && !/rotat/.test(lname)) {
-    const ranges = caps.map((c) => ({ from: Number(c.attrs.Min), to: Number(c.attrs.Max), prism: /open|no function|off/i.test(c.text || '') ? 0 : 3 }));
-    return { type: 'prism', label: name, ranges: ranges.length ? ranges : [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }] };
+    let last = 3;
+    const ranges = caps.map((c) => {
+      const from = Number(c.attrs.Min); const to = Number(c.attrs.Max);
+      const text = c.text || '';
+      if (/open|no function|off/i.test(text)) return { from, to, prism: 0 };
+      const m = /(\d+)\s*-?\s*(facet|face|prism)/i.exec(text);
+      if (m) last = Math.max(2, Math.min(16, Number(m[1])));
+      const rot = /Rotation/.test(c.attrs.Preset || '') || /rotat/i.test(text) ? qxfRotation(c) : null;
+      return { from, to, prism: last, ...(/linear/i.test(text) ? { shape: 'linear' } : {}), ...(rot && rot.rotate ? rot : {}) };
+    });
+    return { type: /prism ?2/.test(lname) ? 'prism2' : 'prism', label: name, ranges: ranges.length ? ranges : [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }] };
   }
   if (group === 'Beam' && /zoom/.test(lname)) return { type: 'zoom', label: name };
   if ((fixtureType === 'Smoke' || fixtureType === 'Hazer') && /fog|smoke|haze|output|pump/.test(lname)) return { type: 'fog', label: name };

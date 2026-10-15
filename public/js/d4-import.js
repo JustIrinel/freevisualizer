@@ -13,7 +13,7 @@
 // may be swapped. Attributes nested one level deeper inside <Include> belong
 // to a cell (pixel).
 import { parseXml, child, children, descendants } from './xml-lite.js';
-import { DEFAULT_STROBE_RANGES } from './profiles.js';
+import { DEFAULT_STROBE_RANGES, rotationRanges } from './profiles.js';
 import { tr } from './i18n.js';
 
 const COLOR_NAMES = [
@@ -80,6 +80,23 @@ function strobeRanges(funcs) {
   });
 }
 
+/** Function name → rotation: index, stop or rotation with direction (null when it says nothing). */
+function rotationOfName(name) {
+  const n = name.toLowerCase();
+  if (/stop|no rot|static/.test(n)) return { stop: true };
+  if (/index|position|angle|\bpos\b/.test(n)) return { index: true };
+  const ccw = /ccw|counter|anti|reverse|left/.test(n);
+  if (ccw || /\bcw\b|clockwise|rotat|spin|right/.test(n)) return { rotate: ccw ? -1 : 1, ...(/fast.*slow/.test(n) ? { fastToSlow: true } : {}) };
+  return null;
+}
+
+function rotationRangesOf(funcs) {
+  const known = funcs.map((f) => ({ ...f.range, ...(rotationOfName(f.name) || { stop: true }) }));
+  // One vague "Rotate" function over the whole range: use the usual layout instead.
+  if (funcs.length <= 1) return rotationRanges();
+  return known;
+}
+
 /** One <Control><Attribute> → our channel description (coarse). */
 function convertAttribute(attr) {
   const id = attr.attrs.ID || '';
@@ -89,6 +106,14 @@ function convertAttribute(attr) {
   const funcs = functionsOf(attr);
   const base = { label: name };
 
+  // Gobo / prism rotation and index.
+  if (/gobo|prism/.test(text) && /rotat|index|spin|\bpos\b|rot\b/.test(text) && !/speed|macro|reset/.test(text)) {
+    const prism = /prism/.test(text);
+    const two = /(gobo|prism) ?2|2rot/.test(text);
+    const type = prism ? (two ? 'prism2Rot' : 'prismRot') : two ? 'gobo2Rot' : 'goboRot';
+    return { type, ...base, ranges: rotationRangesOf(funcs) };
+  }
+  if (/frost|diffus/.test(text)) return { type: 'frost', ...base };
   // Speeds, macros, rotations and maintenance channels have no visual effect here.
   if (/speed|macro|reset|lamp|control|mode|reserved|rotat|index|shake|\bfx\b/.test(text) && !/^(dimmer|pan|tilt)\b/.test(text)) return { type: 'none', ...base };
   if (/^pan|\bpan\b/.test(text) && !/tilt/.test(text)) return { type: 'pan', ...base };
@@ -98,8 +123,15 @@ function convertAttribute(attr) {
   if (/fog|smoke|haze|pump/.test(text)) return { type: 'fog', ...base };
   if (/zoom/.test(text)) return { type: 'zoom', ...base };
   if (/prism/.test(text)) {
-    const ranges = funcs.map((f) => ({ ...f.range, prism: /open|off|out|no /i.test(f.name) ? 0 : 3 }));
-    return { type: 'prism', ...base, ranges: ranges.length ? ranges : [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }] };
+    let last = 3;
+    const ranges = funcs.map((f) => {
+      if (/open|off|out|no /i.test(f.name)) return { ...f.range, prism: 0 };
+      const rot = rotationOfName(f.name);
+      const m = /(\d+)/.exec(f.name);
+      if (m && !rot) last = Math.max(2, Math.min(16, Number(m[1])));
+      return { ...f.range, prism: last, ...(/linear/i.test(f.name) ? { shape: 'linear' } : {}), ...(rot && !rot.index && !rot.stop ? rot : {}) };
+    });
+    return { type: /prism ?2/.test(text) ? 'prism2' : 'prism', ...base, ranges: ranges.length ? ranges : [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }] };
   }
   if (/gobo/.test(text) || group === 'G') {
     let n = 0;
@@ -110,7 +142,7 @@ function convertAttribute(attr) {
       const m = /(\d+)/.exec(fn);
       return { ...f.range, gobo: m ? Number(m[1]) : ++n, ...(/shake/.test(fn) ? { shake: true } : {}) };
     });
-    return ranges.length ? { type: 'gobo', ...base, ranges } : { type: 'none', ...base };
+    return ranges.length ? { type: /gobo ?2|static gobo/.test(text) ? 'gobo2' : 'gobo', ...base, ranges } : { type: 'none', ...base };
   }
   // Colour mixing channels (RGB/W/A/UV/CMY…), then colour wheels.
   const mix = MIX.find(([, re]) => re.test(text));

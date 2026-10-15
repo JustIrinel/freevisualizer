@@ -129,3 +129,49 @@ test('wedding effects: sparks need the fire channel, laser reads pattern and spi
   assert.ok(project.fixtures.every((f) => byId[f.profileId]), 'all wedding fixtures use built-in profiles');
   assert.strictEqual(findConflicts(project, byId).size, 0);
 });
+
+test('OFL gobo rotation, second gobo wheel, prism rotation, linear prism, frost', () => {
+  const spot = oflToProfile(load('intimidator-spot-260'), 0, 'chauvet-dj/intimidator-spot-260');
+  const rot = spot.channels.find((c) => c.type === 'goboRot');
+  assert.ok(rot, 'Gobo Rotation → goboRot');
+  assert.deepStrictEqual(rot.ranges.map((r) => (r.stop ? 'stop' : r.rotate)), ['stop', 1, -1, 'stop']);
+  assert.strictEqual(spot.channels.filter((c) => c.type === 'gobo').length, 1);
+
+  const fx = {
+    name: 'Twin Spot', categories: ['Moving Head'],
+    wheels: {
+      'Gobo Wheel 1': { slots: [{ type: 'Open' }, { type: 'Gobo' }, { type: 'Gobo' }] },
+      'Gobo Wheel 2': { slots: [{ type: 'Open' }, { type: 'Gobo' }] },
+    },
+    availableChannels: {
+      Pan: { capability: { type: 'Pan', angleStart: '0deg', angleEnd: '540deg' } },
+      'Gobo Wheel 1': { capabilities: [{ dmxRange: [0, 63], type: 'WheelSlot', slotNumber: 1 }, { dmxRange: [64, 127], type: 'WheelSlot', slotNumber: 2 }, { dmxRange: [128, 255], type: 'WheelSlot', slotNumber: 3 }] },
+      'Gobo Wheel 1 Rotation': { capabilities: [
+        { dmxRange: [0, 127], type: 'WheelSlotRotation', wheel: 'Gobo Wheel 1', angleStart: '0deg', angleEnd: '360deg' },
+        { dmxRange: [128, 189], type: 'WheelSlotRotation', wheel: 'Gobo Wheel 1', speedStart: 'fast CW', speedEnd: 'slow CW' },
+        { dmxRange: [190, 193], type: 'WheelSlotRotation', wheel: 'Gobo Wheel 1', speed: 'stop' },
+        { dmxRange: [194, 255], type: 'WheelSlotRotation', wheel: 'Gobo Wheel 1', speedStart: 'slow CCW', speedEnd: 'fast CCW' },
+      ] },
+      'Gobo Wheel 2': { capabilities: [{ dmxRange: [0, 127], type: 'WheelSlot', slotNumber: 1 }, { dmxRange: [128, 255], type: 'WheelSlot', slotNumber: 2 }] },
+      'Gobo Wheel 2 Rotation': { capabilities: [{ dmxRange: [0, 9], type: 'NoFunction' }, { dmxRange: [10, 255], type: 'WheelSlotRotation', wheel: 'Gobo Wheel 2', speedStart: 'slow CW', speedEnd: 'fast CW' }] },
+      Prism: { capabilities: [{ dmxRange: [0, 127], type: 'NoFunction' }, { dmxRange: [128, 255], type: 'Prism', facets: 5 }] },
+      'Prism Rotation': { capabilities: [{ dmxRange: [0, 127], type: 'PrismRotation', angleStart: '0deg', angleEnd: '360deg' }, { dmxRange: [128, 255], type: 'PrismRotation', speedStart: 'slow CW', speedEnd: 'fast CW' }] },
+      'Prism 2': { capabilities: [{ dmxRange: [0, 127], type: 'NoFunction' }, { dmxRange: [128, 255], type: 'Prism', facets: 4, comment: 'linear 4-facet' }] },
+      Frost: { capability: { type: 'Frost', frostIntensityStart: '0%', frostIntensityEnd: '100%' } },
+    },
+    modes: [{ name: 'Full', channels: ['Pan', 'Gobo Wheel 1', 'Gobo Wheel 1 Rotation', 'Gobo Wheel 2', 'Gobo Wheel 2 Rotation', 'Prism', 'Prism Rotation', 'Prism 2', 'Frost'] }],
+  };
+  const p = normalizeProfile(oflToProfile(fx, 0, 'acme/twin-spot'));
+  assert.deepStrictEqual(p.channels.map((c) => c.type), ['pan', 'gobo', 'goboRot', 'gobo2', 'gobo2Rot', 'prism', 'prismRot', 'prism2', 'frost']);
+  assert.deepStrictEqual(p.channels[2].ranges.map((r) => (r.index ? `index ${r.angleTo}` : r.stop ? 'stop' : `${r.rotate}${r.fastToSlow ? ' fast→slow' : ''}`)), ['index 360', '1 fast→slow', 'stop', '-1']);
+  assert.deepStrictEqual(p.channels[7].ranges[1], { from: 128, to: 255, prism: 4, shape: 'linear' });
+  const rt = createRuntime();
+  let s;
+  for (let i = 0; i < 4; i++) s = computeState(p, dmx([128, 100, 64, 200, 255, 200, 200, 200, 255]), 1, rt, 0.1, i * 0.1);
+  assert.deepStrictEqual(s.gobos.map((g) => g.slot), [1, 1]);
+  assert.ok(Math.abs(s.gobos[0].angle - (64 / 127) * Math.PI * 2) < 1e-6);
+  assert.ok(s.gobos[1].angle > 0);
+  assert.deepStrictEqual(s.prisms.map((x) => [x.facets, x.shape]), [[5, 'circular'], [4, 'linear']]);
+  assert.ok(s.prisms[0].angle > 0);
+  assert.strictEqual(s.frost, 1);
+});

@@ -149,6 +149,50 @@ function wheelFor(fixture, cap, channelName) {
   return { name, wheel: wheels[name] || wheels[Object.keys(wheels).find((w) => channelName && channelName.includes(w))] || null };
 }
 
+/** 0 for the first gobo wheel of the fixture, 1 for the second one. */
+function goboWheelIndex(fixture, wheelName, channelName) {
+  const names = Object.entries(fixture.wheels || {})
+    .filter(([, w]) => (w.slots || []).some((s) => s.type === 'Gobo' || s.type === 'Iris'))
+    .map(([n]) => n);
+  const i = names.indexOf(wheelName);
+  if (i >= 0) return Math.min(1, i);
+  return /gobo ?(wheel ?)?2|2nd gobo|second gobo|static gobo/i.test(channelName || '') ? 1 : 0;
+}
+
+function prismFacets(cap) {
+  if (cap.facets >= 2) return cap.facets;
+  const m = /(\d+)[- ]?(facet|fold|face|prism)/i.exec(cap.comment || '');
+  return m ? Number(m[1]) : 3;
+}
+
+/** "slow CW", "fast CCW", "stop", "12rpm", "-5Hz" → { speed (signed number), stop } */
+function parseSpeed(v) {
+  const str = String(v ?? '').toLowerCase();
+  if (!str) return null;
+  if (/stop/.test(str)) return { speed: 0 };
+  const dir = /ccw/.test(str) ? -1 : 1;
+  const num = /(-?[\d.]+)\s*(rpm|hz|%)/.exec(str);
+  if (num) return { speed: Math.abs(parseFloat(num[1])) * (parseFloat(num[1]) < 0 ? -1 : dir) };
+  if (/fast/.test(str)) return { speed: 10 * dir };
+  if (/slow/.test(str)) return { speed: 1 * dir };
+  return { speed: 5 * dir };
+}
+
+/** OFL rotation capability (WheelSlotRotation, WheelRotation, PrismRotation) → our rotation range. */
+function rotationRange(cap, from, to) {
+  if (cap.angleStart != null || cap.angle != null) {
+    const a = parseDeg(cap.angleStart ?? cap.angle) ?? 0;
+    const b = parseDeg(cap.angleEnd ?? cap.angle) ?? a;
+    return { from, to, index: true, angleFrom: a, angleTo: b };
+  }
+  const start = parseSpeed(cap.speedStart ?? cap.speed);
+  const end = parseSpeed(cap.speedEnd ?? cap.speed);
+  if (!start || !end) return { from, to, rotate: 1 };
+  if (start.speed === 0 && end.speed === 0) return { from, to, stop: true };
+  const dir = Math.sign(start.speed || end.speed);
+  return { from, to, rotate: dir, ...(Math.abs(start.speed) > Math.abs(end.speed) ? { fastToSlow: true } : {}) };
+}
+
 /** Convert one channel definition into a FreeVisualizer channel. */
 function convertChannel(fixture, item, info) {
   const { def, fine, baseName } = info;
@@ -194,11 +238,20 @@ function convertChannel(fixture, item, info) {
 
   if (mainType === 'WheelSlot' || mainType === 'WheelRotation' || mainType === 'WheelShake' || mainType === 'WheelSlotRotation') {
     const firstWheelCap = caps.find((c) => /^Wheel/.test(c.type)) || {};
-    const { wheel } = wheelFor(fixture, firstWheelCap, baseName || item.name);
+    const { name: wheelName, wheel } = wheelFor(fixture, firstWheelCap, baseName || item.name);
     const slots = (wheel && wheel.slots) || [];
     const isColor = slots.some((s) => s.type === 'Color') || /colou?r/i.test(baseName || '');
     const isGobo = slots.some((s) => s.type === 'Gobo' || s.type === 'Iris') || /gobo/i.test(baseName || '');
-    if (mainType === 'WheelSlotRotation' && !has('WheelSlot')) return { type: 'none', label };
+    const second = isGobo && goboWheelIndex(fixture, wheelName, baseName || item.name) === 1;
+    // Only rotation capabilities (gobo index / rotation, or the whole wheel spinning): a rotation channel.
+    if (!has('WheelSlot') && !has('WheelShake') && (has('WheelSlotRotation') || (isGobo && has('WheelRotation')))) {
+      if (!isGobo) return { type: 'none', label };
+      const ranges = caps.map((c) => {
+        const [from, to] = rangeOf(c, scale);
+        return /Rotation$/.test(c.type) ? rotationRange(c, from, to) : { from, to, stop: true };
+      });
+      return { type: second ? 'gobo2Rot' : 'goboRot', label, ranges };
+    }
     if (isColor && !isGobo) {
       const ranges = [];
       for (const c of caps) {
@@ -228,22 +281,44 @@ function convertChannel(fixture, item, info) {
           ranges.push({ from, to, gobo: open ? 0 : n - 1, ...(c.type === 'WheelShake' ? { shake: true } : {}) });
         } else if (c.type === 'WheelRotation') {
           ranges.push({ from, to, gobo: 1, rotate: true });
+        } else if (c.type === 'WheelSlotRotation') {
+          // Gobo selection and rotation on one channel.
+          const prev = ranges[ranges.length - 1];
+          const n = c.slotNumber != null ? Math.floor(c.slotNumber) - 1 : prev && prev.gobo ? prev.gobo : 1;
+          ranges.push({ ...rotationRange(c, from, to), gobo: Math.max(1, n) });
         } else {
           ranges.push({ from, to, gobo: 0 });
         }
       }
-      return { type: 'gobo', label, ranges };
+      return { type: second ? 'gobo2' : 'gobo', label, ranges };
     }
     return { type: 'none', label };
   }
 
-  if (mainType === 'Prism' || (has('Prism') && /prism/i.test(label) && !/rot/i.test(label))) {
+  if (mainType === 'Prism' || (has('Prism') && (/prism/i.test(label) || mainType === 'PrismRotation'))) {
+    let last = 3;
     const ranges = caps.map((c) => {
       const [from, to] = rangeOf(c, scale);
-      return { from, to, prism: c.type === 'Prism' ? c.facets || 3 : 0 };
+      if (c.type === 'Prism') {
+        last = prismFacets(c);
+        return { from, to, prism: last, ...(/linear/i.test(`${c.comment || ''} ${label}`) ? { shape: 'linear' } : {}) };
+      }
+      // Prism in and rotating, on the same channel.
+      if (c.type === 'PrismRotation') return { ...rotationRange(c, from, to), prism: last };
+      return { from, to, prism: 0 };
     });
     return { type: 'prism', label, ranges };
   }
+
+  if (mainType === 'PrismRotation') {
+    const ranges = caps.map((c) => {
+      const [from, to] = rangeOf(c, scale);
+      return c.type === 'PrismRotation' ? rotationRange(c, from, to) : { from, to, stop: true };
+    });
+    return { type: 'prismRot', label, ranges };
+  }
+
+  if (mainType === 'Frost') return { type: 'frost', label };
 
   if (mainType === 'Zoom') {
     const cap = caps.find((c) => c.type === 'Zoom') || {};
@@ -285,6 +360,11 @@ export function oflToProfile(fixture, modeIndex = 0, key = fixture.__key || '') 
     return converted;
   });
 
+  // A second prism (and its rotation) → prism 2.
+  for (const [type, two] of [['prism', 'prism2'], ['prismRot', 'prism2Rot']]) {
+    const list = channels.filter((c) => c.type === type && c.pixel == null);
+    if (list.length > 1 && !channels.some((c) => c.type === two)) list[1].type = two;
+  }
   const pixelCount = channels.reduce((m, c) => (c.pixel != null ? Math.max(m, c.pixel + 1) : m), 0);
   let kind = guessKind(fixture, channels);
   // 7 heads (1 + 6) on a hexagonal plate: the popular "retro" effect lights.

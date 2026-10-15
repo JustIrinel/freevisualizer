@@ -85,6 +85,19 @@ export async function gdtfAssets(buffer, ft) {
   }
   const thumb = find(/(^|\/)thumbnail\.png$/i);
   if (thumb) out.thumbnail = await files.get(thumb)();
+  // Gobo images: Wheel → Slot MediaFileName → wheels/<name>.png
+  out.wheels = {};
+  for (const w of children(child(ft, 'Wheels'), 'Wheel')) {
+    children(w, 'Slot').forEach((slot, i) => {
+      const media = slot.attrs.MediaFileName;
+      if (!media) return;
+      const esc = media.replace(/\.(png|jpe?g|svg)$/i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const key = find(new RegExp(`(^|/)wheels/${esc}\\.(png|jpe?g)$`, 'i'));
+      if (!key) return;
+      (out.wheels[w.attrs.Name] ||= {})[i + 1] = { ext: /\.png$/i.test(key) ? 'png' : 'jpg', bytes: null, key };
+    });
+  }
+  for (const slots of Object.values(out.wheels)) for (const v of Object.values(slots)) { v.bytes = await files.get(v.key)(); delete v.key; }
   return out;
 }
 
@@ -159,6 +172,38 @@ function functionRanges(ch, bytes) {
   return fns.map((f, i) => ({ fn: f, from: starts[i], to: i + 1 < fns.length ? Math.max(starts[i], starts[i + 1] - 1) : 255, bytes }));
 }
 
+/** Prism wheel slot: number of facets (<Facet> children) and whether they lie on a line. */
+function prismOfSlot(slot) {
+  const facets = children(slot, 'Facet');
+  const name = slot.attrs.Name || '';
+  const m = /(\d+)/.exec(name);
+  const n = facets.length >= 2 ? facets.length : m ? Number(m[1]) : 3;
+  let linear = /linear|line/i.test(name);
+  if (!linear && facets.length >= 3) {
+    // Facet rotation matrices: a linear prism tilts every facet around the same axis.
+    const tilts = facets.map((f) => parseMatrix(f.attrs.Rotation || ''));
+    const axisX = tilts.every((t) => Math.abs(t[1]) < 1e-3 && Math.abs(t[4]) < 1e-3);
+    const axisY = tilts.every((t) => Math.abs(t[6]) < 1e-3 && Math.abs(t[9]) < 1e-3);
+    linear = (axisX || axisY) && !(axisX && axisY);
+  }
+  return { facets: Math.max(2, Math.min(16, n)), linear };
+}
+
+/** GDTF Gobo(n)Pos / Gobo(n)PosRotate / Prism(n)Pos… channel function → rotation range. */
+function gdtfRotation(r) {
+  const a = r.fn.attrs.Attribute || '';
+  const name = (r.fn.attrs.Name || '').toLowerCase();
+  const from = Number(r.fn.attrs.PhysicalFrom); const to = Number(r.fn.attrs.PhysicalTo);
+  const hasPhys = Number.isFinite(from) && Number.isFinite(to) && r.fn.attrs.PhysicalFrom != null;
+  if (/stop|no rot/.test(name)) return { from: r.from, to: r.to, stop: true };
+  if (/Rotate|Spin/.test(a)) {
+    if (!hasPhys || (from === 0 && to === 0)) return { from: r.from, to: r.to, rotate: /ccw|counter|reverse/.test(name) ? -1 : 1, ...(/fast.*slow/.test(name) ? { fastToSlow: true } : {}) };
+    const dir = Math.sign(from + to) || Math.sign(to) || 1;
+    return { from: r.from, to: r.to, rotate: dir, ...(Math.abs(from) > Math.abs(to) ? { fastToSlow: true } : {}) };
+  }
+  return { from: r.from, to: r.to, index: true, ...(hasPhys ? { angleFrom: from, angleTo: to } : {}) };
+}
+
 function convert(ft, entry) {
   const ch = entry.def;
   const attr = mainAttribute(ch);
@@ -176,10 +221,46 @@ function convert(ft, entry) {
   if (attr === 'Tilt') return add('tilt');
   if (COLOR_ADD[attr]) return add(COLOR_ADD[attr]);
   if (/^Zoom/.test(attr)) return add('zoom');
+  const num = (re) => Number((re.exec(attr) || [])[1] || 1);
   if (/^Prism\d*$/.test(attr)) {
-    const ranges = functionRanges(ch, entry.bytes).map((r) => ({ from: r.from, to: r.to, prism: /^Prism/.test(r.fn.attrs.Attribute || '') && !/no|open|off/i.test(r.fn.attrs.Name || '') ? 3 : 0 }));
-    return add('prism', { ranges });
+    const n = num(/^Prism(\d*)$/);
+    let last = 3;
+    const ranges = [];
+    for (const r of functionRanges(ch, entry.bytes)) {
+      const a = r.fn.attrs.Attribute || '';
+      if (/^Prism\d*Pos/.test(a)) { ranges.push({ ...gdtfRotation(r), prism: last }); continue; }
+      const slots = wheelSlots(ft, r.fn.attrs.Wheel);
+      const sets = children(r.fn, 'ChannelSet');
+      const off = /no|open|off|out/i.test(r.fn.attrs.Name || '') || !/^Prism/.test(a);
+      if (!off && sets.length && slots.length) {
+        const starts = sets.map((x) => dmxValue(x.attrs.DMXFrom));
+        sets.forEach((x, i) => {
+          const slot = slots[Number(x.attrs.WheelSlotIndex || 1) - 1];
+          const to = Math.max(starts[i], i + 1 < sets.length ? starts[i + 1] - 1 : r.to);
+          if (!slot || /open/i.test(slot.attrs.Name || '')) { ranges.push({ from: starts[i], to, prism: 0 }); return; }
+          last = prismOfSlot(slot);
+          ranges.push({ from: starts[i], to, prism: last.facets, ...(last.linear ? { shape: 'linear' } : {}) });
+          last = last.facets;
+        });
+      } else if (!off && slots.length) {
+        const pr = prismOfSlot(slots.find((x) => !/open/i.test(x.attrs.Name || '')) || slots[0]);
+        last = pr.facets;
+        ranges.push({ from: r.from, to: r.to, prism: pr.facets, ...(pr.linear ? { shape: 'linear' } : {}) });
+      } else {
+        ranges.push({ from: r.from, to: r.to, prism: off ? 0 : 3 });
+      }
+    }
+    return add(n === 2 ? 'prism2' : 'prism', { ranges });
   }
+  if (/^Prism\d*Pos/.test(attr)) {
+    const ranges = functionRanges(ch, entry.bytes).map((r) => ({ ...gdtfRotation(r) }));
+    return add(num(/^Prism(\d*)Pos/) === 2 ? 'prism2Rot' : 'prismRot', { ranges });
+  }
+  if (/^Gobo\d*Pos/.test(attr)) {
+    const ranges = functionRanges(ch, entry.bytes).map((r) => ({ ...gdtfRotation(r) }));
+    return add(num(/^Gobo(\d*)Pos/) === 2 ? 'gobo2Rot' : 'goboRot', { ranges });
+  }
+  if (/^Frost\d*$/.test(attr)) return add('frost');
   if (/^Color\d+$/.test(attr)) {
     const ranges = [];
     for (const r of functionRanges(ch, entry.bytes)) {
@@ -208,17 +289,25 @@ function convert(ft, entry) {
     for (const r of functionRanges(ch, entry.bytes)) {
       const fnAttr = r.fn.attrs.Attribute || '';
       const sets = children(r.fn, 'ChannelSet');
-      if (sets.length && !/Spin|Shake/.test(fnAttr)) {
+      if (/^Gobo\d*Pos/.test(fnAttr)) {
+        const prev = ranges[ranges.length - 1];
+        ranges.push({ ...gdtfRotation(r), gobo: prev && prev.gobo ? prev.gobo : 1 });
+      } else if (sets.length && !/WheelSpin/.test(fnAttr)) {
+        // Gobo(n) = select, Gobo(n)SelectShake = shake, Gobo(n)SelectSpin = select and rotate.
+        const extra = /Shake/.test(fnAttr) ? { shake: true } : /Spin/.test(fnAttr) ? { rotate: 1 } : {};
         const setStarts = sets.map((s) => dmxValue(s.attrs.DMXFrom));
         sets.forEach((s, i) => {
           const idx = Number(s.attrs.WheelSlotIndex || 1);
-          ranges.push({ from: setStarts[i], to: Math.max(setStarts[i], i + 1 < sets.length ? setStarts[i + 1] - 1 : r.to), gobo: Math.max(0, idx - 1) });
+          ranges.push({ from: setStarts[i], to: Math.max(setStarts[i], i + 1 < sets.length ? setStarts[i + 1] - 1 : r.to), gobo: Math.max(0, idx - 1), ...extra });
         });
+      } else if (/SelectSpin/.test(fnAttr)) {
+        ranges.push({ from: r.from, to: r.to, gobo: 1, rotate: 1 });
       } else {
         ranges.push({ from: r.from, to: r.to, gobo: 1, ...(/Shake/.test(fnAttr) ? { shake: true } : { rotate: true }) });
       }
     }
-    return add('gobo', { ranges });
+    const wheel = functionRanges(ch, entry.bytes).map((r) => r.fn.attrs.Wheel).find(Boolean);
+    return add(num(/^Gobo(\d+)$/) === 2 ? 'gobo2' : 'gobo', { ranges, ...(wheel ? { wheel } : {}) });
   }
   if (/^Shutter\d*$|Strobe/.test(attr)) {
     const ranges = functionRanges(ch, entry.bytes).map((r) => {
@@ -256,7 +345,10 @@ function physicalRange(ft, attrName) {
   return null;
 }
 
-export function gdtfToProfile(ft, modeIndex = 0) {
+/**
+ * @param opts.goboFiles  uploaded gobo images: { wheelName: { slotIndex (1-based): file } }
+ */
+export function gdtfToProfile(ft, modeIndex = 0, opts = {}) {
   const mode = children(child(ft, 'DMXModes'), 'DMXMode')[modeIndex];
   if (!mode) throw new Error(tr('Modul selectat nu există'));
   const entries = expandChannels(ft, mode);
@@ -267,6 +359,19 @@ export function gdtfToProfile(ft, modeIndex = 0) {
     conv.forEach((c, k) => { channels[e.offset - 1 + k] = c; });
   }
   for (let i = 0; i < channels.length; i++) if (!channels[i]) channels[i] = { type: 'none', label: '' };
+  // Real gobo images of wheel 1 / wheel 2, indexed like range.gobo (slot index − 1).
+  let gobos = null;
+  for (const c of channels) {
+    if ((c.type !== 'gobo' && c.type !== 'gobo2') || !c.wheel) continue;
+    const files = opts.goboFiles && opts.goboFiles[c.wheel];
+    if (files) {
+      const list = [];
+      for (const [slot, file] of Object.entries(files)) list[Number(slot) - 1] = file;
+      gobos ||= [[], []];
+      gobos[c.type === 'gobo2' ? 1 : 0] = Array.from(list, (f) => f || null);
+    }
+    delete c.wheel;
+  }
 
   const pixelCount = channels.reduce((m, c) => (c.pixel != null ? Math.max(m, c.pixel + 1) : m), 0);
   const hasPanTilt = channels.some((c) => c.type === 'pan' || c.type === 'tilt');
@@ -303,6 +408,7 @@ export function gdtfToProfile(ft, modeIndex = 0) {
     beamAngle,
     panRange: physicalRange(ft, 'Pan') || 540,
     tiltRange: physicalRange(ft, 'Tilt') || 270,
+    ...(gobos ? { gobos } : {}),
     channels,
   };
 }

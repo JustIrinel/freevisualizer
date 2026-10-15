@@ -564,19 +564,24 @@ export async function importFixtureFile(app, file) {
       const ft = await readGdtf(buffer);
       // The manufacturer's 3D model and photo, when the file has them.
       const extra = {};
+      const goboFiles = {};
       try {
         const assets = await gdtfAssets(buffer, ft);
         const files = {};
         for (const [modelName, f] of Object.entries(assets.files)) files[modelName] = await uploadAsset(f.bytes, f.ext);
         if (Object.keys(files).length) extra.model = { type: 'gdtf', files, geometry: assets.geometry };
         if (assets.thumbnail) extra.thumbnail = await uploadAsset(assets.thumbnail, 'png');
+        // Real gobo images from the wheels/ folder.
+        for (const [wheel, slots] of Object.entries(assets.wheels || {})) {
+          for (const [slot, f] of Object.entries(slots)) (goboFiles[wheel] ||= {})[slot] = await uploadAsset(f.bytes, f.ext);
+        }
       } catch (err) {
         console.warn('GDTF 3D:', err.message);
       }
       return chooseModeAndImportGeneric(app, {
         title: `${ft.attrs.Manufacturer || ''} ${ft.attrs.LongName || ft.attrs.Name || name}`.trim(),
         modes: listGdtfModes(ft),
-        convert: (i) => ({ ...gdtfToProfile(ft, i), ...extra }),
+        convert: (i) => ({ ...gdtfToProfile(ft, i, { goboFiles }), ...extra }),
       });
     }
     const text = await file.text();

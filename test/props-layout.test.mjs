@@ -23,6 +23,17 @@ test('crowd: no overlaps, inside the area, realistic heights, same seed = same c
   assert.ok(kids.every((g) => g.height <= 1.85 * 0.8 + 1e-9));
 });
 
+test('crowd: density packs the same guests into a smaller group', () => {
+  const extent = (pts) => Math.max(...pts.map((g) => Math.abs(g.x))) + Math.max(...pts.map((g) => Math.abs(g.z)));
+  const params = { width: 12, depth: 8, count: 40, size: 1 };
+  const few = crowdLayout({ ...params, density: 1 }, 5);
+  const many = crowdLayout({ ...params, density: 3 }, 5);
+  assert.strictEqual(few.length, 40);
+  assert.strictEqual(many.length, 40);
+  assert.ok(extent(many) < extent(few) * 0.7);
+  assert.ok(minDist(many) >= CROWD_MIN_SPACING - 1e-9);
+});
+
 test('crowd: too many people relax the spacing, then the crowd is capped', () => {
   const packed = crowdLayout({ width: 6, depth: 6, count: 60, density: 1, size: 1 }, 3);
   assert.strictEqual(packed.length, 60);

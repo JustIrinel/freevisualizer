@@ -532,7 +532,7 @@ function renderGroupInspector(app, el) {
     movePad(app),
     h('details', { class: 'exact' }, h('summary', {}, tr('Poziția grupului (mijlocul)')), centre),
     commonParams ? h('h4', {}, tr('Dimensiuni (pentru toate)')) : null,
-    commonParams ? h('div', { class: 'grid2' }, Object.entries(commonParams).map(([k, v]) => field(PARAM_LABELS()[k] || k, numberInput(v, (nv) => app.updateItems(props.map((p) => p.id), (p) => ({ params: { ...p.params, [k]: nv } }), { rebuild: true }), { min: 0, step: k === 'count' ? 1 : 0.1 })))) : null,
+    commonParams ? h('div', { class: 'grid2' }, Object.entries(commonParams).map(([k, v]) => field(PARAM_LABELS()[k] || k, paramInput(sameType, k, v, (nv) => app.updateItems(props.map((p) => p.id), (p) => ({ params: { ...p.params, [k]: nv } }), { rebuild: true }))))) : null,
     moving.length ? h('div', { class: 'grid2' },
       h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertPan), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertPan: v }))), tr('Inversează pan')),
       h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertTilt), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertTilt: v }))), tr('Inversează tilt'))) : null,

@@ -75,3 +75,12 @@ test('SoundSwitch placement: movers on the truss, left (stânga) to right (dreap
   const mover = placed.find((it) => it.fx.name === 'Panther CH1 POZ 1 STANGA');
   assert.deepStrictEqual(mover.rotation, { x: 180, y: 0, z: 0 });
 });
+
+test('SoundSwitch "Gobo Rotation" (type 26) becomes a gobo rotation channel', () => {
+  const p = parseSoundSwitchVenues(bin);
+  const spot = ssProfile(p.definitions.find((d) => d.name.startsWith('Intimidator')), 1);
+  const rot = spot.channels.find((c) => c.label === 'Gobo Rotation');
+  assert.ok(rot);
+  assert.strictEqual(rot.type, 'goboRot');
+  assert.ok(rot.ranges[0].stop && rot.ranges.some((r) => r.rotate === -1));
+});

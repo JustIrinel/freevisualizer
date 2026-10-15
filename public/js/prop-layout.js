@@ -9,24 +9,34 @@ export function seeded(seed) {
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-// Centre-to-centre distance between guests per density preset (1 = few, 2 = normal, 3 = packed).
+// Per density preset (1 = few, 2 = normal, 3 = packed): centre-to-centre distance between
+// guests and people per m². The crowd fills only the part of the area it needs, in the middle.
 export const CROWD_SPACING = { 1: 1.05, 2: 0.72, 3: 0.52 };
+export const CROWD_DENSITY = { 1: 0.45, 2: 1.0, 3: 2.2 };
 // Never closer than this (shoulders are ~0.34 m wide), even when the count does not fit.
 export const CROWD_MIN_SPACING = 0.44;
 export const PERSON_HEIGHT = 1.72; // height of the person model at scale 1
 
 /**
  * Guests on a width × depth area (centred on 0,0): no overlaps, Poisson-like rejection
- * sampling with the seeded RNG. When `count` does not fit at the preset spacing the
- * spacing is relaxed down to CROWD_MIN_SPACING; beyond that the crowd is capped.
+ * sampling with the seeded RNG. The density preset sets how much of the area they use
+ * (packed = a tight group in the middle). When `count` does not fit, the spacing is
+ * relaxed down to CROWD_MIN_SPACING and the group grows to the whole area; beyond that
+ * the crowd is capped.
  * Returns [{ x, z, heading, height, girth, dress }] (heading in radians, height in metres).
  */
 export function crowdLayout(params, seed = 7) {
-  const width = Math.max(0.5, Number(params.width) || 0);
-  const depth = Math.max(0.5, Number(params.depth) || 0);
+  let width = Math.max(0.5, Number(params.width) || 0);
+  let depth = Math.max(0.5, Number(params.depth) || 0);
   const count = clamp(Math.round(Number(params.count) || 0), 1, 600);
   const size = clamp(Number(params.size) || 1, 0.8, 1.1);
-  const preset = CROWD_SPACING[Math.round(clamp(Number(params.density) || 2, 1, 3))];
+  const level = Math.round(clamp(Number(params.density) || 2, 1, 3));
+  const preset = CROWD_SPACING[level];
+  // Occupied part of the area: count / (people per m²), same proportions, never bigger than the area.
+  const k = Math.min(1, Math.sqrt(count / (CROWD_DENSITY[level] / (size * size)) / (width * depth)));
+  const fullW = width; const fullD = depth;
+  width = Math.max(Math.min(fullW, 1.2), fullW * k);
+  depth = Math.max(Math.min(fullD, 1.2), fullD * k);
   const rnd = seeded(seed);
   const minGap = CROWD_MIN_SPACING * size;
   let gap = Math.max(minGap, preset * size);
@@ -67,8 +77,12 @@ export function crowdLayout(params, seed = 7) {
       placed = true;
     }
     if (placed) continue;
-    if (gap <= minGap + 1e-9) break; // full: cap the crowd
-    gap = Math.max(minGap, gap * 0.92);
+    if (gap <= minGap + 1e-9) {
+      if (width >= fullW && depth >= fullD) break; // full: cap the crowd
+      // Use more of the area before giving up.
+      width = Math.min(fullW, width * 1.15); depth = Math.min(fullD, depth * 1.15);
+      gap = Math.max(minGap, preset * size);
+    } else gap = Math.max(minGap, gap * 0.92);
     cells = new Map();
     pts.forEach(index);
   }

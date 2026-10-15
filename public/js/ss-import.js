@@ -64,8 +64,12 @@ const TYPE = {
   1: 'dimmer', 2: 'colorWheel', 3: 'pan', 4: 'tilt', 7: 'prism', 8: 'gobo',
   14: 'red', 15: 'green', 16: 'blue', 87: 'white', 41: 'strobe', 60: 'fog',
 };
+// 26 = "Gobo Rotation" in SoundSwitch projects (ranges are not stored).
+const ROTATION_TYPE = 26;
 // Types that are known to have no visual effect (speed, reset, programs…).
-const NO_VISUAL = new Set([17, 20, 26, 82, 83, 84, 88]);
+const NO_VISUAL = new Set([17, 20, 82, 83, 84, 88]);
+// SoundSwitch does not store the rotation ranges: common layout (0–7 stop, CW, CCW).
+const SS_ROTATION = [{ from: 0, to: 7, stop: true }, { from: 8, to: 127, rotate: 1 }, { from: 128, to: 247, rotate: -1 }, { from: 248, to: 255, stop: true }];
 const FINE = { dimmer: 'dimmerFine', pan: 'panFine', tilt: 'tiltFine' };
 const COLOR_TYPES = new Set(['red', 'green', 'blue', 'white', 'amber', 'uv', 'lime', 'cyan', 'magenta', 'yellow', 'warmWhite', 'coldWhite']);
 
@@ -73,7 +77,7 @@ function typeByName(name) {
   const n = name.toLowerCase();
   const rules = [
     [/warm ?white/, 'warmWhite'], [/(cold|cool) ?white/, 'coldWhite'], [/amber/, 'amber'], [/\buv\b|ultra ?violet/, 'uv'],
-    [/lime/, 'lime'], [/cyan/, 'cyan'], [/magenta/, 'magenta'], [/yellow/, 'yellow'], [/zoom/, 'zoom'],
+    [/lime/, 'lime'], [/cyan/, 'cyan'], [/magenta/, 'magenta'], [/yellow/, 'yellow'], [/zoom/, 'zoom'], [/frost/, 'frost'],
     [/fog|smoke|haze/, 'fog'], [/^(dimmer|intensity|master dimmer)$/, 'dimmer'], [/^red$/, 'red'], [/^green$/, 'green'],
     [/^blue$/, 'blue'], [/^white$/, 'white'], [/^pan$/, 'pan'], [/^tilt$/, 'tilt'], [/shutter|strobe/, 'strobe'],
   ];
@@ -419,6 +423,7 @@ function strobeRanges(ranges) {
 
 function convertAttribute(a, def) {
   let type = TYPE[a.type];
+  if (a.type === ROTATION_TYPE) type = /prism/i.test(a.name) ? 'prismRot' : 'goboRot';
   if (!type) type = NO_VISUAL.has(a.type) ? 'none' : typeByName(a.name);
   const out = { type, label: a.name };
   if (type === 'strobe') out.ranges = strobeRanges(a.ranges);
@@ -429,6 +434,7 @@ function convertAttribute(a, def) {
   }
   if (type === 'gobo') out.ranges = goboRanges(8);
   if (type === 'prism') out.ranges = [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }];
+  if (type === 'goboRot' || type === 'prismRot') out.ranges = SS_ROTATION.map((r) => ({ ...r }));
   return out;
 }
 

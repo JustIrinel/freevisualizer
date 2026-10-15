@@ -34,11 +34,40 @@ function nearestWheel(channel, rgb) {
   return best ? Math.round((best.from + best.to) / 2) : 0;
 }
 
-function goboValue(channel, idx) {
+function goboValue(channel, idx, spin = false) {
+  // A wheel whose ranges also rotate the gobo (no separate rotation channel).
+  const spinning = spin ? (channel.ranges || []).filter((r) => r.gobo > 0 && typeof r.rotate === 'number') : [];
+  if (spinning.length) return at(spinning[idx % spinning.length], 0.35);
   const list = (channel.ranges || []).filter((r) => r.gobo != null && !r.shake && !r.rotate);
   if (!list.length) return 0;
   const r = list[idx % list.length];
   return Math.round((r.from + r.to) / 2);
+}
+
+const at = (r, k) => Math.round(r.from + (r.to - r.from) * Math.max(0, Math.min(1, k)));
+
+/** Rotation channel: dir ±1 at speed k (0 slow … 1 fast); 0 = stopped (index 0 / stop range). */
+function rotationValue(channel, dir, k = 0.3) {
+  const ranges = channel.ranges || [];
+  if (!ranges.length) return dir ? Math.round(8 + 247 * k) : 0;
+  if (!dir) {
+    const r = ranges.find((x) => x.index) || ranges.find((x) => x.stop);
+    return r ? r.from : 0;
+  }
+  const r = ranges.find((x) => Math.sign(x.rotate) === dir) || ranges.find((x) => typeof x.rotate === 'number');
+  if (!r) return 0;
+  return at(r, r.fastToSlow ? 1 - k : k);
+}
+
+/** Prism channel: the range closest to `facets` (0 = prism out). */
+function prismValue(channel, facets) {
+  const ranges = channel.ranges || [];
+  if (!ranges.length) return facets ? 255 : 0;
+  if (!facets) { const off = ranges.find((r) => !r.prism); return off ? off.from : 0; }
+  const list = ranges.filter((r) => r.prism > 0 && !r.rotate);
+  if (!list.length) return 0;
+  list.sort((a, b) => Math.abs(a.prism - facets) - Math.abs(b.prism - facets));
+  return at(list[0], 0.5);
 }
 
 /** Retro heads: slow warm waves, a chase on the beat, full glow on the drop. */
@@ -71,6 +100,8 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
     const n = total;
     const k = index / n;
     let rgb; let dim; let strobe = 0; let panT; let tiltT; let gobo = 0;
+    // Beam shaping: gobo rotation (dir, speed), second wheel, prisms, frost.
+    let goboSpin = 0; let goboSpeed = 0.3; let gobo2 = 0; let prism = 0; let prismSpin = 0; let prismSpeed = 0.3; let prism2 = 0; let frost = 0;
     const moverIdx = movers.findIndex((m) => m.fixture === fixture);
     const side = moverIdx % 2 === 0 ? 1 : -1;
 
@@ -88,6 +119,10 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
         panT = 0.5 + side * (0.08 + 0.06 * Math.sin(time * 0.6));
         tiltT = 0.58 + 0.15 * Math.sin(time * 0.5 + side);
         gobo = 2 + (bar % 3);
+        goboSpin = side; goboSpeed = 0.35;
+        gobo2 = bar % 2 ? 0 : 1 + (bar % 3);
+        // Every other bar the prism goes in and turns slowly.
+        if (bar % 2) { prism = 3; prismSpin = -side; prismSpeed = 0.2; }
         break;
       case 2: // warm ballad
         rgb = [1, 0.55 + 0.1 * Math.sin(time + index), 0.15];
@@ -95,6 +130,9 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
         panT = 0.5 + 0.1 * Math.sin(time * 0.3 + moverIdx);
         tiltT = 0.66 + 0.04 * Math.cos(time * 0.4 + moverIdx);
         gobo = 1;
+        goboSpin = 1; goboSpeed = 0.08;
+        frost = profile.style === 'spot' ? 0.35 : 0;
+        if ((bar % 8) >= 6) { prism2 = 4; prismSpin = 1; prismSpeed = 0.1; }
         break;
       default: { // drop: white strobes + fast chase
         const drop = (bar % 4) === 3;
@@ -106,6 +144,8 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
         panT = 0.5 + 0.22 * Math.sin(time * 2.2 + moverIdx * 1.3);
         tiltT = 0.6 + 0.1 * Math.cos(time * 2.2 + moverIdx * 1.3);
         gobo = 0;
+        // Between the drops the beams fan out through a fast-turning prism.
+        if (!drop && profile.style === 'beam') { prism = 8; prismSpin = side; prismSpeed = 0.75; }
       }
     }
 
@@ -143,13 +183,20 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
         case 'yellow': v = (1 - col[2]) * 255; break;
         case 'strobe': v = strobe ? strobeValue(c, strobe) : (profile.kind === 'strobe' ? openValue(c) : openValue(c)); break;
         case 'colorWheel': v = nearestWheel(c, rgb); break;
-        case 'gobo': v = goboValue(c, gobo); break;
+        case 'gobo': v = goboValue(c, gobo, !!goboSpin && !profile.channels.some((x) => x.type === 'goboRot')); break;
+        case 'gobo2': v = goboValue(c, gobo2); break;
+        case 'goboRot': v = rotationValue(c, goboSpin, goboSpeed); break;
+        case 'gobo2Rot': v = rotationValue(c, -goboSpin, goboSpeed); break;
+        case 'prismRot': v = rotationValue(c, prismSpin, prismSpeed); break;
+        case 'prism2Rot': v = rotationValue(c, -prismSpin, prismSpeed); break;
+        case 'frost': v = frost * 255; break;
         case 'pan': v = Math.floor(panT * 65535) >> 8; break;
         case 'panFine': v = Math.floor(panT * 65535) & 255; break;
         case 'tilt': v = Math.floor(tiltT * 65535) >> 8; break;
         case 'tiltFine': v = Math.floor(tiltT * 65535) & 255; break;
         case 'zoom': v = profile.kind === 'laser' ? 90 + 60 * Math.sin(time * 0.4) : scene === 2 ? 220 : 60; break;
-        case 'prism': v = 0; break;
+        case 'prism': v = prismValue(c, prism); break;
+        case 'prism2': v = prismValue(c, prism2); break;
         case 'fog': v = profile.kind === 'lowfog' ? (scene === 2 ? 255 : 0) : fog * 255; break;
         case 'sparkHeight': case 'sparkFire': v = sparks ? 255 : 0; break;
         case 'laserPattern': v = ((bar >> 1) % 5) * 52 + 10; break;
