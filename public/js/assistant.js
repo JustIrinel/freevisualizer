@@ -6,6 +6,7 @@ import { KINDS, uid } from './profiles.js';
 import { nextFreeAddress } from './project.js';
 import { oflToProfile, listModes } from './ofl-import.js';
 import { aimRotation } from './aim.js';
+import { tripodParams, tripodMount, caseMount, spreadOver } from './prop-layout.js';
 import { tr, tp } from './i18n.js';
 
 const MAX_STEPS = 14;
@@ -49,7 +50,7 @@ function getRig(app) {
       return {
         id: f.id, name: f.name, profile: `${prof.manufacturer ? `${prof.manufacturer} ` : ''}${prof.name}`, kind: prof.kind,
         universe: f.universe, address: f.address, channels: prof.channels.length,
-        position: f.position, rotation: f.rotation,
+        position: f.position, rotation: f.rotation, ...(f.locked ? { locked: true } : {}),
       };
     }),
     objects: p.props.map((o) => ({ id: o.id, type: o.type, name: o.name, position: o.position, rotation: o.rotation, params: o.params })),
@@ -112,6 +113,15 @@ export function placementFor(app, n, placement) {
       if (!t) throw new Error(tr('Nu există truss în scenă. Folosește alt surface.'));
       const half = ((t.params?.length || 6) / 2) * 0.85;
       return line(t.position.x, half).map((x) => ({ position: v(x, t.position.y - 0.17, t.position.z), rotation: { x: 180, y: 0, z: 0 } }));
+    }
+    case 'stand': case 'case': {
+      // Spread over the tripods / cases (or only the one named in truss_id), left to right.
+      const type = surface === 'stand' ? 'tripod' : 'case';
+      let targets = app.project.props.filter((o) => o.type === type);
+      if (placement.truss_id) targets = targets.filter((o) => o.id === placement.truss_id || o.name === placement.truss_id);
+      if (!targets.length) throw new Error(surface === 'stand' ? tr('Nu există stative trepied în scenă. Adaugă unul sau folosește alt surface.') : tr('Nu există caseuri în scenă. Adaugă unul sau folosește alt surface.'));
+      const lengthOf = (o) => (surface === 'stand' ? tripodParams(o.params).bar : Math.max(0, (o.params?.width || 1.2) - 0.3));
+      return spreadOver(targets, n, lengthOf).map(({ target, offset }) => (surface === 'stand' ? tripodMount(target, offset) : caseMount(target, offset)));
     }
     case 'floor_back_wall':
       return line(0, Math.min(w / 2 - 1.5, Math.max(2, n * 1.2))).map((x) => ({ position: v(x, 0, -d / 2 + 0.4), rotation: { x: -12, y: 0, z: 0 } }));
@@ -182,7 +192,11 @@ function idsFrom(app, list) {
 }
 
 function moveFixtures(app, input) {
-  const { ids, missing } = idsFrom(app, input.fixture_ids);
+  const found = idsFrom(app, input.fixture_ids);
+  const missing = found.missing;
+  const locked = found.ids.filter((id) => app.isLocked(id));
+  const ids = found.ids.filter((id) => !app.isLocked(id));
+  if (!ids.length) throw new Error('These fixtures are locked by the user (🔒). Ask the user to unlock them first.');
   const target = input.aim_at;
   app.updateItems(ids, (it) => {
     const patch = {};
@@ -197,13 +211,16 @@ function moveFixtures(app, input) {
     patch.rotation = { x: Math.round(rot.x), y: Math.round(rot.y), z: Math.round(rot.z) };
     return patch;
   });
-  return { moved: ids.length, ...(missing.length ? { not_found: missing } : {}) };
+  return { moved: ids.length, ...(missing.length ? { not_found: missing } : {}), ...(locked.length ? { locked_not_moved: locked } : {}) };
 }
 
 function removeFixtures(app, input) {
-  const { ids, missing } = idsFrom(app, input.fixture_ids);
+  const found = idsFrom(app, input.fixture_ids);
+  const locked = found.ids.filter((id) => app.isLocked(id));
+  const ids = found.ids.filter((id) => !app.isLocked(id));
+  if (!ids.length) throw new Error('These fixtures are locked by the user (🔒). Ask the user to unlock them first.');
   app.removeItems(ids);
-  return { removed: ids.length, ...(missing.length ? { not_found: missing } : {}) };
+  return { removed: ids.length, ...(found.missing.length ? { not_found: found.missing } : {}), ...(locked.length ? { locked_not_removed: locked } : {}) };
 }
 
 export async function runTool(app, name, input) {
@@ -226,6 +243,20 @@ const TOOL_LABEL = {
 };
 
 // ------------------------------------------------------------------ panel
+// The assistant is optional (it needs a paid Anthropic key): the ✨ button shows
+// only when it is switched on in Settings. Unset = on if a key is already saved.
+const VIS_KEY = 'freevis.assistant.v1';
+
+export function assistantPreference() {
+  try { return localStorage.getItem(VIS_KEY); } catch (_) { return null; }
+}
+
+export function setAssistantVisible(on) {
+  try { localStorage.setItem(VIS_KEY, on ? 'on' : 'off'); } catch (_) { /* storage blocked */ }
+  document.getElementById('assistantBtn')?.classList.toggle('hidden', !on);
+  if (!on) window.freevis?.assistant?.toggle(false);
+}
+
 export class AssistantPanel {
   constructor(app) {
     this.app = app;
@@ -244,6 +275,18 @@ export class AssistantPanel {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
     });
     this.input.addEventListener('keyup', (e) => e.stopPropagation());
+    this.applyVisibility();
+  }
+
+  async applyVisibility() {
+    const btn = document.getElementById('assistantBtn');
+    const pref = assistantPreference();
+    if (pref) { btn?.classList.toggle('hidden', pref !== 'on'); return; }
+    btn?.classList.add('hidden');
+    try {
+      const st = await (await fetch('/api/assistant/status')).json();
+      btn?.classList.toggle('hidden', !st.configured);
+    } catch (_) { /* server offline: keep it hidden */ }
   }
 
   async toggle(force) {
@@ -355,7 +398,7 @@ function setupForm(panel) {
   const model = h('select', {}, Object.entries(panel.status.models || {}).map(([id, label]) => h('option', { value: id, selected: id === panel.status.model }, label)));
   const save = h('button', { class: 'primary', onclick: async () => {
     const res = await fetch('/api/assistant/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: key.value, model: model.value }) });
-    if (res.ok) { toast(tr('Cheia a fost salvată pe acest calculator.')); panel.refreshStatus(); }
+    if (res.ok) { toast(tr('Cheia a fost salvată pe acest calculator.')); setAssistantVisible(true); panel.refreshStatus(); }
   } }, tr('Salvează'));
   for (const el of [key]) el.addEventListener('keydown', (e) => e.stopPropagation());
   return h('div', { class: 'form' },

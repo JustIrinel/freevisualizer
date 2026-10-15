@@ -232,3 +232,14 @@ details.exact summary { cursor: pointer; color: var(--muted); font-size: 12px; m
 .lang-btn { display: inline-flex; gap: 0; padding: 0; overflow: hidden; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
 .lang-btn span { padding: 5px 7px; color: var(--muted); }
 html[lang="ro"] .lang-btn [data-lang="ro"], html[lang="en"] .lang-btn [data-lang="en"] { background: var(--accent); color: #fff; }
+
+/* Hover label in the scene, lock and groups */
+.hover-tip { position: absolute; display: none; pointer-events: none; z-index: 6; padding: 3px 8px; border-radius: 6px; font-size: 12px; background: rgba(12, 12, 18, .85); border: 1px solid rgba(255, 255, 255, .25); color: #fff; white-space: nowrap; }
+.hover-tip.locked { border-color: #ff4d5e; color: #ffb3bb; }
+.lock-icon { cursor: pointer; font-size: 11px; margin-left: 4px; }
+.lock-btn { width: 100%; margin: 6px 0; }
+.lock-btn.on { border-color: #ff4d5e; color: #ffb3bb; background: rgba(255, 77, 94, .12); }
+.group-row .name { font-weight: 600; }
+.icon.mini { padding: 1px 5px; font-size: 11px; min-width: 0; }
+.group-head { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin: 6px 0; }
+.group-make { width: 100%; margin: 6px 0; }

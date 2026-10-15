@@ -12,6 +12,7 @@ import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
 import { importSoundSwitch, venuesFromZip, soundSwitchImportDialog } from './ss-dialog.js';
 import { loadBrand, saveBrand } from './recorder.js';
+import { assistantPreference, setAssistantVisible } from './assistant.js';
 import { tr, tp, lang, LANGS, setLang } from './i18n.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
@@ -723,15 +724,24 @@ export async function settingsDialog(app) {
 async function assistantSettings() {
   let st = { configured: false, models: {}, model: 'claude-opus-5-5' };
   try { st = await (await fetch('/api/assistant/status')).json(); } catch (_) { /* offline */ }
+  const pref = assistantPreference();
+  const show = h('input', { type: 'checkbox', checked: pref ? pref === 'on' : st.configured });
+  show.addEventListener('change', () => setAssistantVisible(show.checked));
   const key = h('input', { type: 'password', placeholder: st.configured ? tr('•••••••• (cheie salvată)') : 'sk-ant-…', autocomplete: 'off' });
   key.addEventListener('keydown', (e) => e.stopPropagation());
   const model = h('select', {}, Object.entries(st.models || {}).map(([id, label]) => h('option', { value: id, selected: id === st.model }, label)));
   const msg = h('span', { class: 'muted small' }, st.configured ? (st.source === 'env' ? tr('Cheie din variabila ANTHROPIC_API_KEY.') : tr('Cheie salvată pe acest calculator.')) : tr('Nicio cheie salvată.'));
   const post = async (body, text) => {
     const res = await fetch('/api/assistant/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) { msg.textContent = text; key.value = ''; }
+    if (res.ok) {
+      msg.textContent = text;
+      if (body.apiKey) { show.checked = true; setAssistantVisible(true); }
+      key.value = '';
+    }
   };
   return h('div', { class: 'form' },
+    h('div', { class: 'muted small' }, tr('Opțional. Asistentul scrie pentru tine („pune 4 beam-uri pe truss”) folosind Claude de la Anthropic, cu cheia ta API, plătită după consum. Tot ce face se poate face și manual, gratuit.')),
+    h('label', { class: 'inline' }, show, tr('Arată butonul ✨ Asistent în bara de sus')),
     h('div', { class: 'grid2' }, field(tr('Cheie API'), key), field('Model', model)),
     h('div', { class: 'row' },
       h('button', { onclick: () => post({ ...(key.value ? { apiKey: key.value } : {}), model: model.value }, tr('Salvat.')) }, tr('Salvează')),

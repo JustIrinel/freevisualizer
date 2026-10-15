@@ -27,6 +27,7 @@ How to work:
 - DMX: the universe, start address and mode must match the DMX patch in SoundSwitch. If the user does not give them, use the next free addresses and the mode the user names (or the largest mode), and say which mode and addresses you used so they can match SoundSwitch.
 - Coordinates are metres, viewed from the audience: x = left (−) / right (+), y = height, z = towards the audience (+) / towards the back wall and the DJ (−). The floor is y = 0.
 - Rotations are degrees. A fixture standing on the floor (rotation 0,0,0) shines up; hanging under a truss is x = 180; x = 90 points it at the audience.
+- Mobile DJs often put lights on tripod stands with a T-bar (objects of type "tripod") or on road cases (type "case"): use add_fixtures surface "stand" / "case" for those.
 - Do what was asked, then say in one or two sentences what you changed. If something is ambiguous and getting it wrong would make a mess (for example deleting fixtures), ask first.`;
 
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
@@ -66,8 +67,8 @@ const TOOLS = [
         placement: {
           type: 'object', additionalProperties: false, required: ['surface', 'truss_id', 'position', 'spacing'],
           properties: {
-            surface: { type: 'string', enum: ['truss', 'floor_front', 'floor_back_wall', 'left_wall', 'right_wall', 'booth', 'ceiling', 'position'] },
-            truss_id: nullable({ type: 'string', description: 'Which truss (from get_rig); null = the main truss' }),
+            surface: { type: 'string', enum: ['truss', 'stand', 'case', 'floor_front', 'floor_back_wall', 'left_wall', 'right_wall', 'booth', 'ceiling', 'position'], description: '"stand" = on the T-bars of the tripod stands, "case" = on top of the road cases (fixtures are spread over all of them, left to right)' },
+            truss_id: nullable({ type: 'string', description: 'Target object id (from get_rig): which truss, tripod stand or case; null = the main truss / all stands / all cases' }),
             position: vec('Start point for surface "position" (or to override the default start)'),
             spacing: nullable({ type: 'number', description: 'Metres between fixtures; null = spread evenly' }),
           },

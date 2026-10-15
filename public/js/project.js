@@ -1,6 +1,7 @@
 // Project model: fixtures, props, room, custom profiles and view settings.
 import { uid } from './profiles.js';
 import { tr } from './i18n.js';
+import { pruneGroups } from './groups.js';
 
 export const PROJECT_VERSION = 1;
 export const AUTOSAVE_KEY = 'freevis.autosave.v1';
@@ -18,6 +19,7 @@ export function emptyProject(name = tr('Proiect nou')) {
     profiles: [],
     fixtures: [],
     props: [],
+    groups: [],
     camera: null,
   };
 }
@@ -48,7 +50,7 @@ export function demoProject() {
     prop('speaker', tr('Boxă stânga'), v(-2.4, 0, -6.2)),
     prop('speaker', tr('Boxă dreapta'), v(2.4, 0, -6.2)),
     prop('screen', tr('Ecran LED'), v(0, 1.4, -9.85), v(0, 0, 0), { width: 4, height: 2.25 }),
-    prop('crowd', tr('Invitați'), v(0, 0, 1.5), v(0, 0, 0), { width: 12, depth: 8, count: 70 }),
+    prop('crowd', tr('Invitați'), v(0, 0, 1.5), v(0, 0, 0), { width: 12, depth: 8, count: 45 }),
   );
 
   const hang = v(180, 0, 0);
@@ -89,7 +91,7 @@ export function weddingProject() {
     prop('speaker', tr('Boxă stânga'), v(-4.6, 0, -8.6)),
     prop('speaker', tr('Boxă dreapta'), v(4.6, 0, -8.6)),
     prop('dancefloor', tr('Ring de dans'), v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
-    prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 40 }),
+    prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 24 }),
     prop('headtable', tr('Masa mirilor'), v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),
     prop('mirrorball', tr('Glob disco'), v(0, 4.4, -3.5), v(0, 0, 0), { diameter: 0.5, drop: 0.6, rpm: 2 }),
   );
@@ -140,6 +142,8 @@ export function normalizeProject(raw) {
     invertPan: false, invertTilt: false, position: v(0, 0, 0), rotation: v(0, 0, 0), universe: 1, address: 1, ...f, id: f.id || uid('fx'),
   }));
   p.props = (Array.isArray(p.props) ? p.props : []).map((x) => ({ position: v(0, 0, 0), rotation: v(0, 0, 0), params: {}, ...x, id: x.id || uid('pr') }));
+  p.groups = (Array.isArray(p.groups) ? p.groups : []).filter((g) => g && g.id).map((g) => ({ id: g.id, name: g.name || g.id }));
+  pruneGroups(p);
   p.version = PROJECT_VERSION;
   return p;
 }

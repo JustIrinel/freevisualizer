@@ -11,6 +11,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildVenue } from './venue3d.js';
 import { createFixtureModel, roomUniforms } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
+import { tripodParams, tripodMount, caseTop } from './prop-layout.js';
 import { tr } from './i18n.js';
 
 const MAX_LIGHTS = 40;
@@ -64,6 +65,8 @@ export class Visualizer {
     this.onTransformStart = () => {};
     this.onTransformEnd = () => {};
     this.onGizmoInfo = () => {};   // (text | null) – live position / rotation readout
+    this.hoverInfo = () => null;   // (id) → { ids, locked, label } for the hover highlight
+    this.lockedIds = new Set();
     this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true };
     this.lightsUsed = 0;
     this.fogLevel = 0;
@@ -92,6 +95,8 @@ export class Visualizer {
     renderer.domElement.addEventListener('pointerdown', (e) => this._onPointerDown(e), { capture: true });
     renderer.domElement.addEventListener('pointermove', (e) => this._onPointerMove(e));
     renderer.domElement.addEventListener('pointerup', (e) => this._onPointerUp(e));
+    renderer.domElement.addEventListener('dblclick', (e) => this._onDoubleClick(e));
+    renderer.domElement.addEventListener('pointerleave', () => this._setHover(null));
 
     this.orbit = new OrbitControls(this.camera, renderer.domElement);
     this.orbit.target.set(0, 1.8, 0);
@@ -112,7 +117,7 @@ export class Visualizer {
       if (e.value) {
         this._dragStart = {
           pivot: this.pivot.matrix.clone(),
-          members: this.selectedIds.filter((id) => this.objects.has(id)).map((id) => ({ id, matrix: this.objects.get(id).model.root.matrix.clone() })),
+          members: this._movableIds().map((id) => ({ id, matrix: this.objects.get(id).model.root.matrix.clone() })),
         };
         this.onTransformStart(this.selectedIds);
       } else {
@@ -370,14 +375,35 @@ export class Visualizer {
       this.scene.add(helper, arrow);
       this.selHelpers.push({ box, helper, arrow });
     }
-    this.selHelpers.forEach((h, i) => { h.helper.visible = i < this.selectedIds.length; h.arrow.visible = false; });
+    this.selHelpers.forEach((h, i) => {
+      h.helper.visible = i < this.selectedIds.length;
+      h.arrow.visible = false;
+      // Locked objects get a red box.
+      if (h.helper.visible) h.helper.material.color.set(this.lockedIds.has(this.selectedIds[i]) ? 0xff4d5e : 0x4da3ff);
+    });
     this._updateSelectionHelpers();
     this._attachGizmo();
   }
 
+  /** Ids of locked objects: they get no gizmo and a red outline. */
+  setLocked(ids) {
+    this.lockedIds = new Set(ids);
+  }
+
+  _movableIds() {
+    return this.selectedIds.filter((id) => this.objects.has(id) && !this.lockedIds.has(id));
+  }
+
   _attachGizmo() {
-    const ids = this.selectedIds;
-    if (!ids.length) { this.transform.detach(); return; }
+    const ids = this._movableIds();
+    if (!ids.length) {
+      this.transform.detach();
+      if (this.selectedIds.length) this.onGizmoInfo(tr('🔒 Blocat – apasă K sau 🔓 în inspector ca să-l poți muta'));
+      else this.onGizmoInfo(null);
+      return;
+    }
+    if (ids.length < this.selectedIds.length) this.onGizmoInfo(tr('🔒 Obiectele blocate rămân pe loc'));
+    else this.onGizmoInfo(null);
     if (ids.length === 1) {
       this.transform.attach(this.objects.get(ids[0]).model.root);
     } else {
@@ -395,11 +421,11 @@ export class Visualizer {
 
   /** A single object rotates around its own axes; moving stays aligned with the room. */
   _applySpace() {
-    this.transform.setSpace(this.transform.mode === 'rotate' && this.selectedIds.length === 1 ? 'local' : 'world');
+    this.transform.setSpace(this.transform.mode === 'rotate' && this._movableIds().length === 1 ? 'local' : 'world');
   }
 
   _onGizmoChange() {
-    const ids = this.selectedIds;
+    const ids = this._movableIds();
     if (!ids.length) return;
     if (ids.length > 1 && this._dragStart) {
       // Apply the pivot's change since the drag started to every member.
@@ -554,6 +580,28 @@ export class Visualizer {
       const dist = pt.distanceTo(this.raycaster.ray.origin);
       if (!best || dist < best.dist) best = { dist, pt, o };
     }
+    // Tripod stands: snap onto the T-bar (or the top plate), Alt = hang under the bar.
+    let stand = null;
+    for (const o of props) {
+      if (o.data.type !== 'tripod') continue;
+      const { height, bar } = tripodParams(o.data.params);
+      const inv = o.model.root.matrixWorld.clone().invert();
+      const ray = this.raycaster.ray.clone().applyMatrix4(inv);
+      const half = bar > 0 ? bar / 2 : 0;
+      const box = new THREE.Box3(new THREE.Vector3(-half - 0.1, height - 0.45, -0.14), new THREE.Vector3(half + 0.1, height + 0.22, 0.14));
+      const pt = ray.intersectBox(box, new THREE.Vector3());
+      const own = hit && this._objectIdOf(hit.object) === o.data.id;
+      if (!pt && !own) continue;
+      const dist = pt ? pt.applyMatrix4(o.model.root.matrixWorld).distanceTo(this.raycaster.ray.origin) : hit.distance;
+      if (stand && dist >= stand.dist) continue;
+      const onBar = new THREE.Vector3();
+      ray.distanceSqToSegment(new THREE.Vector3(-half, height, 0), new THREE.Vector3(half, height, 0), null, onBar);
+      stand = { dist, o, offset: Number.isFinite(onBar.x) ? onBar.x : 0 };
+    }
+    if (stand && (!hit || stand.dist <= hit.distance + 0.3) && (!best || stand.dist <= best.dist)) {
+      const at = tripodMount(stand.o.data, stand.offset, !!(e && e.altKey));
+      return { surface: 'stand', position: at.position, rotation: at.rotation };
+    }
     if (best && (!hit || best.dist <= hit.distance + 0.3)) {
       const tp = best.o.model.root.position;
       const horizontal = Math.abs(best.o.model.root.rotation.z) < 0.3;
@@ -565,6 +613,10 @@ export class Visualizer {
     const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
     const propId = this._objectIdOf(hit.object);
     const prop = propId ? this.objects.get(propId) : null;
+    // Road case lid: exact height (also for stacked cases), whatever part of the lid was hit.
+    if (n.y > 0.7 && prop && prop.data.type === 'case' && Math.abs(prop.data.rotation?.x || 0) < 1 && Math.abs(prop.data.rotation?.z || 0) < 1) {
+      return { surface: 'case', position: v(hit.point.x, caseTop(prop.data), hit.point.z), rotation: { x: 0, y: 0, z: 0 } };
+    }
     if (n.y > 0.7) return { surface: prop ? 'top' : 'floor', position: v(hit.point.x, hit.point.y, hit.point.z), rotation: { x: 0, y: 0, z: 0 } };
     if (n.y < -0.7) return { surface: 'ceiling', position: v(hit.point.x, hit.point.y - 0.05, hit.point.z), rotation: { x: 180, y: 0, z: 0 } };
     // Wall (or the side of an object): stand off 15 cm, light pointing into the room.
@@ -618,7 +670,16 @@ export class Visualizer {
   _onPointerMove(e) {
     if (this._placing) { this._updatePlacementGhost(e); return; }
     const m = this._marquee;
-    if (!m) return;
+    if (!m) {
+      // Hover highlight, at most once per frame and not while dragging.
+      if (e.buttons || this.transform.dragging || this.transform.axis || this._aim) { this._setHover(null); return; }
+      this._hoverEvent = e;
+      if (!this._hoverQueued) {
+        this._hoverQueued = true;
+        requestAnimationFrame(() => { this._hoverQueued = false; this._updateHover(this._hoverEvent); });
+      }
+      return;
+    }
     const rect = this.container.getBoundingClientRect();
     m.x1 = e.clientX - rect.left;
     m.y1 = e.clientY - rect.top;
@@ -677,9 +738,12 @@ export class Visualizer {
       if (hit) cb(hit.point.clone());
       return;
     }
+    this.onPick(this._pickId(), { toggle: e.ctrlKey || e.metaKey, shift: e.shiftKey, single: e.altKey });
+  }
+
+  /** Object under the raycaster. Fixtures win over props: a fixture hanging on a truss is picked even when the ray touches the truss first. */
+  _pickId() {
     const roots = [...this.objects.values()].map((o) => o.model.root);
-    // Fixtures win over props: a fixture hanging on a truss is picked even
-    // when the ray touches the truss first.
     let id = null;
     for (const h of this.raycaster.intersectObjects(roots, true)) {
       const hitId = this._objectIdOf(h.object);
@@ -687,7 +751,63 @@ export class Visualizer {
       if (this.objects.get(hitId)?.type === 'fixture') { id = hitId; break; }
       id ??= hitId;
     }
-    this.onPick(id, { toggle: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+    return id;
+  }
+
+  /** Double-click: just this object, even inside a group. */
+  _onDoubleClick(e) {
+    if (this._placing || this._aim) return;
+    this.raycaster.setFromCamera(this._ndc(e), this.camera);
+    const id = this._pickId();
+    if (id) this.onPick(id, { single: true });
+  }
+
+  _updateHover(e) {
+    if (!e || this._placing || this._marquee) { this._setHover(null); return; }
+    this.raycaster.setFromCamera(this._ndc(e), this.camera);
+    const id = this._pickId();
+    const info = id ? this.hoverInfo(id) : null;
+    this._setHover(info, e);
+  }
+
+  /** White box around the object (or its whole group) under the mouse; red when locked. */
+  _setHover(info, e) {
+    const canvas = this.renderer.domElement;
+    if (!info) {
+      if (this._hover) { this._hover.helper.visible = false; this._hover.tip.style.display = 'none'; }
+      canvas.style.cursor = '';
+      return;
+    }
+    if (!this._hover) {
+      const box = new THREE.Box3();
+      const helper = new THREE.Box3Helper(box, 0xffffff);
+      helper.raycast = () => {};
+      helper.material.transparent = true;
+      helper.material.depthTest = false;
+      helper.renderOrder = 19;
+      this.scene.add(helper);
+      const tip = document.createElement('div');
+      tip.className = 'hover-tip';
+      this.container.appendChild(tip);
+      this._hover = { box, helper, tip };
+    }
+    const h = this._hover;
+    h.box.makeEmpty();
+    for (const id of info.ids) {
+      const o = this.objects.get(id);
+      if (o) h.box.union(computeBounds(o.model.root, new THREE.Box3()));
+    }
+    h.box.expandByScalar(0.03);
+    h.helper.material.color.set(info.locked ? 0xff4d5e : 0xffffff);
+    h.helper.material.opacity = info.locked ? 0.95 : 0.7;
+    h.helper.visible = !h.box.isEmpty();
+    canvas.style.cursor = info.locked ? 'not-allowed' : 'pointer';
+    const rect = this.container.getBoundingClientRect();
+    h.tip.textContent = info.label;
+    h.tip.classList.toggle('locked', info.locked);
+    h.tip.style.display = 'block';
+    h.tip.style.left = `${e.clientX - rect.left + 14}px`;
+    h.tip.style.top = `${e.clientY - rect.top + 16}px`;
   }
 
   _objectIdOf(obj) {

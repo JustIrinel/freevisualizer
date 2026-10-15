@@ -8,6 +8,7 @@ import * as ssDialog from './ss-dialog.js';
 import { ROOM_STYLES } from './venue3d.js';
 import { recordDialog } from './recorder.js';
 import { tr, tp, lang, setLang } from './i18n.js';
+import { exactGroup, groupMembers } from './groups.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -184,12 +185,47 @@ export function showGizmoInfo(text) {
   el.classList.toggle('hidden', !text);
 }
 
+/** 🔒 in a list row: click to unlock (shown only for locked items). */
+function lockIcon(app, it) {
+  if (!it.locked) return null;
+  return h('span', { class: 'lock-icon', title: tr('Blocat – click ca să deblochezi'), onclick: (e) => { e.stopPropagation(); app.setLocked([it.id], false); } }, '🔒');
+}
+
+/** Groups that have members matching `filter`, above the list. */
+function renderGroupRows(app, list, filter) {
+  const all = [...app.project.fixtures, ...app.project.props];
+  const groups = (app.project.groups || []).filter((g) => all.some((it) => it.groupId === g.id && filter(it)));
+  if (!groups.length) return;
+  list.append(h('div', { class: 'group-title' }, tr('Grupuri')));
+  for (const g of groups) {
+    const ids = groupMembers(app.project, g.id);
+    const locked = ids.every((id) => app.isLocked(id));
+    const selected = ids.every((id) => app.selectedIds.includes(id));
+    list.append(h('div', { class: `item group-row ${selected ? 'selected' : ''}`, title: tr('Click: selectează tot grupul'), onclick: () => app.selectGroup(g.id) },
+      h('span', { class: 'name' }, `⛓ ${g.name}`),
+      h('span', { class: 'meta' }, String(ids.length)),
+      h('button', { class: 'icon mini', title: locked ? tr('Deblochează grupul') : tr('Blochează grupul'), onclick: (e) => { e.stopPropagation(); app.setLocked(ids, !locked); } }, locked ? '🔒' : '🔓'),
+      h('button', { class: 'icon mini', title: tr('Desfă grupul (obiectele rămân)'), onclick: (e) => { e.stopPropagation(); app.setSelection(ids); app.ungroupSelection(); } }, '✕')));
+  }
+}
+
+/** Big lock / unlock button for the inspector. */
+function lockButton(app, ids) {
+  const locked = ids.length && ids.every((id) => app.isLocked(id));
+  return h('button', {
+    class: `lock-btn ${locked ? 'on' : ''}`,
+    title: tr('Blocat = nu se mai poate muta sau roti din greșeală (tasta K)'),
+    onclick: () => app.setLocked(ids, !locked),
+  }, locked ? tr('🔒 Blocat · click ca să deblochezi') : tr('🔓 Blochează poziția (K)'));
+}
+
 function renderFixtureList(app) {
   const list = $('fixtureList');
   const q = $('fixtureFilter').value.toLowerCase().trim();
   const conflicts = app.conflicts();
   const fixtures = [...app.project.fixtures].sort((a, b) => a.universe - b.universe || a.address - b.address);
   list.innerHTML = '';
+  renderGroupRows(app, list, (it) => app.isFixture(it.id));
   let lastU = null;
   let shown = 0;
   for (const f of fixtures) {
@@ -211,6 +247,7 @@ function renderFixtureList(app) {
     },
     h('span', { class: 'swatch', 'data-swatch': f.id }),
     h('span', { class: 'name' }, f.name),
+    lockIcon(app, f),
     h('span', { class: 'meta' }, `${f.address}–${end}`)));
   }
   if (!app.project.fixtures.length) {
@@ -231,12 +268,13 @@ function renderFixtureList(app) {
 function renderPropList(app) {
   const list = $('propList');
   list.innerHTML = '';
+  renderGroupRows(app, list, (it) => !app.isFixture(it.id));
   for (const p of app.project.props) {
     list.append(h('div', {
       class: `item ${app.selectedIds.includes(p.id) ? 'selected' : ''}`,
       'data-id': p.id,
       onclick: (e) => listClick(app, p.id, e, () => app.project.props.map((x) => x.id)),
-    }, h('span', { class: 'name' }, p.name), h('span', { class: 'tag' }, (PROP_TYPES[p.type] || {}).label || p.type)));
+    }, h('span', { class: 'name' }, p.name), lockIcon(app, p), h('span', { class: 'tag' }, (PROP_TYPES[p.type] || {}).label || p.type)));
   }
   if (!app.project.props.length) list.append(h('div', { class: 'muted small' }, tr('Nimic adăugat.')));
 }
@@ -462,8 +500,29 @@ function renderGroupInspector(app, el) {
   const universe = numberInput(fixtures[0] ? fixtures[0].universe : 1, () => {}, { min: 1, max: 32768, integer: true });
   const start = numberInput(fixtures.length ? Math.min(...fixtures.map((f) => f.address)) : 1, () => {}, { min: 1, max: 512, integer: true });
   const totalCh = fixtures.reduce((s, f) => s + app.profile(f.profileId).channels.length, 0);
-  el.append(
-    h('h3', {}, tr('{n} elemente selectate', { n })),
+  const group = exactGroup(app.project, app.selectedIds);
+  let groupHead;
+  if (group) {
+    const nameInput = h('input', { value: group.name });
+    nameInput.addEventListener('change', () => app.renameGroup(group.id, nameInput.value.trim()));
+    groupHead = h('div', { class: 'form group-head' },
+      field(tr('Nume grup'), nameInput),
+      h('button', { title: 'Ctrl+Shift+G', onclick: () => app.ungroupSelection() }, tr('Desfă grupul')));
+  } else {
+    groupHead = h('button', { class: 'group-make', title: 'Ctrl+G', onclick: () => app.groupSelection() }, tr('⛓ Grupează selecția (Ctrl+G)'));
+  }
+  // Exact position of the whole selection (middle of the positions).
+  const mid = (axis) => { const v = items.map((it) => it.position[axis]); return Math.round(((Math.min(...v) + Math.max(...v)) / 2) * 100) / 100; };
+  const centre = h('div', { class: 'grid3' }, [['x', 'X (m)'], ['y', tr('Înălțime (m)')], ['z', 'Z (m)']].map(([axis, label]) => field(label, numberInput(mid(axis), (v) => app.moveSelectionCenterTo(axis, v), { step: 0.1 }))));
+  // Props of one type: edit their parameters together.
+  const props = items.filter((it) => !app.isFixture(it.id));
+  const sameType = props.length > 1 && props.length === n && props.every((p) => p.type === props[0].type) ? props[0].type : null;
+  const commonParams = sameType ? { ...(PROP_TYPES[sameType] || {}).params, ...props[0].params } : null;
+  const moving = fixtures.filter((f) => app.profile(f.profileId).kind === 'moving');
+  el.append(...[
+    h('h3', {}, group ? `⛓ ${group.name}` : tr('{n} elemente selectate', { n })),
+    groupHead,
+    lockButton(app, app.selectedIds),
     h('div', { class: 'sub' }, fixtures.length ? `${tp(fixtures.length, '1 fixtură', '{n} fixturi')} · ${tp(totalCh, '1 canal', '{n} canale')}` : tr('Elemente de scenă')),
     h('div', { class: 'list group-list' }, items.map((it) => h('div', { class: 'item' },
       h('span', { class: 'name' }, it.name),
@@ -471,6 +530,12 @@ function renderGroupInspector(app, el) {
       h('button', { class: 'icon', title: tr('Scoate din selecție'), onclick: () => app.toggleSelect(it.id) }, '✕')))),
     h('h4', {}, tr('Mută / rotește tot grupul')),
     movePad(app),
+    h('details', { class: 'exact' }, h('summary', {}, tr('Poziția grupului (mijlocul)')), centre),
+    commonParams ? h('h4', {}, tr('Dimensiuni (pentru toate)')) : null,
+    commonParams ? h('div', { class: 'grid2' }, Object.entries(commonParams).map(([k, v]) => field(PARAM_LABELS()[k] || k, numberInput(v, (nv) => app.updateItems(props.map((p) => p.id), (p) => ({ params: { ...p.params, [k]: nv } }), { rebuild: true }), { min: 0, step: k === 'count' ? 1 : 0.1 })))) : null,
+    moving.length ? h('div', { class: 'grid2' },
+      h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertPan), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertPan: v }))), tr('Inversează pan')),
+      h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertTilt), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertTilt: v }))), tr('Inversează tilt'))) : null,
     h('h4', {}, tr('Aliniază și distribuie')),
     h('div', { class: 'grid2' },
       h('button', { title: tr('Toate la aceeași înălțime ca ultimul selectat'), onclick: () => app.alignSelection('y') }, tr('Aceeași înălțime')),
@@ -497,7 +562,7 @@ function renderGroupInspector(app, el) {
     h('div', { class: 'grid2' },
       h('button', { onclick: () => app.duplicateMany(app.selectedIds) }, tr('Duplică grupul')),
       h('button', { class: 'danger', onclick: () => app.removeItems(app.selectedIds) }, tr('Șterge {n}', { n }))),
-  );
+  ].filter(Boolean));
 }
 
 export function renderInspector(app) {
@@ -510,7 +575,8 @@ export function renderInspector(app) {
     el.append(h('div', { class: 'inspector-empty' },
       h('p', {}, tr('Selectează o fixtură sau un element (click în scenă sau în listă).')),
       h('p', { class: 'small' }, tr('Mai multe deodată: Ctrl/Cmd+click, sau Shift + trage cu mouse-ul un dreptunghi în scenă. Ctrl/Cmd+A selectează toate fixturile.')),
-      h('p', { class: 'small' }, tr('Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere'))));
+      h('p', { class: 'small' }, tr('Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere')),
+      h('p', { class: 'small' }, tr('Grupuri și blocare: Ctrl+G grupează · Ctrl+Shift+G desface · Alt+click sau dublu-click = un singur obiect din grup · K blochează / deblochează'))));
     return;
   }
   if (app.selectedIds.length > 1) { renderGroupInspector(app, el); return; }
@@ -534,6 +600,7 @@ function renderFixtureInspector(app, el, f) {
       h('div', { class: 'muted small' }, tr('Canale {a}–{b} în universul {u}', { a: f.address, b: fixtureEnd(f, p), u: f.universe })),
       conflicts.has(f.id) ? h('div', { class: 'warn-box' }, tr('⚠ Adresele se suprapun cu altă fixtură (sau depășesc 512).')) : null,
       h('button', { onclick: () => dialogs.changeProfileDialog(app, f) }, tr('Schimbă profilul…')),
+      lockButton(app, [f.id]),
       ...transformSection(app, f, true),
       p.kind === 'moving' ? h('div', { class: 'grid2' },
         h('label', { class: 'inline' }, checkbox(f.invertPan, (v) => app.updateItem(f.id, { invertPan: v })), tr('Inversează pan')),
@@ -597,18 +664,39 @@ function renderFaders(app, f, p) {
     box);
 }
 
+function PARAM_LABELS() {
+  return {
+    length: tr('Lungime (m)'), width: tr('Lățime (m)'), height: tr('Înălțime (m)'), depth: tr('Adâncime (m)'), count: tr('Număr persoane'), diameter: tr('Diametru (m)'), drop: tr('Tijă (m)'), rpm: tr('Rotații / minut'),
+    wheels: tr('Roți'), bar: tr('Bară T (m, 0 = fără)'), legs: tr('Deschidere picioare (m)'), density: tr('Densitate'), size: tr('Mărime oameni'),
+  };
+}
+
+/** Input for one prop param: a select for choice params (wheels, density), else a number with the type's limits. */
+function paramInput(type, k, v, onChange) {
+  const def = PROP_TYPES[type] || {};
+  const choices = def.choices && def.choices[k];
+  if (choices) {
+    const sel = h('select', {}, choices.map(([val, label]) => h('option', { value: val, selected: Number(v) === val }, label)));
+    sel.addEventListener('change', () => onChange(Number(sel.value)));
+    return sel;
+  }
+  const [min, max] = (def.limits && def.limits[k]) || [k === 'count' ? 1 : 0.05];
+  return numberInput(v, onChange, { min, max, step: k === 'count' ? 1 : k === 'size' ? 0.05 : 0.1, integer: k === 'count' });
+}
+
 function renderPropInspector(app, el, pr) {
   const def = PROP_TYPES[pr.type] || { params: {} };
   const nameInput = h('input', { value: pr.name });
   nameInput.addEventListener('change', () => app.updateItem(pr.id, { name: nameInput.value.trim() || pr.name }));
-  const labels = { length: tr('Lungime (m)'), width: tr('Lățime (m)'), height: tr('Înălțime (m)'), depth: tr('Adâncime (m)'), count: tr('Număr persoane'), diameter: tr('Diametru (m)'), drop: tr('Tijă (m)'), rpm: tr('Rotații / minut') };
+  const labels = PARAM_LABELS();
   const params = { ...def.params, ...pr.params };
   el.append(
     h('h3', {}, def.label || pr.type),
     h('div', { class: 'form' },
       field(tr('Nume'), nameInput),
-      h('div', { class: 'grid2' }, Object.entries(params).map(([k, v]) => field(labels[k] || k, numberInput(v, (nv) => app.updateItem(pr.id, { params: { ...params, ...app.findItem(pr.id).params, [k]: nv } }, { rebuild: true }), { min: k === 'count' ? 1 : 0.05, step: k === 'count' ? 1 : 0.1, integer: k === 'count' })))),
+      h('div', { class: 'grid2' }, Object.entries(params).map(([k, v]) => field(labels[k] || k, paramInput(pr.type, k, v, (nv) => app.updateItem(pr.id, { params: { ...params, ...app.findItem(pr.id).params, [k]: nv } }, { rebuild: true }))))),
       pr.type === 'wall' ? field(tr('Culoare'), colorInput(pr.color || '#2a2a30', (v) => app.updateItem(pr.id, { color: v }, { rebuild: true }))) : null,
+      lockButton(app, [pr.id]),
       ...transformSection(app, pr, false),
       h('div', { class: 'grid2' },
         h('button', { onclick: () => app.duplicate(pr.id) }, tr('Duplică')),

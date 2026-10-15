@@ -26,6 +26,8 @@ export function compileProfile(profile) {
     const target = c.pixel != null ? (pixels[c.pixel] || (pixels[c.pixel] = { colors: {} })) : master;
     if (COLOR_TYPES.has(c.type)) target.colors[c.type] = i;
     else if (c.type !== 'none' && target[c.type] == null) target[c.type] = i;
+    // A second gobo wheel / prism typed like the first one becomes wheel 2 / prism 2.
+    else if (SECOND[c.type] && target[SECOND[c.type]] == null) target[SECOND[c.type]] = i;
   });
   const compiled = {
     master,
@@ -40,8 +42,44 @@ export function compileProfile(profile) {
   return compiled;
 }
 
+const SECOND = { gobo: 'gobo2', goboRot: 'gobo2Rot', prism: 'prism2', prismRot: 'prism2Rot' };
+
 export function createRuntime() {
-  return { phase: 0, wheelPos: 0, goboRot: 0, flashUntil: 0, nextFlash: 0, shake: 0 };
+  return {
+    phase: 0, wheelPos: 0, goboRot: 0, flashUntil: 0, nextFlash: 0, shake: 0,
+    // Per gobo wheel and per prism: accumulated rotation (rad), shake phase, wheel scroll.
+    gobos: [{ angle: 0, shake: 0, scroll: 0 }, { angle: 0, shake: 0, scroll: 0 }],
+    prisms: [{ angle: 0 }, { angle: 0 }],
+  };
+}
+
+// Rotation speed of gobos and prisms, rad/s (≈ 0.04 … 1 turn per second).
+export const ROT_SLOW = 0.25;
+export const ROT_FAST = 6.5;
+const TAU = Math.PI * 2;
+
+/**
+ * A rotation range → { index: angle } or { speed: rad/s (signed) } or null (stop).
+ * { index: true, angleFrom?, angleTo? (deg) } | { rotate: ±1, fastToSlow? } | { stop: true }
+ */
+export function rotationFromRange(r, v) {
+  if (!r || r.stop) return null;
+  if (r.index) return { index: (lerpRange(r, v, r.angleFrom ?? 0, r.angleTo ?? 360) * Math.PI) / 180 };
+  if (typeof r.rotate === 'number' && r.rotate !== 0) {
+    let k = (v - r.from) / Math.max(1, r.to - r.from);
+    if (r.fastToSlow) k = 1 - k;
+    return { speed: Math.sign(r.rotate) * (ROT_SLOW + (ROT_FAST - ROT_SLOW) * k) };
+  }
+  return null;
+}
+
+// Rotation channel without ranges: 0–7 stop, then slow → fast.
+const SIMPLE_ROT = [{ from: 0, to: 7, stop: true }, { from: 8, to: 255, rotate: 1 }];
+
+function applyRotation(acc, rot, dt) {
+  if (!rot) return;
+  if (rot.index != null) acc.angle = rot.index;
+  else acc.angle = (acc.angle + rot.speed * dt) % (TAU * 64);
 }
 
 function findRange(ranges, v) {
@@ -161,6 +199,9 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     gobo: 0,
     goboRotation: 0,
     prism: 0,
+    gobos: [],
+    prisms: [],
+    frost: 0,
     fog: 0,
     spark: 0,
     laserPattern: 0,
@@ -204,18 +245,7 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     if (ch(m.zoom).invert) z = 1 - z;
     state.beamAngle = profile.beamAngle[0] + (profile.beamAngle[1] - profile.beamAngle[0]) * z;
   }
-  if (m.gobo != null) {
-    const r = findRange(ch(m.gobo).ranges, read(m.gobo));
-    if (r) {
-      state.gobo = r.gobo || 0;
-      if (r.shake) { rt.shake += dt * 18; state.goboRotation = Math.sin(rt.shake) * 0.35; }
-      if (r.rotate) { rt.goboRot += dt * 2; state.goboRotation = rt.goboRot; }
-    }
-  }
-  if (m.prism != null) {
-    const r = findRange(ch(m.prism).ranges, read(m.prism));
-    state.prism = r ? r.prism || 0 : read(m.prism) > 127 ? 3 : 0;
-  }
+  computeBeamShaping(c, m, ch, read, rt, dt, state);
   if (m.fog != null) state.fog = read(m.fog) / 255;
 
   // Cold spark machine: height channel, optionally gated by a "fire" channel.
@@ -232,4 +262,77 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
     state.laserSpin = v < 10 ? 0 : v < 128 ? ((v - 10) / 117) * 4 : -((v - 128) / 127) * 4;
   }
   return state;
+}
+
+/** Gobo wheels, gobo / prism rotation and frost → state.gobos, state.prisms, state.frost. */
+function computeBeamShaping(c, m, ch, read, rt, dt, state) {
+  if (!rt.gobos) rt.gobos = [{ angle: 0, shake: 0, scroll: 0 }, { angle: 0, shake: 0, scroll: 0 }];
+  if (!rt.prisms) rt.prisms = [{ angle: 0 }, { angle: 0 }];
+  const wheels = [['gobo', 'goboRot'], ['gobo2', 'gobo2Rot']];
+  const nWheels = m.gobo2 != null || m.gobo2Rot != null ? 2 : m.gobo != null || m.goboRot != null ? 1 : 0;
+  for (let w = 0; w < nWheels; w++) {
+    const [type, rotType] = wheels[w];
+    const acc = rt.gobos[w];
+    let slot = 0; let shake = false; let rangeRot = null;
+    if (m[type] != null) {
+      const channel = ch(m[type]);
+      const v = read(m[type]);
+      const r = findRange(channel.ranges, v);
+      if (r) {
+        slot = r.gobo || 0;
+        if (r.rotate === true) {
+          // Wheel spin: the gobos scroll past one after another.
+          const slots = Math.max(1, ...channel.ranges.map((x) => x.gobo || 0));
+          acc.scroll = (acc.scroll + dt * lerpRange(r, v, 0.6, 5)) % slots;
+          slot = 1 + Math.floor(acc.scroll);
+        } else if (r.rotate || r.index) rangeRot = r;
+        if (r.shake) { shake = true; acc.shake += dt * lerpRange(r, v, 9, 22); }
+      } else if (!channel.ranges) slot = Math.floor(v / 16);
+    }
+    if (m[rotType] != null) {
+      const v = read(m[rotType]);
+      const ranges = ch(m[rotType]).ranges;
+      applyRotation(acc, rotationFromRange(findRange(ranges || SIMPLE_ROT, v), v), dt);
+    } else if (rangeRot) {
+      applyRotation(acc, rotationFromRange(rangeRot, read(m[type])), dt);
+    }
+    const angle = acc.angle + (shake ? Math.sin(acc.shake) * 0.35 : 0);
+    state.gobos.push({ slot, angle, shake });
+  }
+
+  const prisms = [['prism', 'prismRot'], ['prism2', 'prism2Rot']];
+  const nPrisms = m.prism2 != null || m.prism2Rot != null ? 2 : m.prism != null || m.prismRot != null ? 1 : 0;
+  for (let k = 0; k < nPrisms; k++) {
+    const [type, rotType] = prisms[k];
+    const acc = rt.prisms[k];
+    let facets = 0; let shape = 'circular'; let rangeRot = null;
+    if (m[type] != null) {
+      const v = read(m[type]);
+      const channel = ch(m[type]);
+      const r = findRange(channel.ranges, v);
+      if (r) {
+        facets = r.prism || 0;
+        if (r.shape === 'linear') shape = 'linear';
+        if (r.rotate || r.index) rangeRot = r;
+      } else if (!channel.ranges) facets = v > 127 ? 3 : 0;
+    }
+    if (m[rotType] != null) {
+      const v = read(m[rotType]);
+      const ranges = ch(m[rotType]).ranges;
+      applyRotation(acc, rotationFromRange(findRange(ranges || SIMPLE_ROT, v), v), dt);
+    } else if (rangeRot) {
+      applyRotation(acc, rotationFromRange(rangeRot, read(m[type])), dt);
+    }
+    state.prisms.push({ facets, shape, angle: acc.angle });
+  }
+
+  if (m.frost != null) state.frost = read(m.frost) / 255;
+
+  // Older single-wheel fields, still used by simple models.
+  if (state.gobos.length) {
+    state.gobo = state.gobos[0].slot;
+    state.goboRotation = state.gobos[0].angle;
+  }
+  const active = state.prisms.find((p) => p.facets > 0);
+  state.prism = active ? active.facets : 0;
 }

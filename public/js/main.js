@@ -8,6 +8,7 @@ import {
   demoProject, weddingProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
 } from './project.js';
 import { PROP_TYPES } from './props3d.js';
+import { caseTop } from './prop-layout.js';
 import { toast, pickFile } from './dom.js';
 import * as ui from './ui.js';
 import * as dialogs from './dialogs.js';
@@ -16,6 +17,7 @@ import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
 import { aimRotation } from './aim.js';
 import { translatePage, tr, tp } from './i18n.js';
+import { expandToGroups, splitLocked, lockedIds, makeGroup, ungroup as ungroupItems, findGroup, groupMembers, pruneGroups } from './groups.js';
 
 const round2 = (v) => Math.round(v * 100) / 100;
 const wrapDeg = (d) => { let v = ((d + 180) % 360 + 360) % 360 - 180; if (v === -180) v = 180; return Math.round(v * 10) / 10; };
@@ -39,16 +41,23 @@ class App {
     this.recorder = new ClipRecorder(this);
     this.assistant = new AssistantPanel(this);
 
-    this.vis.onPick = (id, { toggle }) => {
-      if (toggle) { if (id) this.toggleSelect(id); }
-      else this.select(id);
+    // A click selects the whole group; Alt+click or double-click selects one object.
+    this.vis.onPick = (id, { toggle, single }) => {
+      const ids = id ? (single ? [id] : expandToGroups(this.project, [id])) : [];
+      if (toggle) {
+        if (!ids.length) return;
+        const on = ids.every((x) => this.selectedIds.includes(x));
+        this.setSelection(on ? this.selectedIds.filter((x) => !ids.includes(x)) : [...this.selectedIds, ...ids]);
+      } else this.setSelection(ids);
     };
-    this.vis.onMarquee = (ids, { add }) => this.setSelection(add ? [...this.selectedIds, ...ids] : ids);
+    this.vis.onMarquee = (ids, { add }) => this.setSelection(expandToGroups(this.project, add ? [...this.selectedIds, ...ids] : ids));
+    // Hover: the object (or its whole group), whether it is locked, and a short label.
+    this.vis.hoverInfo = (id) => this.hoverInfo(id);
     this.vis.onTransformStart = () => this.checkpoint();
     this.vis.onTransform = (changes) => {
       for (const t of changes) {
         const item = this.findItem(t.id);
-        if (!item) continue;
+        if (!item || item.locked) continue;
         item.position = t.position;
         item.rotation = t.rotation;
       }
@@ -284,6 +293,7 @@ class App {
   setSelection(ids) {
     const seen = new Set();
     this.selectedIds = (ids || []).filter((id) => id && !seen.has(id) && seen.add(id) && this.findItem(id));
+    this.vis.setLocked(lockedIds(this.project));
     this.vis.setSelection(this.selectedIds);
     ui.renderSelection(this);
   }
@@ -339,10 +349,26 @@ class App {
   updateItems(ids, patchFor, { rebuild = false, record = true, quiet = false } = {}) {
     const items = ids.map((id) => this.findItem(id)).filter(Boolean);
     if (!items.length) return;
+    // Everything locked and only moves asked: nothing changes, no undo step.
+    if (record && !items.some((it) => !it.locked)) {
+      const probe = items.map((it, i) => patchFor(it, i)).filter(Boolean);
+      if (probe.length && probe.every((p) => Object.keys(p).every((k) => k === 'position' || k === 'rotation'))) {
+        this.lockedNotice(items.length);
+        return;
+      }
+    }
     if (record) this.checkpoint();
+    let blocked = 0;
     items.forEach((item, i) => {
-      const patch = patchFor(item, i);
+      let patch = patchFor(item, i);
       if (!patch) return;
+      // Locked objects keep their place: drop position / rotation changes.
+      if (item.locked && (patch.position || patch.rotation)) {
+        const { position, rotation, ...rest } = patch;
+        blocked++;
+        patch = rest;
+        if (!Object.keys(patch).length) return;
+      }
       Object.assign(item, patch);
       const fixture = this.isFixture(item.id);
       if (rebuild) {
@@ -357,6 +383,88 @@ class App {
     this.saveSoon();
     if (!quiet) ui.renderLists(this);
     ui.updateInspectorTransform(this);
+    if (blocked) this.lockedNotice(blocked);
+  }
+
+  lockedNotice(n) {
+    const now = performance.now();
+    if (now - (this._lockToastAt || 0) < 1500) return;
+    this._lockToastAt = now;
+    toast(tp(n, '🔒 Un obiect blocat nu a fost mutat. Deblochează-l cu K sau din inspector.', '🔒 {n} obiecte blocate nu au fost mutate. Deblochează-le cu K sau din inspector.'));
+  }
+
+  // ------------------------------------------------------------------ lock & groups
+  isLocked(id) {
+    return !!this.findItem(id)?.locked;
+  }
+
+  /** Lock or unlock; with no value: unlock if all are locked, else lock all. */
+  setLocked(ids, value) {
+    const items = ids.map((id) => this.findItem(id)).filter(Boolean);
+    if (!items.length) return;
+    const on = value ?? !items.every((it) => it.locked);
+    this.checkpoint();
+    for (const it of items) { if (on) it.locked = true; else delete it.locked; }
+    this.vis.setLocked(lockedIds(this.project));
+    this.vis.setSelection(this.selectedIds);
+    this.saveSoon();
+    ui.renderAll(this);
+    toast(on ? tp(items.length, '🔒 Blocat: nu se mai poate muta din greșeală.', '🔒 {n} obiecte blocate: nu se mai pot muta din greșeală.')
+      : tp(items.length, '🔓 Deblocat.', '🔓 {n} obiecte deblocate.'));
+  }
+
+  groupSelection(name) {
+    if (this.selectedIds.length < 2) { toast(tr('Selectează cel puțin 2 obiecte ca să faci un grup.')); return null; }
+    this.checkpoint();
+    const g = makeGroup(this.project, this.selectedIds, name, uid('gr'));
+    this.saveSoon();
+    ui.renderAll(this);
+    this.setSelection(groupMembers(this.project, g.id));
+    toast(tr('Grupul „{name}” e gata. Click pe oricare obiect din el selectează tot grupul (Alt+click = doar obiectul).', { name: g.name }), 'info', 5000);
+    return g;
+  }
+
+  ungroupSelection() {
+    const n = ungroupItems(JSON.parse(JSON.stringify(this.project)), this.selectedIds);
+    if (!n) { toast(tr('Selecția nu face parte dintr-un grup.')); return; }
+    this.checkpoint();
+    ungroupItems(this.project, this.selectedIds);
+    this.saveSoon();
+    ui.renderAll(this);
+    ui.renderSelection(this);
+    toast(tp(n, 'Grupul a fost desfăcut.', '{n} grupuri desfăcute.'));
+  }
+
+  selectGroup(groupId) {
+    this.setSelection(groupMembers(this.project, groupId));
+  }
+
+  renameGroup(groupId, name) {
+    const g = findGroup(this.project, groupId);
+    if (!g || !name || g.name === name) return;
+    this.checkpoint();
+    g.name = name;
+    this.saveSoon();
+    ui.renderLists(this);
+  }
+
+  /** Move the selection so the middle of its positions lands on `axis = value`. */
+  moveSelectionCenterTo(axis, value) {
+    const items = this.selectedItems();
+    if (!items.length) return;
+    const vals = items.map((it) => it.position[axis]);
+    const mid = (Math.min(...vals) + Math.max(...vals)) / 2;
+    this.moveSelection({ [axis]: value - mid });
+  }
+
+  hoverInfo(id) {
+    const item = this.findItem(id);
+    if (!item) return null;
+    const g = findGroup(this.project, item.groupId);
+    const ids = g ? groupMembers(this.project, g.id) : [id];
+    const locked = ids.some((x) => this.isLocked(x));
+    const label = `${locked ? '🔒 ' : ''}${g ? `${g.name} · ` : ''}${item.name}`;
+    return { ids, locked, label };
   }
 
   /** Move relative to the view: 'left' | 'right' | 'toward' | 'away' | 'up' | 'down'. */
@@ -394,7 +502,7 @@ class App {
   placeFixtures(list) {
     if (!list.length) return;
     let i = 0;
-    const next = () => toast(tr('Plasează {name} ({i} din {n}): click pe podea, truss, perete sau tavan. Esc = gata.', { name: list[i].name, i: i + 1, n: list.length }), 'info', 60000);
+    const next = () => toast(tr('Plasează {name} ({i} din {n}): click pe podea, truss, stativ, case, perete sau tavan (Alt = agățat sub bara stativului). Esc = gata.', { name: list[i].name, i: i + 1, n: list.length }), 'info', 60000);
     next();
     this.vis.startPlacement((at) => {
       const f = { ...list[i], position: at.position, rotation: at.rotation };
@@ -461,13 +569,19 @@ class App {
     this.removeItems([id]);
   }
 
-  removeItems(ids) {
-    const list = ids.filter((id) => this.findItem(id));
+  removeItems(ids, { force = false } = {}) {
+    let list = ids.filter((id) => this.findItem(id));
+    if (!force) {
+      const { free, locked } = splitLocked(this.project, list);
+      if (locked.length) toast(tp(locked.length, '🔒 Un obiect blocat nu a fost șters. Deblochează-l întâi.', '🔒 {n} obiecte blocate nu au fost șterse. Deblochează-le întâi.'));
+      list = free;
+    }
     if (!list.length) return;
     this.checkpoint();
     const gone = new Set(list);
     this.project.fixtures = this.project.fixtures.filter((f) => !gone.has(f.id));
     this.project.props = this.project.props.filter((p) => !gone.has(p.id));
+    pruneGroups(this.project);
     for (const id of list) {
       this.vis.removeObject(id);
       this.runtimes.delete(id);
@@ -491,8 +605,23 @@ class App {
     const fixtureNames = this.project.fixtures.map((f) => f.name);
     const propNames = this.project.props.map((p) => p.name);
     let nextAddr = null;
+    const newGroups = new Map();
     for (const item of items) {
       const copy = JSON.parse(JSON.stringify(item));
+      delete copy.locked;
+      if (copy.groupId) {
+        // A copy of a whole group becomes a new group; a copied single member joins none.
+        const g = findGroup(this.project, copy.groupId);
+        const whole = g && groupMembers(this.project, g.id).every((id) => ids.includes(id));
+        if (whole) {
+          if (!newGroups.has(g.id)) {
+            const ng = { id: uid('gr'), name: nextName(g.name, this.project.groups.map((x) => x.name)) };
+            this.project.groups.push(ng);
+            newGroups.set(g.id, ng.id);
+          }
+          copy.groupId = newGroups.get(g.id);
+        } else delete copy.groupId;
+      }
       copy.position = { ...copy.position, x: round2(copy.position.x + 0.5) };
       if (this.isFixture(item.id)) {
         copy.id = uid('fx');
@@ -529,8 +658,15 @@ class App {
     if (!def) return;
     this.checkpoint();
     const room = this.project.room;
-    const y = type === 'truss' ? 3.75 : type === 'mirrorball' ? Math.max(2.2, (room.height || 6) - 1.1) : 0;
+    const y = type === 'truss' ? 3.75 : type === 'mirrorball' ? Math.max(2.2, (room.height || 6) - 1.1) : 0; // case / tripod / others: on the floor
     const prop = { id: uid('pr'), type, name: def.label, position: { x: 0, y, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, params: { ...def.params } };
+    // A new case with one case selected goes on top of it (stack).
+    const under = this.selectedIds.length === 1 && type === 'case' ? this.findItem(this.selectedIds[0]) : null;
+    if (under && under.type === 'case') {
+      prop.position = { ...under.position, y: caseTop(under) };
+      prop.rotation = { ...under.rotation };
+      prop.params = { ...prop.params, width: under.params?.width ?? prop.params.width, depth: under.params?.depth ?? prop.params.depth, wheels: 0 };
+    }
     this.project.props.push(prop);
     this.vis.addProp(prop);
     this.saveSoon();
@@ -583,6 +719,7 @@ class App {
       if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); this.redo(); return; }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); this.duplicateMany(this.selectedIds); return; }
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); this.selectAll(); return; }
+      if (mod && e.key.toLowerCase() === 'g') { e.preventDefault(); if (e.shiftKey) this.ungroupSelection(); else this.groupSelection(); return; }
       if (mod) return;
       const fine = e.shiftKey;
       const step = fine ? 0.05 : 0.25;
@@ -602,6 +739,7 @@ class App {
         case 'w': case 'W': ui.setTransformMode(this, 'translate'); break;
         case 'e': case 'E': ui.setTransformMode(this, 'rotate'); break;
         case 'f': case 'F': this.vis.focusSelected(); break;
+        case 'k': case 'K': this.setLocked(this.selectedIds); break;
         case 'h': case 'H': document.body.classList.toggle('ui-hidden'); this.vis.resize(); break;
         case 'd': case 'D': this.toggleDemo(); break;
         case 'l': case 'L': ui.toggleLabels(this); break;

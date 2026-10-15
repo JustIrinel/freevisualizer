@@ -42,8 +42,15 @@ export const CHANNEL_TYPES = {
   panFine: ['Pan fine', tr('Mișcare')],
   tilt: ['Tilt', tr('Mișcare')],
   tiltFine: ['Tilt fine', tr('Mișcare')],
-  gobo: ['Gobo', tr('Fascicul')],
+  gobo: [tr('Gobo (roata 1)'), tr('Fascicul')],
+  goboRot: [tr('Rotație gobo (roata 1)'), tr('Fascicul')],
+  gobo2: [tr('Gobo (roata 2)'), tr('Fascicul')],
+  gobo2Rot: [tr('Rotație gobo (roata 2)'), tr('Fascicul')],
   prism: [tr('Prismă'), tr('Fascicul')],
+  prismRot: [tr('Rotație prismă'), tr('Fascicul')],
+  prism2: [tr('Prismă 2'), tr('Fascicul')],
+  prism2Rot: [tr('Rotație prismă 2'), tr('Fascicul')],
+  frost: ['Frost', tr('Fascicul')],
   zoom: ['Zoom', tr('Fascicul')],
   fog: [tr('Fum (output)'), tr('Efecte')],
   sparkHeight: [tr('Scântei – înălțime'), tr('Efecte')],
@@ -73,6 +80,29 @@ export function goboRanges(count, end = 127) {
   for (let i = 0; i < count; i++) ranges.push({ from: i * step, to: i === count - 1 ? end : (i + 1) * step - 1, gobo: i });
   if (end < 255) ranges.push({ from: end + 1, to: 255, gobo: 1, shake: true });
   return ranges;
+}
+
+/** Gobo wheel whose upper half rotates each gobo (slow → fast), like many budget spots. */
+export function rotatingGoboRanges(count) {
+  const ranges = goboRanges(count).slice(0, count);
+  const n = count - 1; // slot 0 is open
+  const step = Math.floor(128 / n);
+  for (let i = 0; i < n; i++) ranges.push({ from: 128 + i * step, to: i === n - 1 ? 255 : 128 + (i + 1) * step - 1, gobo: i + 1, rotate: 1 });
+  return ranges;
+}
+
+/** Usual gobo / prism rotation channel: index, CW fast → slow, stop, CCW slow → fast. */
+export function rotationRanges() {
+  return [
+    { from: 0, to: 127, index: true },
+    { from: 128, to: 189, rotate: 1, fastToSlow: true },
+    { from: 190, to: 193, stop: true },
+    { from: 194, to: 255, rotate: -1 },
+  ];
+}
+
+export function prismRanges(facets, shape = 'circular') {
+  return [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: facets, ...(shape === 'linear' ? { shape } : {}) }];
 }
 
 function laserColors() {
@@ -107,11 +137,23 @@ export const BUILTIN_PROFILES = [
   generic({ id: 'gen-dimmer-1', name: tr('Dimmer / Par halogen 1ch'), kind: 'par', defaultColor: '#ffc27a', beamAngle: [20, 20], channels: [ch('dimmer')] }),
   generic({
     id: 'gen-mh-spot-11', name: 'Moving Head Spot 11ch', kind: 'moving', style: 'spot', beamAngle: [14, 14],
-    channels: [ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('colorWheel', { ranges: wheelRanges(DEFAULT_WHEEL) }), ch('gobo', { ranges: goboRanges(8) }), strobe(), ch('dimmer'), ch('none', { label: tr('Viteză P/T') }), ch('none', { label: 'Auto' }), ch('none', { label: 'Reset' })],
+    channels: [ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('colorWheel', { ranges: wheelRanges(DEFAULT_WHEEL) }), ch('gobo', { ranges: rotatingGoboRanges(8) }), strobe(), ch('dimmer'), ch('none', { label: tr('Viteză P/T') }), ch('none', { label: 'Auto' }), ch('none', { label: 'Reset' })],
   }),
   generic({
     id: 'gen-mh-beam-16', name: 'Moving Head Beam 16ch', kind: 'moving', style: 'beam', beamAngle: [3, 3],
-    channels: [ch('colorWheel', { ranges: wheelRanges(['#ffffff', '#ff0000', '#ff8000', '#ffff00', '#00ff00', '#00ffff', '#0040ff', '#ff00ff', '#b0ffb0', '#ff60a0', '#8000ff', '#ffd090', '#40a0ff', '#ff4000']) }), strobe(), ch('dimmer'), ch('gobo', { ranges: goboRanges(14) }), ch('prism', { ranges: [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 8 }] }), ch('none', { label: tr('Rotație prismă') }), ch('none', { label: 'Frost' }), ch('none', { label: 'Focus' }), ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('none', { label: tr('Viteză P/T') }), ch('none', { label: 'Reset' }), ch('none', { label: tr('Lampă') }), ch('none', { label: tr('Funcții') })],
+    channels: [ch('colorWheel', { ranges: wheelRanges(['#ffffff', '#ff0000', '#ff8000', '#ffff00', '#00ff00', '#00ffff', '#0040ff', '#ff00ff', '#b0ffb0', '#ff60a0', '#8000ff', '#ffd090', '#40a0ff', '#ff4000']) }), strobe(), ch('dimmer'), ch('gobo', { ranges: goboRanges(14) }), ch('prism', { ranges: prismRanges(8) }), ch('prismRot', { ranges: rotationRanges() }), ch('frost'), ch('none', { label: 'Focus' }), ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('none', { label: tr('Viteză P/T') }), ch('none', { label: 'Reset' }), ch('none', { label: tr('Lampă') }), ch('none', { label: tr('Funcții') })],
+  }),
+  generic({
+    id: 'gen-mh-spot-2g2p-20', name: tr('Moving Head Spot 20ch – 2 roți gobo + 2 prisme'), kind: 'moving', style: 'spot', beamAngle: [10, 32],
+    channels: [
+      ch('pan'), ch('panFine'), ch('tilt'), ch('tiltFine'), ch('none', { label: tr('Viteză P/T') }), ch('dimmer'), strobe(),
+      ch('colorWheel', { ranges: wheelRanges(DEFAULT_WHEEL) }),
+      ch('gobo', { ranges: goboRanges(8) }), ch('goboRot', { ranges: rotationRanges() }),
+      ch('gobo2', { ranges: goboRanges(10) }), ch('gobo2Rot', { ranges: rotationRanges() }),
+      ch('prism', { ranges: prismRanges(3) }), ch('prismRot', { ranges: rotationRanges() }),
+      ch('prism2', { ranges: prismRanges(4, 'linear') }), ch('prism2Rot', { ranges: rotationRanges() }),
+      ch('frost'), ch('none', { label: 'Focus' }), ch('zoom'), ch('none', { label: 'Reset' }),
+    ],
   }),
   generic({
     id: 'gen-mh-wash-14', name: 'Moving Head Wash RGBW Zoom 14ch', kind: 'moving', style: 'wash', beamAngle: [8, 45],
