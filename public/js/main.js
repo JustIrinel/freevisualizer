@@ -15,6 +15,7 @@ import { AssistantPanel } from './assistant.js';
 import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
 import { aimRotation } from './aim.js';
+import { translatePage } from './i18n.js';
 
 const round2 = (v) => Math.round(v * 100) / 100;
 const wrapDeg = (d) => { let v = ((d + 180) % 360 + 360) % 360 - 180; if (v === -180) v = 180; return Math.round(v * 10) / 10; };
@@ -623,6 +624,7 @@ class App {
 }
 
 let app = null;
+translatePage();
 try {
   app = new App();
   window.freevis = app; // handy for debugging from the console
