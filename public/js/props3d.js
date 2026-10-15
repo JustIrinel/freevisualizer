@@ -134,10 +134,13 @@ function personGeometries() {
     return [solid(t), solid(sh)];
   };
   const armsDown = mergeSimple([...torso(), ...[-1, 1].map((s) => solid(limb(V(s * 0.16, 1.41, 0), V(s * 0.19, 0.84, 0.02), 0.042, 0.032)))]);
-  const armsUp = mergeSimple([...torso(), ...[-1, 1].map((s) => solid(limb(V(s * 0.16, 1.4, 0), V(s * 0.26, 2.0, 0.06), 0.042, 0.032)))]);
+  const armsUp = mergeSimple([...torso(), ...[-1, 1].flatMap((s) => [
+    solid(limb(V(s * 0.16, 1.4, 0), V(s * 0.3, 1.66, 0.04), 0.042, 0.036)), // upper arm
+    solid(limb(V(s * 0.3, 1.66, 0.04), V(s * 0.24, 1.93, 0.08), 0.036, 0.03)), // forearm
+  ])]);
   // Head and neck (skin), hair darkened on top and at the back.
   const neck = new THREE.CylinderGeometry(0.048, 0.052, 0.12, 8); neck.translate(0, 1.48, 0);
-  const head = new THREE.SphereGeometry(0.098, 12, 9); head.scale(0.9, 1.12, 1); head.translate(0, 1.61, 0);
+  const head = new THREE.SphereGeometry(0.098, 12, 9); head.scale(0.84, 1.1, 0.98); head.translate(0, 1.61, 0);
   shade(head, (x, y, z) => (y > 1.645 || z < -0.035 ? 0.2 : 1));
   const heads = mergeSimple([solid(neck), head]);
   crowdGeos = { trousers, dress, armsDown, armsUp, heads };

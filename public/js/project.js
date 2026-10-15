@@ -2,6 +2,8 @@
 import { uid } from './profiles.js';
 import { tr } from './i18n.js';
 import { pruneGroups } from './groups.js';
+import { tripodMount, barSlots } from './prop-layout.js';
+import { aimRotation } from './aim.js';
 
 export const PROJECT_VERSION = 1;
 export const AUTOSAVE_KEY = 'freevis.autosave.v1';
@@ -121,6 +123,15 @@ export function weddingProject() {
     fixture(tr('Fum greu'), 'gen-lowfog-1', 1, 195, v(0, 0, -7.3)),
     fixture('Laser', 'gen-laser-6', 1, 201, v(0, trussY + 0.25, trussZ), v(80, 0, 0)),
   );
+  // Two tripod stands beside the booth, two pars on each T-bar aimed at the dance floor.
+  [-1, 1].forEach((side, k) => {
+    const stand = prop('tripod', tr('Stativ {n}', { n: k + 1 }), v(side * 6, 0, -7.6), v(0, 0, 0), { height: 2.6, bar: 1.2, legs: 1.2 });
+    p.props.push(stand);
+    barSlots(1.2, 2).forEach((off, j) => {
+      const at = tripodMount(stand, off).position;
+      p.fixtures.push(fixture(`Par ${k * 2 + j + 1}`, 'gen-par-rgbwauv-6', 1, 211 + (k * 2 + j) * 6, at, aimRotation(at, v(side * 1.6, 1.2, -3.5))));
+    });
+  });
   p.camera = { position: [8.5, 4.4, 10.5], target: [0, 1.8, -4.5] };
   return p;
 }

@@ -13,8 +13,12 @@ import { createFixtureModel, roomUniforms } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
 import { tripodParams, tripodMount, caseTop } from './prop-layout.js';
 import { tr } from './i18n.js';
+import { GoboLightManager } from './gobos.js';
 
 const MAX_LIGHTS = 40;
+// Spot lights that can project a gobo / prism texture (each costs a texture unit
+// and a varying in every lit material).
+export const MAX_GOBO_LIGHTS = 6;
 const D2R = THREE.MathUtils.degToRad;
 const R2D = THREE.MathUtils.radToDeg;
 
@@ -148,6 +152,7 @@ export class Visualizer {
       puffTexture: puffTexture(),
       allocateLight: () => { if (this.lightsUsed >= MAX_LIGHTS) return false; this.lightsUsed++; return true; },
       releaseLight: () => { this.lightsUsed = Math.max(0, this.lightsUsed - 1); },
+      goboLights: new GoboLightManager(MAX_GOBO_LIGHTS),
       // World-space layer for effects that must not follow the fixture's rotation (sparks, low fog, reflections).
       world: new THREE.Group(),
       roomBox: new THREE.Box3(new THREE.Vector3(-12, 0, -10), new THREE.Vector3(12, 6, 10)),
@@ -933,6 +938,7 @@ export class Visualizer {
     }
     if (this.selectedIds.length) this._updateSelectionHelpers();
     this._updateAxisHints();
+    this.ctx.goboLights.update(this.renderer);
     this.composer.render(dt);
     if (this.onAfterRender) this.onAfterRender(dt);
     if (this.settings.showLabels) this.labels.render(this.scene, this.camera);

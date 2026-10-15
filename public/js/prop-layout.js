@@ -77,7 +77,7 @@ export function crowdLayout(params, seed = 7) {
     const height = (1.55 + 0.3 * ((rnd() + rnd()) / 2)) * size;
     // Most guests face the DJ (towards −z), the others dance in their own direction.
     const heading = rnd() < 0.65 ? Math.PI + (rnd() - 0.5) * 1.6 : rnd() * Math.PI * 2;
-    return { x: pt.x, z: pt.z, heading, height, girth: 0.9 + rnd() * 0.22, dress: rnd() < 0.42, armsUp: rnd() < 0.14, phase: rnd() * Math.PI * 2 };
+    return { x: pt.x, z: pt.z, heading, height, girth: 0.9 + rnd() * 0.22, dress: rnd() < 0.42, armsUp: rnd() < 0.1, phase: rnd() * Math.PI * 2 };
   });
 }
 

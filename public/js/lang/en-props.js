@@ -1,3 +1,19 @@
 // English for the props strings (Romanian key → English).
 export default {
+  'Case (flight case)': 'Road case (flight case)',
+  'Fără roți': 'No castors',
+  'Cu roți': 'With castors',
+  'Stativ trepied': 'Tripod stand',
+  'Stativ {n}': 'Stand {n}',
+  'Puțini (rar)': 'Few (sparse)',
+  'Normal': 'Normal',
+  'Mulți (înghesuiți)': 'Many (packed)',
+  'Roți': 'Castors',
+  'Bară T (m, 0 = fără)': 'T-bar (m, 0 = none)',
+  'Deschidere picioare (m)': 'Leg spread (m)',
+  'Densitate': 'Density',
+  'Mărime oameni': 'People size',
+  'Plasează {name} ({i} din {n}): click pe podea, truss, stativ, case, perete sau tavan (Alt = agățat sub bara stativului). Esc = gata.': 'Place {name} ({i} of {n}): click the floor, a truss, a stand, a case, a wall or the ceiling (Alt = hang under the stand\'s T-bar). Esc = done.',
+  'Nu există stative trepied în scenă. Adaugă unul sau folosește alt surface.': 'There are no tripod stands in the scene. Add one or use another surface.',
+  'Nu există caseuri în scenă. Adaugă unul sau folosește alt surface.': 'There are no road cases in the scene. Add one or use another surface.',
 };

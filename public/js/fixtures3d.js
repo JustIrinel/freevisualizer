@@ -8,11 +8,14 @@ import {
   movingBase, yokeArms, roundHead, spotHead, parBracket, hexBody, reflector, isShared,
 } from './fixture-parts.js';
 import { applyModel } from './models3d.js';
+import { ProjectionTexture, projectionLayout } from './gobos.js';
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 
 const BEAM_LENGTH = 22;
+const PRISM_BEAMS = 16;
+const GOBO_TYPES = new Set(['gobo', 'gobo2', 'goboRot', 'gobo2Rot', 'prism', 'prism2', 'prismRot', 'prism2Rot', 'frost']);
 
 // Room bounds shared by every beam so beams fade out at walls and ceiling.
 export const roomUniforms = {
@@ -25,27 +28,39 @@ const beamVertex = /* glsl */ `
   varying vec3 vNormalV;
   varying vec3 vViewPos;
   varying vec3 vWorld;
+  varying vec3 vCamLocal;
   void main() {
     vLocal = position;
     vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
     vNormalV = normalize(normalMatrix * normal);
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     vViewPos = -mv.xyz;
+    vCamLocal = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
     gl_Position = projectionMatrix * mv;
   }
 `;
 
+// With a gobo / prism the cone is ray-marched through the fixture's projection
+// texture, so the pattern shows in the haze as real "fingers" of light.
 const beamFragment = /* glsl */ `
   uniform vec3 uColor;
   uniform float uIntensity;
-  uniform float uGobo;
-  uniform float uGoboRot;
+  uniform float uUseMap;
+  uniform sampler2D uMap;
+  uniform mat4 uToLight;
+  uniform float uFieldTan;
   uniform vec3 uRoomMin;
   uniform vec3 uRoomMax;
   varying vec3 vLocal;
   varying vec3 vNormalV;
   varying vec3 vViewPos;
   varying vec3 vWorld;
+  varying vec3 vCamLocal;
+  float sampleProj(vec3 p) {
+    vec3 l = (uToLight * vec4(p, 1.0)).xyz;
+    vec2 uv = 0.5 + 0.5 * vec2(l.x, l.z) / (max(l.y, 1e-4) * uFieldTan);
+    return texture2D(uMap, uv).r;
+  }
   void main() {
     vec3 lo = smoothstep(uRoomMin, uRoomMin + vec3(0.35, 0.02, 0.35), vWorld);
     vec3 hi = smoothstep(uRoomMax, uRoomMax - vec3(0.35, 0.8, 0.35), vWorld);
@@ -57,9 +72,37 @@ const beamFragment = /* glsl */ `
     float edge = abs(dot(normalize(vNormalV), normalize(vViewPos)));
     edge = pow(edge, 1.6);
     float g = 1.0;
-    if (uGobo > 0.5) {
-      float a = atan(vLocal.z, vLocal.x) + uGoboRot;
-      g = 0.35 + 0.65 * smoothstep(-0.25, 0.25, sin(a * (2.0 + uGobo)));
+    if (uUseMap > 0.5) {
+      // Chord of the view ray through the unit cone x² + z² = y², 0 < y < 1.
+      vec3 ro = vCamLocal;
+      vec3 rd = vLocal - vCamLocal; // the fragment is at t = 1
+      float a = rd.x * rd.x + rd.z * rd.z - rd.y * rd.y;
+      float c = ro.x * ro.x + ro.z * ro.z - ro.y * ro.y;
+      bool camInside = c < 0.0 && ro.y > 0.0 && ro.y < 1.0;
+      float t0 = 1.0; float t1 = 1.0;
+      float tOther = abs(a) > 1e-6 ? c / a : 1.0;
+      float tCap = abs(rd.y) > 1e-6 ? (1.0 - ro.y) / rd.y : 1e6;
+      float tApex = abs(rd.y) > 1e-6 ? -ro.y / rd.y : 1e6;
+      if (camInside) {
+        if (gl_FrontFacing) discard;
+        t0 = 0.0; t1 = 1.0;
+      } else if (gl_FrontFacing) {
+        t1 = 1e6;
+        if (tOther > 1.0001) t1 = min(t1, tOther);
+        if (tCap > 1.0001) t1 = min(t1, tCap);
+        if (tApex > 1.0001) t1 = min(t1, tApex);
+        if (t1 > 1e5) t1 = 1.0;
+      } else {
+        discard;
+      }
+      float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      float sum = 0.0;
+      for (int i = 0; i < 12; i++) {
+        float t = mix(t0, t1, (float(i) + n) / 12.0);
+        sum += sampleProj(ro + rd * t);
+      }
+      // One face instead of two: twice the old per-face brightness.
+      g = 2.0 * sum / 12.0;
     }
     vec3 col = uColor * uIntensity * fall * start * edge * g * clip;
     gl_FragColor = vec4(col, 1.0);
@@ -76,6 +119,8 @@ function getUnitCone() {
   return unitCone;
 }
 
+const _yAxis = new THREE.Vector3(0, 1, 0);
+
 /** Volumetric-looking additive cone, apex at origin, pointing +Y. */
 export class Beam {
   constructor() {
@@ -83,8 +128,10 @@ export class Beam {
       uniforms: {
         uColor: { value: new THREE.Color(1, 1, 1) },
         uIntensity: { value: 0 },
-        uGobo: { value: 0 },
-        uGoboRot: { value: 0 },
+        uUseMap: { value: 0 },
+        uMap: { value: null },
+        uToLight: { value: new THREE.Matrix4() },
+        uFieldTan: { value: 1 },
         ...roomUniforms,
       },
       vertexShader: beamVertex,
@@ -98,16 +145,30 @@ export class Beam {
     this.mesh.raycast = () => {};
     this.mesh.renderOrder = 10;
     this.mesh.frustumCulled = false;
+    // The cone's own matrix maps it into the frame of the light that owns the projection.
+    this.material.uniforms.uToLight.value = this.mesh.matrix;
   }
 
-  set(color, intensity, angleDeg, gobo = 0, goboRot = 0, length = BEAM_LENGTH) {
+  set(color, intensity, angleDeg, length = BEAM_LENGTH) {
     const r = Math.tan(THREE.MathUtils.degToRad(Math.max(0.1, Math.min(170, angleDeg)) / 2)) * length;
     this.mesh.scale.set(r, length, r);
     this.material.uniforms.uColor.value.setRGB(color[0], color[1], color[2]);
     this.material.uniforms.uIntensity.value = intensity;
-    this.material.uniforms.uGobo.value = gobo;
-    this.material.uniforms.uGoboRot.value = goboRot;
     this.mesh.visible = intensity > 0.002;
+  }
+
+  /** Sample a projection texture covering ±fieldTan around the parent's +Y (null = plain beam). */
+  setMap(texture, fieldTan = 1) {
+    const u = this.material.uniforms;
+    u.uUseMap.value = texture ? 1 : 0;
+    u.uMap.value = texture;
+    u.uFieldTan.value = fieldTan;
+  }
+
+  /** Point the cone along (x, 1, y) of its parent (tan-space offset of a prism copy). */
+  aim(x, y) {
+    _v1.set(x, 1, y).normalize();
+    this.mesh.quaternion.setFromUnitVectors(_yAxis, _v1);
   }
 
   dispose() {
@@ -321,22 +382,29 @@ class MovingHeadModel extends BaseModel {
     this.lensMat = built.lensMat;
     const lensY = built.frontY;
 
-    // Main beam + 8 extra beams used by the prism effect.
+    // Pool of beams: one per prism copy (the first one is the plain beam).
     this.beamOrigin = new THREE.Group();
     this.beamOrigin.position.y = lensY;
     this.head.add(this.beamOrigin);
-    this.beam = new Beam();
-    this.beamOrigin.add(this.beam.mesh);
-    this.beams.push(this.beam);
     this.prismBeams = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < PRISM_BEAMS; i++) {
       const b = new Beam();
       this.prismBeams.push(b);
       this.beams.push(b);
       this.beamOrigin.add(b.mesh);
     }
+    this.beam = this.prismBeams[0];
     const light = this.createLight(profile.beamAngle[1]);
     if (light) this.beamOrigin.add(light);
+    // Gobo / prism / frost: projection texture shared by the beams and the spot light.
+    this.goboCapable = profile.channels.some((c) => GOBO_TYPES.has(c.type));
+    this.proj = null;
+    this.projActive = false;
+    if (this.goboCapable && light && ctx.goboLights) {
+      light.shadow.camera.near = 0.05;
+      light.shadow.focus = 1;
+      ctx.goboLights.register(this);
+    }
     this.addLabel();
     this.label.position.y = 0.55;
     this.curPan = 0;
@@ -353,17 +421,32 @@ class MovingHeadModel extends BaseModel {
     this.head.rotation.x = THREE.MathUtils.degToRad(this.curTilt);
     setLens(this.lensMat, s.color, s.intensity, 6);
     const gain = beamGain(s.beamAngle, g.haze) * (this.profile.style === 'beam' ? 1.4 : 1);
-    const facets = s.prism || 0;
-    const mainShare = facets ? 0.35 : 1;
-    this.beam.set(s.color, s.intensity * gain * mainShare, s.beamAngle, s.gobo, s.goboRotation);
-    const spread = Math.max(4, s.beamAngle * 1.6);
+    const layout = this.goboCapable ? projectionLayout(s, this.profile) : null;
+    this.projActive = !!(layout && layout.active && s.intensity > 0.002);
+    if (this.projActive) {
+      if (!this.proj) this.proj = new ProjectionTexture();
+      this.proj.request(layout);
+    }
+    const copies = this.projActive ? layout.copies : [{ x: 0, y: 0, w: 1 }];
+    const coneDeg = this.projActive ? THREE.MathUtils.radToDeg(Math.atan(layout.beamTan)) * 2 : s.beamAngle;
     this.prismBeams.forEach((b, i) => {
-      if (i >= facets) { b.set(s.color, 0, s.beamAngle); return; }
-      const a = (i / facets) * Math.PI * 2 + s.goboRotation;
-      b.mesh.rotation.set(THREE.MathUtils.degToRad(spread) * Math.cos(a), 0, THREE.MathUtils.degToRad(spread) * Math.sin(a));
-      b.set(s.color, s.intensity * gain * (0.8 / Math.max(1, facets / 3)), s.beamAngle, s.gobo, s.goboRotation);
+      const c = copies[i];
+      if (!c) { b.set(s.color, 0, coneDeg); return; }
+      b.aim(c.x, c.y);
+      b.setMap(this.projActive ? this.proj.texture : null, this.projActive ? layout.fieldTan : 1);
+      b.set(s.color, s.intensity * gain * c.w, coneDeg);
     });
-    this.updateLight(s.color, s.intensity, facets ? s.beamAngle + spread * 2 : s.beamAngle, this.profile.style === 'wash' ? 130 : 170);
+    const angle = this.projActive ? THREE.MathUtils.radToDeg(Math.atan(layout.fieldTan)) * 2 : s.beamAngle;
+    // A gobo blocks part of the light, and a projection must not burn out to a white blob.
+    this.updateLight(s.color, s.intensity * (this.projActive ? 0.22 : 1), angle, this.profile.style === 'wash' ? 130 : 170);
+    // The projection draws the edge itself; the cone must cover the whole texture.
+    if (this.light && this.projActive) this.light.angle = Math.min(Math.PI / 2.2, Math.atan(layout.fieldTan));
+  }
+
+  dispose() {
+    if (this.ctx.goboLights) this.ctx.goboLights.unregister(this);
+    if (this.proj) this.proj.dispose();
+    super.dispose();
   }
 }
 
@@ -758,7 +841,7 @@ class LaserModel extends BaseModel {
         default: // single beam drawing a figure-8
           r.set(Math.sin(ph * 1.7) * spread * 0.5, 0, Math.sin(ph * 0.85) * spread * 0.5);
       }
-      b.set(s.color, gain, 0.35, 0, 0, 30);
+      b.set(s.color, gain, 0.35, 30);
     });
   }
 }

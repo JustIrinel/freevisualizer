@@ -1,7 +1,7 @@
 // Modal dialogs: add fixtures, profile editor, OFL import, projects, settings, help.
 import { h, openModal, closeModal, toast, numberInput, field, pickFile } from './dom.js';
 import {
-  KINDS, MOVING_STYLES, CHANNEL_TYPES, DEFAULT_STROBE_RANGES, DEFAULT_WHEEL, wheelRanges, goboRanges,
+  KINDS, MOVING_STYLES, CHANNEL_TYPES, DEFAULT_STROBE_RANGES, DEFAULT_WHEEL, wheelRanges, goboRanges, rotationRanges, prismRanges,
   channelLabel, cloneProfile, normalizeProfile, uid,
 } from './profiles.js';
 import { oflToProfile, listModes } from './ofl-import.js';
@@ -290,13 +290,30 @@ function rangesEditor(c, onChange) {
           extra1 = h('input', { type: 'color', value: r.color || '#ffffff', style: { padding: '1px', height: '26px' } });
           extra1.addEventListener('change', () => { r.color = extra1.value; onChange(); });
         }
-      } else if (kind === 'gobo') {
+      } else if (kind === 'gobo' || kind === 'gobo2') {
         mid = numberInput(r.gobo ?? 0, (v) => { r.gobo = v; onChange(); }, { min: 0, max: 30, integer: true });
         mid.title = tr('Gobo (0 = deschis)');
         extra1 = h('label', { class: 'inline', title: 'Shake' }, h('input', { type: 'checkbox', checked: !!r.shake, onchange: (e) => { r.shake = e.target.checked; onChange(); } }), 'shake');
-      } else if (kind === 'prism') {
-        mid = numberInput(r.prism ?? 0, (v) => { r.prism = v; onChange(); }, { min: 0, max: 8, integer: true });
+      } else if (kind === 'prism' || kind === 'prism2') {
+        mid = numberInput(r.prism ?? 0, (v) => { r.prism = v; onChange(); }, { min: 0, max: 16, integer: true });
         mid.title = tr('Fațete (0 = fără prismă)');
+        extra1 = h('select', { title: tr('Formă') }, h('option', { value: 'circular' }, tr('Circulară')), h('option', { value: 'linear' }, tr('Liniară')));
+        extra1.value = r.shape === 'linear' ? 'linear' : 'circular';
+        extra1.addEventListener('change', () => { if (extra1.value === 'linear') r.shape = 'linear'; else delete r.shape; onChange(); });
+      } else if (ROTATION_TYPES.has(kind)) {
+        const modeOf = (x) => (x.index ? 'index' : x.rotate > 0 ? 'cw' : x.rotate < 0 ? 'ccw' : 'stop');
+        mid = h('select', {}, h('option', { value: 'index' }, tr('Index (unghi 0–360°)')), h('option', { value: 'cw' }, tr('Rotație ↻')), h('option', { value: 'ccw' }, tr('Rotație ↺')), h('option', { value: 'stop' }, tr('Stop')));
+        mid.value = modeOf(r);
+        mid.addEventListener('change', () => {
+          for (const k of ['index', 'rotate', 'stop', 'fastToSlow']) delete r[k];
+          if (mid.value === 'index') r.index = true;
+          else if (mid.value === 'stop') r.stop = true;
+          else r.rotate = mid.value === 'cw' ? 1 : -1;
+          onChange(); render();
+        });
+        if (r.rotate) {
+          extra1 = h('label', { class: 'inline', title: tr('Viteza scade în interval (rapid → lent)') }, h('input', { type: 'checkbox', checked: !!r.fastToSlow, onchange: (e) => { if (e.target.checked) r.fastToSlow = true; else delete r.fastToSlow; onChange(); } }), tr('rapid → lent'));
+        }
       }
       const del = h('button', { class: 'icon', title: tr('Șterge interval'), onclick: () => { c.ranges.splice(i, 1); onChange(); render(); } }, '✕');
       wrap.append(h('div', { class: 'r' }, from, to, mid, extra1, extra2, del));
@@ -308,8 +325,9 @@ function rangesEditor(c, onChange) {
       const r = { from, to: 255 };
       if (kind === 'strobe') r.mode = 'strobe';
       if (kind === 'colorWheel') r.color = '#ffffff';
-      if (kind === 'gobo') r.gobo = 0;
-      if (kind === 'prism') r.prism = 3;
+      if (kind === 'gobo' || kind === 'gobo2') r.gobo = 0;
+      if (kind === 'prism' || kind === 'prism2') r.prism = 3;
+      if (ROTATION_TYPES.has(kind)) r.rotate = 1;
       c.ranges.push(r);
       onChange(); render();
     } }, tr('+ interval')));
@@ -318,13 +336,15 @@ function rangesEditor(c, onChange) {
   return wrap;
 }
 
-const RANGE_TYPES = new Set(['strobe', 'colorWheel', 'gobo', 'prism']);
+const ROTATION_TYPES = new Set(['goboRot', 'gobo2Rot', 'prismRot', 'prism2Rot']);
+const RANGE_TYPES = new Set(['strobe', 'colorWheel', 'gobo', 'gobo2', 'prism', 'prism2', ...ROTATION_TYPES]);
 
 function defaultRanges(type) {
   if (type === 'strobe') return DEFAULT_STROBE_RANGES.map((r) => ({ ...r }));
   if (type === 'colorWheel') return wheelRanges(DEFAULT_WHEEL);
-  if (type === 'gobo') return goboRanges(8);
-  if (type === 'prism') return [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }];
+  if (type === 'gobo' || type === 'gobo2') return goboRanges(8);
+  if (type === 'prism' || type === 'prism2') return prismRanges(3);
+  if (ROTATION_TYPES.has(type)) return rotationRanges();
   return undefined;
 }
 
