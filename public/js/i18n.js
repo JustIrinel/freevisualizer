@@ -18,7 +18,7 @@ const dict = lang === 'en' ? EN : null;
 
 // The server (error messages) and the desktop menu follow the same choice.
 try { document.cookie = `freevis_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`; } catch (_) { /* no cookies */ }
-document.documentElement.lang = lang;
+if (typeof document !== 'undefined') document.documentElement.lang = lang;
 
 /**
  * Translate a Romanian UI string. `{name}` placeholders are filled from `vars`
