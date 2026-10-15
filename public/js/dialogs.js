@@ -696,6 +696,8 @@ export async function settingsDialog(app) {
     info ? h('div', { class: 'muted small' }, `Server pe portul ${info.port}. IP-urile acestui calculator: ${info.interfaces.map((i) => `${i.address} (${i.name})`).join(', ') || '—'}`) : h('div', { class: 'warn-box' }, 'Serverul nu răspunde.'),
     h('h4', {}, 'Branding pentru clipuri video'),
     brandingForm(),
+    h('h4', {}, 'Asistent Claude'),
+    await assistantSettings(),
     h('h4', {}, 'Imagine'),
     field('Lumina din sală (candelabre, ambient)', range('houseLight', 0, 1, 0.01)),
     field('Putere lumină pe suprafețe (podea/pereți)', range('lightPower', 0, 3, 0.05)),
@@ -711,6 +713,27 @@ export async function settingsDialog(app) {
       return true;
     } },
   ]);
+}
+
+async function assistantSettings() {
+  let st = { configured: false, models: {}, model: 'claude-opus-5-5' };
+  try { st = await (await fetch('/api/assistant/status')).json(); } catch (_) { /* offline */ }
+  const key = h('input', { type: 'password', placeholder: st.configured ? '•••••••• (cheie salvată)' : 'sk-ant-…', autocomplete: 'off' });
+  key.addEventListener('keydown', (e) => e.stopPropagation());
+  const model = h('select', {}, Object.entries(st.models || {}).map(([id, label]) => h('option', { value: id, selected: id === st.model }, label)));
+  const msg = h('span', { class: 'muted small' }, st.configured ? (st.source === 'env' ? 'Cheie din variabila ANTHROPIC_API_KEY.' : 'Cheie salvată pe acest calculator.') : 'Nicio cheie salvată.');
+  const post = async (body, text) => {
+    const res = await fetch('/api/assistant/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) { msg.textContent = text; key.value = ''; }
+  };
+  return h('div', { class: 'form' },
+    h('div', { class: 'grid2' }, field('Cheie API', key), field('Model', model)),
+    h('div', { class: 'row' },
+      h('button', { onclick: () => post({ ...(key.value ? { apiKey: key.value } : {}), model: model.value }, 'Salvat.') }, 'Salvează'),
+      h('button', { onclick: () => post({ apiKey: '' }, 'Cheia a fost ștearsă.') }, 'Șterge cheia'),
+      msg),
+    h('div', { class: 'muted small' }, 'Cheia rămâne doar pe acest calculator și nu este afișată în pagină. Costul se plătește direct la Anthropic, după consum. ',
+      h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'Obține o cheie ↗')));
 }
 
 function brandingForm() {

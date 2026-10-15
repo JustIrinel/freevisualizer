@@ -31,6 +31,7 @@
     </div>
     <div class="spacer"></div>
     <div id="inputStatus" class="status-pill" title="Starea intrării DMX"><span class="led"></span><span class="txt">Se conectează…</span></div>
+    <button id="assistantBtn" data-action="assistant" class="toggle as-btn" title="Asistent Claude: adaugă și aranjează fixturi scriind ce vrei">✨ Asistent</button>
     <button id="demoBtn" class="toggle" title="Show demo intern – testează rigul fără SoundSwitch">▶ Demo</button>
     <button data-action="settings" class="icon" title="Setări">⚙</button>
     <button data-action="help" class="icon" title="Ajutor: conectare SoundSwitch">?</button>
@@ -128,6 +129,15 @@
     <aside class="panel right" id="inspector"></aside>
   </main>
 
+  <section id="assistantPanel" class="assistant hidden" aria-label="Asistent Claude">
+    <header><b>✨ Asistent Claude</b><span class="spacer"></span>
+      <button class="as-new icon" title="Conversație nouă">⟲</button>
+      <button class="as-close icon" title="Închide">✕</button></header>
+    <div class="as-setup hidden"></div>
+    <div class="as-log"></div>
+    <footer><textarea rows="2" placeholder="Ex: Pune 4 BeamZ Panther 60 pe truss, de la adresa 200"></textarea>
+      <button class="as-send primary">Trimite</button></footer>
+  </section>
   <div id="dropOverlay" class="drop-overlay hidden"><div>Eliberează aici proiectul SoundSwitch (.ssproj) sau fișierul de fixtură (.d4, .gdtf, .zip, .json)</div></div>
   <dialog id="modal"><div id="modalBody"></div></dialog>
   <div id="toast" class="toast hidden"></div>

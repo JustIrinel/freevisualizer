@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { ArtNetReceiver, ipv4Interfaces } = require('./artnet');
 const { SacnReceiver } = require('./sacn');
 const { OflService } = require('./ofl');
+const { createAssistant } = require('./assistant');
 
 const PUBLIC = path.resolve(__dirname, '..', 'public');
 const FLUSH_MS = 20;
@@ -167,6 +168,7 @@ function createApp(opts = {}) {
   sacn.on('error', (err) => { stats.sacn.error = err.message; });
 
   const ofl = new OflService(path.join(DATA, 'ofl-cache'));
+  const assistant = createAssistant(DATA);
   let port = null;
 
   // -------------------------------------------------------------- http
@@ -225,6 +227,20 @@ function createApp(opts = {}) {
       if (req.method === 'DELETE') {
         if (fs.existsSync(file)) fs.unlinkSync(file);
         return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    // Claude assistant: the key stays on this computer and is never sent to the page.
+    if (p === '/api/assistant/status') return sendJson(res, 200, assistant.status());
+    if (p === '/api/assistant/config' && req.method === 'POST') {
+      return sendJson(res, 200, assistant.configure(JSON.parse(await readBody(req))));
+    }
+    if (p === '/api/assistant' && req.method === 'POST') {
+      try {
+        const body = JSON.parse(await readBody(req));
+        return sendJson(res, 200, await assistant.turn(body.messages));
+      } catch (err) {
+        return sendJson(res, err.status || 500, { error: err.message });
       }
     }
 

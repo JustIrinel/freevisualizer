@@ -94,5 +94,8 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
     }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0"
   }
 }

@@ -24,6 +24,7 @@ export function bindStatic(app) {
     help: () => dialogs.helpDialog(app),
     'add-fixture': () => dialogs.addFixturesDialog(app),
     'import-soundswitch': () => ssDialog.soundSwitchImportDialog(app),
+    assistant: () => app.assistant.toggle(),
     'ofl-search': () => dialogs.oflDialog(app),
     'open-fixture-id': () => dialogs.openFixtureId(),
     'new-profile': () => dialogs.profileEditor(app, null),

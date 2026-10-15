@@ -11,6 +11,7 @@ import { PROP_TYPES } from './props3d.js';
 import { toast, pickFile } from './dom.js';
 import * as ui from './ui.js';
 import * as dialogs from './dialogs.js';
+import { AssistantPanel } from './assistant.js';
 import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
 import { aimRotation } from './aim.js';
@@ -35,6 +36,7 @@ class App {
     this.time = 0;
     this.demoBpm = 126;
     this.recorder = new ClipRecorder(this);
+    this.assistant = new AssistantPanel(this);
 
     this.vis.onPick = (id, { toggle }) => {
       if (toggle) { if (id) this.toggleSelect(id); }
@@ -183,7 +185,18 @@ class App {
     return JSON.stringify(rest);
   }
 
+  /** Group many edits (e.g. one assistant message) into a single undo step. */
+  beginBatch() {
+    this.checkpoint();
+    this._batching = true;
+  }
+
+  endBatch() {
+    this._batching = false;
+  }
+
   checkpoint() {
+    if (this._batching) return;
     this.undoStack.push(this._snapshot());
     if (this.undoStack.length > 80) this.undoStack.shift();
     this.redoStack = [];

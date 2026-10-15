@@ -209,3 +209,22 @@ details.exact summary { cursor: pointer; color: var(--muted); font-size: 12px; m
 .model-row .thumb { width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 6px; }
 .model-row .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 .profile-thumb { width: 22px; height: 22px; object-fit: contain; background: #fff; border-radius: 4px; margin-right: 6px; vertical-align: middle; }
+.as-btn { border-color: var(--accent); }
+.assistant { position: fixed; right: 300px; bottom: 16px; width: 380px; max-width: calc(100vw - 32px); height: min(560px, calc(100vh - 120px)); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 40; }
+.assistant header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.assistant header .spacer { flex: 1; }
+.assistant .as-setup { padding: 10px; border-bottom: 1px solid var(--line); }
+.assistant .as-setup .row { display: flex; gap: 8px; align-items: center; }
+.assistant .as-log { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.as-msg { padding: 7px 10px; border-radius: 10px; font-size: 13px; line-height: 1.4; white-space: pre-wrap; max-width: 92%; }
+.as-user { align-self: flex-end; background: #2a2245; border: 1px solid var(--accent); }
+.as-assistant { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); }
+.as-note { font-size: 11.5px; color: var(--muted); }
+.as-tool { color: var(--accent-2); }
+.as-error { color: #ff8a8a; }
+.assistant textarea { font: inherit; font-size: 13px; }
+.as-wait { font-style: italic; }
+.assistant footer { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.assistant footer textarea { flex: 1; resize: none; }
+@media (max-width: 1100px) { .assistant { right: 16px; } }
