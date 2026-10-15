@@ -5,14 +5,14 @@ export const PROJECT_VERSION = 1;
 export const AUTOSAVE_KEY = 'freevis.autosave.v1';
 
 export function defaultSettings() {
-  return { haze: 0.5, bloom: 0.9, ambient: 0.08, lightPower: 1, showLabels: false, artnetOffset: 1 };
+  return { haze: 0.5, bloom: 0.9, ambient: 0.08, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, artnetOffset: 1 };
 }
 
 export function emptyProject(name = 'Proiect nou') {
   return {
     version: PROJECT_VERSION,
     name,
-    room: { width: 24, depth: 20, height: 6, walls: true, grid: true, floorColor: '#2c2c31', wallColor: '#6e6a66' },
+    room: { style: 'plain', width: 24, depth: 20, height: 6, walls: true, grid: true, floorColor: '#9a9792', wallColor: '#bdbab4' },
     settings: defaultSettings(),
     profiles: [],
     fixtures: [],
@@ -34,6 +34,9 @@ function prop(type, name, position, rotation = v(0, 0, 0), params = {}) {
 /** A small club / wedding rig so the first start already looks like a show. */
 export function demoProject() {
   const p = emptyProject('Rig demo – nuntă / club');
+  p.room.style = 'dark';
+  p.room.floorColor = '#2c2c31';
+  p.room.wallColor = '#6e6a66';
   const trussZ = -7.5;
   const trussY = 3.75;
   p.props.push(
@@ -74,7 +77,7 @@ export function demoProject() {
  *  dance floor with cold sparks, mirror ball with pinspots and low fog. */
 export function weddingProject() {
   const p = emptyProject('Rig nuntă – sală de evenimente');
-  p.room = { ...p.room, width: 26, depth: 20, height: 5.5, floorColor: '#2b2725', wallColor: '#5c544c' };
+  p.room = { ...p.room, style: 'banquet', width: 26, depth: 20, height: 5.5, floorColor: '#2b2725', wallColor: '#d8cdbd' };
   const trussZ = -9;
   const trussY = 3.35;
   p.props.push(
@@ -115,7 +118,7 @@ export function weddingProject() {
     fixture('Fum greu', 'gen-lowfog-1', 1, 195, v(0, 0, -7.3)),
     fixture('Laser', 'gen-laser-6', 1, 201, v(0, trussY + 0.25, trussZ), v(80, 0, 0)),
   );
-  p.camera = { position: [7, 2.8, 9.5], target: [0, 1.8, -4.5] };
+  p.camera = { position: [8.5, 4.4, 10.5], target: [0, 1.8, -4.5] };
   return p;
 }
 
@@ -124,6 +127,12 @@ export function normalizeProject(raw) {
   const base = emptyProject();
   const p = { ...base, ...(raw || {}) };
   p.room = { ...base.room, ...(raw && raw.room) };
+  // Projects saved before room styles: halls with tables become the banquet hall, the rest keep the dark room.
+  if (raw && raw.room && !raw.room.style) {
+    const banquet = (raw.props || []).some((x) => x.type === 'table' || x.type === 'headtable');
+    p.room.style = banquet ? 'banquet' : 'dark';
+    if (banquet) p.room.wallColor = '#d8cdbd';
+  }
   p.settings = { ...base.settings, ...(raw && raw.settings) };
   p.profiles = Array.isArray(p.profiles) ? p.profiles : [];
   p.fixtures = (Array.isArray(p.fixtures) ? p.fixtures : []).map((f) => ({

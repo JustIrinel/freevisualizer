@@ -7,6 +7,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildVenue } from './venue3d.js';
 import { createFixtureModel, roomUniforms } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
 
@@ -61,7 +63,7 @@ export class Visualizer {
     this.onTransformStart = () => {};
     this.onTransformEnd = () => {};
     this.onGizmoInfo = () => {};   // (text | null) – live position / rotation readout
-    this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, lightPower: 1, showLabels: false, snap: true };
+    this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true };
     this.lightsUsed = 0;
     this.fogLevel = 0;
 
@@ -122,8 +124,18 @@ export class Visualizer {
     this.scene.add(this.transform.getHelper());
     this.setSnap(true);
 
-    this.hemi = new THREE.HemisphereLight(0x8890a0, 0x202024, 0.25);
+    this.hemi = new THREE.HemisphereLight(0xfff1dd, 0x3a3430, 0.25);
     this.scene.add(this.hemi);
+    // "Work lights": an extra soft key light so the room is bright while placing fixtures.
+    this.workLight = new THREE.DirectionalLight(0xfff4e6, 0);
+    this.workLight.position.set(4, 10, 8);
+    this.scene.add(this.workLight);
+    // Image-based lighting so metal, plastic and glass reflect like real materials.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.2;
+    pmrem.dispose();
+    this.venue = null;
 
     this.ctx = {
       settings: this.settings,
@@ -181,41 +193,20 @@ export class Visualizer {
   buildRoom(room) {
     for (const c of [...this.roomGroup.children]) {
       this.roomGroup.remove(c);
-      c.geometry?.dispose();
-      c.material?.dispose();
+      c.traverse((o) => {
+        o.geometry?.dispose();
+        if (o.material) for (const m of [].concat(o.material)) { m.map?.dispose(); m.dispose(); }
+      });
     }
     const w = room.width || 24;
     const d = room.depth || 24;
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, d),
-      new THREE.MeshStandardMaterial({ color: room.floorColor || '#1b1b1f', roughness: room.floorRoughness ?? 0.55, metalness: 0.05 }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.userData.isRoom = true;
-    this.roomGroup.add(floor);
-    const grid = new THREE.GridHelper(Math.max(w, d), Math.max(w, d), 0x2a2a33, 0x18181e);
-    grid.position.y = 0.002;
-    grid.material.transparent = true;
-    grid.material.opacity = room.grid === false ? 0 : 0.35;
-    grid.raycast = () => {};
-    this.roomGroup.add(grid);
-    const wallMat = () => new THREE.MeshStandardMaterial({ color: room.wallColor || '#16161a', roughness: 0.9 });
     const hgt = room.height || 6;
-    if (room.walls !== false) {
-      const back = new THREE.Mesh(new THREE.PlaneGeometry(w, hgt), wallMat());
-      back.position.set(0, hgt / 2, -d / 2);
-      const left = new THREE.Mesh(new THREE.PlaneGeometry(d, hgt), wallMat());
-      left.rotation.y = Math.PI / 2;
-      left.position.set(-w / 2, hgt / 2, 0);
-      const right = left.clone();
-      right.material = wallMat();
-      right.rotation.y = -Math.PI / 2;
-      right.position.x = w / 2;
-      // Ceiling faces down only, so the top view still looks through it.
-      const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color: '#111114', roughness: 0.95 }));
-      ceiling.rotation.x = Math.PI / 2;
-      ceiling.position.y = hgt;
-      for (const m of [back, left, right, ceiling]) { m.userData.isRoom = true; this.roomGroup.add(m); }
+    this.venue = null;
+    if (room.style === 'banquet' || room.style === 'plain') {
+      this.venue = buildVenue(room, this.roomGroup, this.ctx);
+      this.venue.setHouse(this.houseLevel());
+    } else {
+      this._buildDarkRoom(room, w, d, hgt);
     }
     this.ctx.roomBox.min.set(-w / 2, 0, -d / 2);
     this.ctx.roomBox.max.set(w / 2, hgt, d / 2);
@@ -230,11 +221,62 @@ export class Visualizer {
     this.room = room;
   }
 
+  /** Original dark "club" room: flat colours, no decor. */
+  _buildDarkRoom(room, w, d, hgt) {
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d),
+      new THREE.MeshStandardMaterial({ color: room.floorColor || '#1b1b1f', roughness: room.floorRoughness ?? 0.55, metalness: 0.05 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.userData.isRoom = true;
+    this.roomGroup.add(floor);
+    const grid = new THREE.GridHelper(Math.max(w, d), Math.max(w, d), 0x2a2a33, 0x18181e);
+    grid.position.y = 0.002;
+    grid.material.transparent = true;
+    grid.material.opacity = room.grid === false ? 0 : 0.35;
+    grid.raycast = () => {};
+    this.roomGroup.add(grid);
+    if (room.walls === false) return;
+    const wallMat = () => new THREE.MeshStandardMaterial({ color: room.wallColor || '#16161a', roughness: 0.9 });
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, hgt), wallMat());
+    back.position.set(0, hgt / 2, -d / 2);
+    const left = new THREE.Mesh(new THREE.PlaneGeometry(d, hgt), wallMat());
+    left.rotation.y = Math.PI / 2;
+    left.position.set(-w / 2, hgt / 2, 0);
+    const right = left.clone();
+    right.material = wallMat();
+    right.rotation.y = -Math.PI / 2;
+    right.position.x = w / 2;
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color: '#111114', roughness: 0.95 }));
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = hgt;
+    for (const m of [back, left, right, ceiling]) { m.userData.isRoom = true; this.roomGroup.add(m); }
+  }
+
+  /** House light level 0..1 (work lights force it to full). */
+  houseLevel() {
+    const s = this.settings;
+    if (s.workLights) return 1;
+    return Math.max(0, Math.min(1, s.houseLight ?? (s.ambient ?? 0.25) / 1.2));
+  }
+
   applySettings() {
     const s = this.settings;
-    this.bloom.strength = s.bloom;
+    const h = this.houseLevel();
+    // With the house lights up, only real light sources should glow, not white tablecloths.
+    this.bloom.strength = s.bloom * (1 - h * 0.4);
+    this.bloom.threshold = 0.75 + h * 0.45;
     this.bloom.enabled = s.bloom > 0.01;
-    this.hemi.intensity = s.ambient;
+    this.hemi.intensity = 0.03 + h * 0.8 + (s.workLights ? 0.45 : 0);
+    this.workLight.intensity = s.workLights ? 1.5 : h * 0.25;
+    this.scene.environmentIntensity = 0.04 + h * 0.4 + (s.workLights ? 0.2 : 0);
+    if (this.venue) this.venue.setHouse(h);
+    const dark = new THREE.Color(0x030305);
+    const lit = new THREE.Color(0x2b2724);
+    const c = dark.lerp(lit, h);
+    this.scene.background.copy(c);
+    this.scene.fog.color.copy(c);
+    this.scene.fog.density = 0.012 * (1 - h * 0.7);
     this.labels.domElement.style.display = s.showLabels ? '' : 'none';
   }
 
@@ -416,6 +458,132 @@ export class Visualizer {
     this.transform.setRotationSnap(on ? D2R(5) : null);
   }
 
+  // ------------------------------------------------------------ camera-relative moves
+  /**
+   * World directions for "right" and "towards me" as seen from the camera,
+   * snapped to the nearest world axis so moves stay on the grid.
+   */
+  cameraAxes() {
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    dir.y = 0;
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1);
+    dir.normalize();
+    const toward = Math.abs(dir.x) > Math.abs(dir.z) ? { x: -Math.sign(dir.x), z: 0 } : { x: 0, z: -Math.sign(dir.z) };
+    // right = forward × up, forward = −toward
+    const right = { x: toward.z, z: -toward.x };
+    return { right, toward };
+  }
+
+  // ------------------------------------------------------------ axis hints next to the gizmo
+  _updateAxisHints() {
+    if (!this._hints) {
+      this._hints = ['x', 'y', 'z'].map((axis) => {
+        const div = document.createElement('div');
+        div.className = `axis-hint axis-${axis}`;
+        this.container.appendChild(div);
+        return div;
+      });
+    }
+    const show = this.selectedIds.length && this.transform.object && this.transform.mode === 'translate' && !this._placing;
+    if (!show) { for (const d of this._hints) d.style.display = 'none'; return; }
+    const origin = this.transform.object.getWorldPosition(new THREE.Vector3());
+    const dist = origin.distanceTo(this.camera.position);
+    const len = dist * 0.16;
+    const labels = this.hintLabels || { x: '⟷ stânga / dreapta', y: '↕ sus / jos', z: '⤢ față / spate' };
+    const w = this.container.clientWidth; const h = this.container.clientHeight;
+    ['x', 'y', 'z'].forEach((axis, i) => {
+      const p = origin.clone();
+      p[axis] += len;
+      p.project(this.camera);
+      const div = this._hints[i];
+      if (p.z > 1) { div.style.display = 'none'; return; }
+      div.style.display = '';
+      div.textContent = labels[axis];
+      div.style.transform = `translate(${((p.x + 1) / 2) * w + 8}px, ${((1 - p.y) / 2) * h - 10}px)`;
+    });
+  }
+
+  // ------------------------------------------------------------ place with the mouse
+  /**
+   * Fixture placement: a ghost follows the mouse and snaps to the surface under it.
+   * onPlace({ position, rotation, surface }) is called on click; Esc / cancelPlacement() stops.
+   */
+  startPlacement(onPlace, onCancel) {
+    this.cancelAim();
+    this.cancelPlacement(false);
+    const ghost = new THREE.Group();
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), new THREE.MeshBasicMaterial({ color: 0x9d7bff, transparent: true, opacity: 0.8, depthTest: false }));
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.8, 0xffd23a, 0.2, 0.12);
+    arrow.line.material.depthTest = false;
+    arrow.cone.material.depthTest = false;
+    ghost.add(dot, arrow);
+    ghost.renderOrder = 999;
+    ghost.visible = false;
+    ghost.traverse((o) => { o.raycast = () => {}; });
+    this.scene.add(ghost);
+    this._placing = { onPlace, onCancel, ghost, arrow, current: null };
+    this.renderer.domElement.style.cursor = 'copy';
+    this.setSelection([]);
+  }
+
+  cancelPlacement(notify = true) {
+    const p = this._placing;
+    if (!p) return;
+    this.scene.remove(p.ghost);
+    this._placing = null;
+    this.renderer.domElement.style.cursor = '';
+    if (notify && p.onCancel) p.onCancel();
+  }
+
+  /** Surface under the mouse → where and how a fixture would be mounted there. */
+  _placementAt(e) {
+    this.raycaster.setFromCamera(this._ndc(e), this.camera);
+    const props = [...this.objects.values()].filter((o) => o.type === 'prop' && !['crowd', 'mirrorball'].includes(o.data.type));
+    const targets = [this.roomGroup, ...props.map((o) => o.model.root)];
+    const hit = this.raycaster.intersectObjects(targets, true).find((h) => h.face);
+    const v = (x, y, z) => ({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, z: Math.round(z * 100) / 100 });
+    // Truss tubes are thin: give each truss a generous invisible hit box.
+    let best = null;
+    for (const o of props) {
+      if (o.data.type !== 'truss') continue;
+      const box = computeBounds(o.model.root, new THREE.Box3()).expandByScalar(0.18);
+      const pt = this.raycaster.ray.intersectBox(box, new THREE.Vector3());
+      if (!pt) continue;
+      const dist = pt.distanceTo(this.raycaster.ray.origin);
+      if (!best || dist < best.dist) best = { dist, pt, o };
+    }
+    if (best && (!hit || best.dist <= hit.distance + 0.3)) {
+      const tp = best.o.model.root.position;
+      const horizontal = Math.abs(best.o.model.root.rotation.z) < 0.3;
+      return horizontal
+        ? { surface: 'truss', position: v(best.pt.x, tp.y - 0.17, tp.z), rotation: { x: 180, y: 0, z: 0 } }
+        : { surface: 'truss', position: v(tp.x, best.pt.y, tp.z + 0.2), rotation: { x: 90, y: 0, z: 0 } };
+    }
+    if (!hit) return null;
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+    const propId = this._objectIdOf(hit.object);
+    const prop = propId ? this.objects.get(propId) : null;
+    if (n.y > 0.7) return { surface: prop ? 'top' : 'floor', position: v(hit.point.x, hit.point.y, hit.point.z), rotation: { x: 0, y: 0, z: 0 } };
+    if (n.y < -0.7) return { surface: 'ceiling', position: v(hit.point.x, hit.point.y - 0.05, hit.point.z), rotation: { x: 180, y: 0, z: 0 } };
+    // Wall (or the side of an object): stand off 15 cm, light pointing into the room.
+    const pos = hit.point.clone().addScaledVector(n, 0.15);
+    const heading = THREE.MathUtils.radToDeg(Math.atan2(n.x, n.z));
+    return { surface: 'wall', position: v(pos.x, Math.max(0.2, pos.y), pos.z), rotation: { x: 90, y: Math.round(heading), z: 0 } };
+  }
+
+  _updatePlacementGhost(e) {
+    const p = this._placing;
+    const at = this._placementAt(e);
+    p.current = at;
+    p.ghost.visible = !!at;
+    if (!at) return;
+    p.ghost.position.set(at.position.x, at.position.y, at.position.z);
+    const r = at.rotation;
+    const dir = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(D2R(r.x), D2R(r.y), D2R(r.z), 'YXZ'));
+    p.arrow.setDirection(dir);
+  }
+
   /** The next click in the scene picks a point (floor, wall, object) and calls back with it. */
   startAim(callback) {
     this._aim = callback;
@@ -434,7 +602,7 @@ export class Visualizer {
 
   _onPointerDown(e) {
     this._pointerDown = { x: e.clientX, y: e.clientY };
-    if (e.button === 0 && e.shiftKey && !this.transform.axis && !this._aim) {
+    if (e.button === 0 && e.shiftKey && !this.transform.axis && !this._aim && !this._placing) {
       // Rectangle selection.
       this.orbit.enabled = false;
       const rect = this.container.getBoundingClientRect();
@@ -447,6 +615,7 @@ export class Visualizer {
   }
 
   _onPointerMove(e) {
+    if (this._placing) { this._updatePlacementGhost(e); return; }
     const m = this._marquee;
     if (!m) return;
     const rect = this.container.getBoundingClientRect();
@@ -492,6 +661,12 @@ export class Visualizer {
     const moved = Math.hypot(e.clientX - this._pointerDown.x, e.clientY - this._pointerDown.y);
     this._pointerDown = null;
     if (moved > 4 || this.transform.dragging || e.button !== 0) return;
+    if (this._placing) {
+      this._updatePlacementGhost(e);
+      const at = this._placing.current;
+      if (at) this._placing.onPlace(at);
+      return;
+    }
     this.raycaster.setFromCamera(this._ndc(e), this.camera);
     if (this._aim) {
       const targets = [...this.objects.values()].map((o) => o.model.root).concat(this.roomGroup.children);
@@ -621,7 +796,7 @@ export class Visualizer {
       showColor: showMax > 0 ? show.map((v) => v / showMax) : [1, 1, 1],
       showLevel: Math.min(1, showMax / 3),
     };
-    this.scene.fog.density = 0.006 + haze * 0.012;
+    this.scene.fog.density = (0.006 + haze * 0.012) * (1 - this.houseLevel() * 0.6);
 
     for (const o of this.objects.values()) {
       if (o.type !== 'fixture') continue;
@@ -636,6 +811,7 @@ export class Visualizer {
       o.model.update(time, { dt, globals, emitters });
     }
     if (this.selectedIds.length) this._updateSelectionHelpers();
+    this._updateAxisHints();
     this.composer.render(dt);
     if (this.onAfterRender) this.onAfterRender(dt);
     if (this.settings.showLabels) this.labels.render(this.scene, this.camera);

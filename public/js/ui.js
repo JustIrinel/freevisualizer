@@ -5,6 +5,7 @@ import { PROP_TYPES } from './props3d.js';
 import { fixtureEnd } from './project.js';
 import * as dialogs from './dialogs.js';
 import * as ssDialog from './ss-dialog.js';
+import { ROOM_STYLES } from './venue3d.js';
 import { recordDialog } from './recorder.js';
 
 const $ = (id) => document.getElementById(id);
@@ -91,6 +92,13 @@ export function bindStatic(app) {
   $('labelsBtn').addEventListener('click', () => toggleLabels(app));
   $('labelsBtn').classList.toggle('active', !!app.project.settings.showLabels);
 
+  const house = $('houseSlider');
+  house.addEventListener('input', () => {
+    if (app.project.settings.workLights) app.setSetting('workLights', false);
+    app.setSetting('houseLight', parseFloat(house.value));
+    renderLightControls(app);
+  });
+  $('workLightsBtn').addEventListener('click', () => { app.setSetting('workLights', !app.project.settings.workLights); renderLightControls(app); });
   const haze = $('hazeSlider');
   haze.value = app.project.settings.haze;
   haze.addEventListener('input', () => app.setSetting('haze', parseFloat(haze.value)));
@@ -122,11 +130,18 @@ export function toggleLabels(app) {
   $('labelsBtn').classList.toggle('active', app.project.settings.showLabels);
 }
 
+function renderLightControls(app) {
+  const s = app.project.settings;
+  $('houseSlider').value = s.workLights ? 1 : s.houseLight ?? 0.3;
+  $('workLightsBtn').classList.toggle('active', !!s.workLights);
+}
+
 // ------------------------------------------------------------------ render
 export function renderAll(app) {
   $('projectName').value = app.project.name;
   $('hazeSlider').value = app.project.settings.haze;
   $('bloomSlider').value = app.project.settings.bloom;
+  renderLightControls(app);
   $('labelsBtn').classList.toggle('active', !!app.project.settings.showLabels);
   renderLists(app);
   renderRoomForm(app);
@@ -244,7 +259,10 @@ function renderRoomForm(app) {
   const r = app.project.room;
   const form = $('roomForm');
   form.innerHTML = '';
+  const style = h('select', {}, Object.entries(ROOM_STYLES).map(([k, label]) => h('option', { value: k, selected: (r.style || 'dark') === k }, label)));
+  style.addEventListener('change', () => app.updateRoom({ style: style.value }));
   form.append(
+    field('Tip sală', style),
     h('div', { class: 'grid3' },
       field('Lățime (m)', numberInput(r.width, (v) => app.updateRoom({ width: v }), { min: 4, max: 200, step: 1 })),
       field('Adâncime (m)', numberInput(r.depth, (v) => app.updateRoom({ depth: v }), { min: 4, max: 200, step: 1 })),
@@ -323,6 +341,66 @@ function wrapDeg180(d) {
   return v;
 }
 
+// ------------------------------------------------------------------ move / rotate pad
+const PAD_KEY = 'freevis.pad.v1';
+function padSteps() {
+  try { return { move: 0.1, turn: 15, ...JSON.parse(localStorage.getItem(PAD_KEY) || '{}') }; } catch { return { move: 0.1, turn: 15 }; }
+}
+function savePadSteps(v) {
+  try { localStorage.setItem(PAD_KEY, JSON.stringify(v)); } catch { /* private mode */ }
+}
+
+/** Button that acts once on press and repeats while held (one undo step per press). */
+function holdButton(label, title, act, app) {
+  let timer = null;
+  const stop = () => { clearTimeout(timer); clearInterval(timer); timer = null; };
+  const b = h('button', { class: 'pad-btn', title }, label);
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    act(true);
+    timer = setTimeout(() => { timer = setInterval(() => act(false), 90); }, 380);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => { if (timer) { stop(); app.saveSoon(); } });
+  return b;
+}
+
+/**
+ * Control pad for the selection: move left/right, towards/away (relative to the
+ * camera), up/down, and rotate on the three axes, with selectable steps.
+ */
+function movePad(app) {
+  const steps = padSteps();
+  const stepRow = (key, values, fmt) => {
+    const row = h('div', { class: 'pad-steps' }, h('span', { class: 'muted small' }, 'Pas:'));
+    for (const v of values) {
+      const b = h('button', { class: steps[key] === v ? 'active' : '' }, fmt(v));
+      b.addEventListener('click', () => {
+        steps[key] = v;
+        savePadSteps(steps);
+        row.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+      });
+      row.append(b);
+    }
+    return row;
+  };
+  const mv = (dir) => (record) => app.nudge(dir, steps.move, { record });
+  const rt = (axis, sign) => (record) => app.rotateSelection(axis, sign * steps.turn, { record });
+  return h('div', { class: 'pad' },
+    h('div', { class: 'pad-title' }, 'Mută', stepRow('move', [0.01, 0.1, 0.5], (v) => (v < 0.1 ? '1 cm' : v < 0.5 ? '10 cm' : '50 cm'))),
+    h('div', { class: 'pad-grid' },
+      h('span'), holdButton('⇡ Departe', 'Mai departe de tine (în spate)', mv('away'), app), h('span'),
+      h('span'), holdButton('▲ Sus', 'Mai sus', mv('up'), app),
+      holdButton('⟵ Stânga', 'Spre stânga, cum vezi pe ecran', mv('left'), app), h('span', { class: 'pad-center' }, '✥'), holdButton('Dreapta ⟶', 'Spre dreapta, cum vezi pe ecran', mv('right'), app),
+      h('span'), h('span'),
+      h('span'), holdButton('⇣ Spre tine', 'Mai aproape de tine (în față)', mv('toward'), app), h('span'),
+      h('span'), holdButton('▼ Jos', 'Mai jos', mv('down'), app)),
+    h('div', { class: 'pad-title' }, 'Rotește', stepRow('turn', [1, 5, 15, 45, 90], (v) => `${v}°`)),
+    h('div', { class: 'pad-rot' },
+      holdButton('⟲ Rotire stânga', 'Rotește în jurul axei verticale', rt('y', -1), app), holdButton('Rotire dreapta ⟳', 'Rotește în jurul axei verticale', rt('y', 1), app),
+      holdButton('⤒ Înclină înainte', 'Apleacă fixtura înainte', rt('x', 1), app), holdButton('Înclină înapoi ⤓', 'Apleacă fixtura înapoi', rt('x', -1), app),
+      holdButton('↶ Lateral stânga', 'Apleacă fixtura spre stânga', rt('z', 1), app), holdButton('Lateral dreapta ↷', 'Apleacă fixtura spre dreapta', rt('z', -1), app)));
+}
+
 const MOUNTS = [
   ['Pe podea ↑', { x: 0, y: 0, z: 0 }],
   ['Agățat ↓', { x: 180, y: 0, z: 0 }],
@@ -344,8 +422,8 @@ function aimButton(app) {
 /** Position, rotation, mounting presets and aiming for one object. */
 function transformSection(app, item, isFixture) {
   return [
-    h('h4', {}, 'Poziție (m)'),
-    positionInputs(app, item.id),
+    movePad(app),
+    h('details', { class: 'exact' }, h('summary', {}, 'Poziție exactă (m)'), positionInputs(app, item.id)),
     h('h4', {}, 'Orientare'),
     isFixture ? h('div', { class: 'muted small' }, 'Săgeata galbenă din scenă arată încotro bate lumina.') : null,
     rotationControls(app, item.id),
@@ -372,7 +450,6 @@ function renderGroupInspector(app, el) {
   const items = app.selectedItems();
   const fixtures = app.selectedFixtures();
   const n = items.length;
-  const step = (label, delta) => h('button', { onclick: () => app.moveSelection(delta) }, label);
   const universe = numberInput(fixtures[0] ? fixtures[0].universe : 1, () => {}, { min: 1, max: 32768, integer: true });
   const start = numberInput(fixtures.length ? Math.min(...fixtures.map((f) => f.address)) : 1, () => {}, { min: 1, max: 512, integer: true });
   const totalCh = fixtures.reduce((s, f) => s + app.profile(f.profileId).channels.length, 0);
@@ -383,11 +460,8 @@ function renderGroupInspector(app, el) {
       h('span', { class: 'name' }, it.name),
       app.isFixture(it.id) ? h('span', { class: 'meta' }, `U${it.universe} · ${it.address}`) : null,
       h('button', { class: 'icon', title: 'Scoate din selecție', onclick: () => app.toggleSelect(it.id) }, '✕')))),
-    h('h4', {}, 'Mută tot grupul'),
-    h('div', { class: 'grid3' },
-      step('← X', { x: -0.25 }), step('↑ Sus', { y: 0.25 }), step('X →', { x: 0.25 }),
-      step('↑ Z (spate)', { z: -0.25 }), step('↓ Jos', { y: -0.25 }), step('Z (față) ↓', { z: 0.25 })),
-    h('div', { class: 'muted small' }, 'Sau trage de săgețile din scenă (W) / săgețile de la tastatură (Shift = pas fin).'),
+    h('h4', {}, 'Mută / rotește tot grupul'),
+    movePad(app),
     h('h4', {}, 'Aliniază și distribuie'),
     h('div', { class: 'grid2' },
       h('button', { title: 'Toate la aceeași înălțime ca ultimul selectat', onclick: () => app.alignSelection('y') }, 'Aceeași înălțime'),
@@ -396,12 +470,7 @@ function renderGroupInspector(app, el) {
     h('div', { class: 'grid2' },
       h('button', { onclick: () => app.distributeSelection('x') }, 'Distribuie egal pe X'),
       h('button', { onclick: () => app.distributeSelection('z') }, 'Distribuie egal pe Z')),
-    h('h4', {}, 'Orientare'),
-    h('div', { class: 'grid2' },
-      h('button', { onclick: () => app.rotateSelection('y', -15) }, '⟲ Rotire −15°'),
-      h('button', { onclick: () => app.rotateSelection('y', 15) }, '⟳ Rotire +15°'),
-      h('button', { onclick: () => app.rotateSelection('x', -15) }, 'Înclinare −15°'),
-      h('button', { onclick: () => app.rotateSelection('x', 15) }, 'Înclinare +15°')),
+    fixtures.length ? h('h4', {}, 'Montaj') : null,
     fixtures.length ? h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', {
       onclick: () => app.updateItems(fixtures.map((f) => f.id), (f) => ({ rotation: { ...rot, y: f.rotation.y } })),
     }, label))) : null,

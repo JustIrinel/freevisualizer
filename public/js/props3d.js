@@ -1,5 +1,6 @@
 // Stage elements: truss, DJ booth, speakers, risers, screens, crowd, walls.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Particles } from './particles.js';
 
 export const PROP_TYPES = {
@@ -123,16 +124,36 @@ export function createPropModel(prop, ctx) {
       break;
     }
     case 'booth': {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(p.width, p.height, p.depth), black());
-      body.position.y = p.height / 2;
-      const top = new THREE.Mesh(new THREE.BoxGeometry(p.width + 0.08, 0.04, p.depth + 0.08), new THREE.MeshStandardMaterial({ color: 0x222228, roughness: 0.3, metalness: 0.5 }));
+      // Event-style DJ booth: glossy white facade, LED strip at the bottom, black desk,
+      // controller with jog wheels and a laptop on a stand.
+      const facadeMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f4, roughness: 0.18, metalness: 0.05 });
+      const facade = new THREE.Mesh(new RoundedBoxGeometry(p.width, p.height, p.depth, 3, 0.03), facadeMat);
+      facade.position.y = p.height / 2;
+      const top = new THREE.Mesh(new RoundedBoxGeometry(p.width + 0.1, 0.04, p.depth + 0.1, 2, 0.015), new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35, metalness: 0.3 }));
       top.position.y = p.height + 0.02;
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(p.width * 0.9, 0.05), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
-      strip.position.set(0, p.height * 0.82, p.depth / 2 + 0.003);
-      animated.push((t) => strip.material.color.setHSL((t * 0.05) % 1, 0.9, 0.3));
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(Math.min(1.4, p.width * 0.7), 0.07, 0.4), new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.5 }));
-      deck.position.set(0, p.height + 0.075, -0.05);
-      root.add(body, top, strip, deck);
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(p.width * 0.96, 0.03), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
+      strip.position.set(0, 0.06, p.depth / 2 + 0.004);
+      animated.push((t) => strip.material.color.setHSL((t * 0.05) % 1, 0.9, 0.45));
+      const logo = new THREE.Mesh(new THREE.PlaneGeometry(p.width * 0.5, p.height * 0.18), new THREE.MeshStandardMaterial({ color: 0xd8d8dc, roughness: 0.4, metalness: 0.6 }));
+      logo.position.set(0, p.height * 0.6, p.depth / 2 + 0.004);
+      const cw = Math.min(0.75, p.width * 0.4);
+      const ctrl = new THREE.Mesh(new RoundedBoxGeometry(cw, 0.06, 0.42, 2, 0.01), new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.4, metalness: 0.4 }));
+      ctrl.position.set(0, p.height + 0.07, 0.02);
+      root.add(facade, top, strip, logo, ctrl);
+      for (const s of [-1, 1]) {
+        const jog = new THREE.Mesh(new THREE.CylinderGeometry(cw * 0.15, cw * 0.15, 0.015, 32), new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.25, metalness: 0.9 }));
+        jog.position.set(s * cw * 0.27, p.height + 0.105, 0.04);
+        root.add(jog);
+      }
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), metal());
+      stand.position.set(cw / 2 + 0.25, p.height + 0.11, -0.05);
+      const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.015, 0.24), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.3, metalness: 0.9 }));
+      laptopBase.position.set(cw / 2 + 0.25, p.height + 0.21, -0.05);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.21), new THREE.MeshBasicMaterial({ color: 0x2a3f66 }));
+      screen.position.set(cw / 2 + 0.25, p.height + 0.32, -0.17);
+      screen.rotation.x = -0.25;
+      screen.material.side = THREE.DoubleSide;
+      root.add(stand, laptopBase, screen);
       break;
     }
     case 'speaker': case 'sub': root.add(speakerFront(p.width, p.height, p.depth)); break;
@@ -178,6 +199,26 @@ export function createPropModel(prop, ctx) {
         candle.material.color.setRGB(f, f * 0.62, f * 0.25);
       });
       root.add(cloth, vase, flowers, candle);
+      // Chiavari-style chairs around the table.
+      const chairs = Math.max(4, Math.round((Math.PI * p.diameter) / 0.6));
+      const gold = new THREE.MeshStandardMaterial({ color: 0xc9a45c, metalness: 0.7, roughness: 0.35 });
+      const cushion = new THREE.MeshStandardMaterial({ color: 0xefe9df, roughness: 0.9 });
+      const seat = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.05, 0.42), cushion, chairs);
+      const frame = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 0.45, 0.03), gold, chairs * 2);
+      const back = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 0.5, 0.03), gold, chairs);
+      const m4 = new THREE.Matrix4(); const q4 = new THREE.Quaternion(); const one = new THREE.Vector3(1, 1, 1);
+      const legs = new THREE.Matrix4();
+      for (let i = 0; i < chairs; i++) {
+        const a = (i / chairs) * Math.PI * 2;
+        const rr = r + 0.38;
+        q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a + Math.PI / 2);
+        const at = (dist, y) => new THREE.Vector3(Math.cos(a) * dist, y, Math.sin(a) * dist);
+        seat.setMatrixAt(i, m4.compose(at(rr, 0.46), q4, one));
+        back.setMatrixAt(i, m4.compose(at(rr + 0.2, 0.74), q4, one));
+        frame.setMatrixAt(i * 2, legs.compose(at(rr - 0.18, 0.22), q4, one));
+        frame.setMatrixAt(i * 2 + 1, legs.compose(at(rr + 0.18, 0.22), q4, one));
+      }
+      root.add(seat, frame, back);
       break;
     }
     case 'crowd': {

@@ -141,7 +141,7 @@ class App {
   _applySettings() {
     const s = this.project.settings;
     Object.assign(this.vis.settings, {
-      haze: s.haze, bloom: s.bloom, ambient: s.ambient, lightPower: s.lightPower, showLabels: s.showLabels,
+      haze: s.haze, bloom: s.bloom, ambient: s.ambient, houseLight: s.houseLight, workLights: !!s.workLights, lightPower: s.lightPower, showLabels: s.showLabels,
     });
     this.vis.applySettings();
     if (this.dmx.artnetOffset !== s.artnetOffset) this.dmx.setArtnetOffset(s.artnetOffset);
@@ -345,18 +345,56 @@ class App {
     ui.updateInspectorTransform(this);
   }
 
-  moveSelection(delta) {
+  /** Move relative to the view: 'left' | 'right' | 'toward' | 'away' | 'up' | 'down'. */
+  nudge(dir, amount, opts = {}) {
+    const { right, toward } = this.vis.cameraAxes();
+    const d = { x: 0, y: 0, z: 0 };
+    const add = (v, k) => { d.x += v.x * k; d.z += v.z * k; };
+    if (dir === 'left') add(right, -amount);
+    else if (dir === 'right') add(right, amount);
+    else if (dir === 'toward') add(toward, amount);
+    else if (dir === 'away') add(toward, -amount);
+    else if (dir === 'up') d.y = amount;
+    else if (dir === 'down') d.y = -amount;
+    this.moveSelection(d, opts);
+  }
+
+  moveSelection(delta, opts = {}) {
     this.updateItems(this.selectedIds, (it) => ({
       position: {
         x: round2(it.position.x + (delta.x || 0)),
         y: round2(Math.max(0, it.position.y + (delta.y || 0))),
         z: round2(it.position.z + (delta.z || 0)),
       },
-    }));
+    }), opts);
   }
 
-  rotateSelection(axis, deg) {
-    this.updateItems(this.selectedIds, (it) => ({ rotation: { ...it.rotation, [axis]: wrapDeg(it.rotation[axis] + deg) } }));
+  rotateSelection(axis, deg, opts = {}) {
+    this.updateItems(this.selectedIds, (it) => ({ rotation: { ...it.rotation, [axis]: wrapDeg(it.rotation[axis] + deg) } }), opts);
+  }
+
+  /**
+   * Place fixtures one by one with the mouse (see Visualizer.startPlacement).
+   * `list` = fixture objects without a final position yet.
+   */
+  placeFixtures(list) {
+    if (!list.length) return;
+    let i = 0;
+    const next = () => toast(`Plasează ${list[i].name} (${i + 1} din ${list.length}): click pe podea, truss, perete sau tavan. Esc = gata.`, 'info', 60000);
+    next();
+    this.vis.startPlacement((at) => {
+      const f = { ...list[i], position: at.position, rotation: at.rotation };
+      this.addFixtures([f]);
+      i++;
+      if (i >= list.length) {
+        this.vis.cancelPlacement(false);
+        this.setSelection(list.map((x) => x.id));
+        toast(`Am plasat ${list.length} fixturi.`);
+      } else {
+        this.setSelection([]);
+        next();
+      }
+    }, () => toast(i ? `Am plasat ${i} din ${list.length} fixturi.` : 'Plasare anulată.'));
   }
 
   /** Point every selected fixture's beam at a world point. */
@@ -537,13 +575,14 @@ class App {
       const turn = fine ? 5 : 15;
       switch (e.key) {
         case 'Delete': case 'Backspace': this.removeItems(this.selectedIds); break;
-        case 'Escape': this.vis.cancelAim(); this.select(null); break;
-        case 'ArrowLeft': this.moveSelection({ x: -step }); break;
-        case 'ArrowRight': this.moveSelection({ x: step }); break;
-        case 'ArrowUp': this.moveSelection({ z: -step }); break;
-        case 'ArrowDown': this.moveSelection({ z: step }); break;
-        case 'PageUp': this.moveSelection({ y: step }); break;
-        case 'PageDown': this.moveSelection({ y: -step }); break;
+        case 'Escape': this.vis.cancelAim(); this.vis.cancelPlacement(); this.select(null); break;
+        // Arrows move relative to the view: left/right on screen, up = away from you.
+        case 'ArrowLeft': this.nudge('left', step); break;
+        case 'ArrowRight': this.nudge('right', step); break;
+        case 'ArrowUp': this.nudge('away', step); break;
+        case 'ArrowDown': this.nudge('toward', step); break;
+        case 'PageUp': this.nudge('up', step); break;
+        case 'PageDown': this.nudge('down', step); break;
         case '[': case '{': this.rotateSelection('y', -turn); break;
         case ']': case '}': this.rotateSelection('y', turn); break;
         case 'w': case 'W': ui.setTransformMode(this, 'translate'); break;

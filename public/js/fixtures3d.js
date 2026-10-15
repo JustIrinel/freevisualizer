@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { Particles } from './particles.js';
 import { LASER_PATTERNS } from './fixture-state.js';
+import {
+  housing, trim, steel, alu, rubber, grille, glass, lens, setGlow, rbox, cyl, controlPanel, handle, feet,
+  movingBase, yokeArms, roundHead, spotHead, parBracket, hexBody, reflector, isShared,
+} from './fixture-parts.js';
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -110,21 +114,19 @@ export class Beam {
   }
 }
 
-const mats = {};
 function bodyMaterial() {
-  return mats.body || (mats.body = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.45, metalness: 0.6 }));
+  return housing();
 }
 function darkMaterial() {
-  return mats.dark || (mats.dark = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.8, metalness: 0.2 }));
+  return rubber();
 }
 
-function lensMaterial() {
-  return new THREE.MeshBasicMaterial({ color: 0x111111, toneMapped: false });
+function lensMaterial(pattern = null) {
+  return lens(pattern);
 }
 
 function setLens(mat, color, intensity, boost = 5) {
-  const k = intensity * boost;
-  mat.color.setRGB(0.05 + color[0] * k, 0.05 + color[1] * k, 0.05 + color[2] * k);
+  setGlow(mat, color, intensity, boost);
 }
 
 /** Beam brightness tuned per beam angle: narrow beams look denser. */
@@ -195,34 +197,80 @@ class BaseModel {
     for (const b of this.beams) b.dispose();
     if (this.light) this.ctx.releaseLight();
     this.root.traverse((o) => {
-      if (o.isMesh && o.material && o.material !== bodyMaterial() && o.material !== darkMaterial() && !o.material.isShaderMaterial) o.material.dispose?.();
+      if (o.isMesh && o.material && !isShared(o.material) && !o.material.isShaderMaterial && !o.material.userData?.cached) o.material.dispose?.();
       if (o.isCSS2DObject && o.element && o.element.parentNode) o.element.parentNode.removeChild(o.element);
     });
   }
 }
 
 // ------------------------------------------------------------------ Par
+/** slim = flat LED par (most DJ uplights), can = classic PAR can, pin = pinspot. */
+function parStyle(profile) {
+  if (profile.kind === 'pinspot') return 'pin';
+  if (profile.parStyle) return profile.parStyle;
+  const text = `${profile.name} ${profile.manufacturer || ''}`.toLowerCase();
+  if (/\bcan\b|halogen|par ?(56|64)|cp ?6[0-2]/.test(text)) return 'can';
+  if (profile.channels.every((c) => c.type === 'dimmer' || c.type === 'none')) return 'can';
+  return 'slim';
+}
+
 class ParModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.2, 24), bodyMaterial());
-    can.position.y = 0;
-    const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.04), darkMaterial());
-    yoke.position.y = -0.1;
-    const ears = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.03), darkMaterial());
-    ears.position.y = -0.04;
-    this.lensMat = lensMaterial();
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.095, 24), this.lensMat);
-    lens.rotation.x = -Math.PI / 2;
-    lens.position.y = 0.101;
-    this.root.add(can, yoke, ears, lens);
+    const style = parStyle(profile);
+    let faceY;
+    if (style === 'slim') {
+      // Flat LED par: square housing, LED matrix behind clear glass, U bracket.
+      const size = 0.25; const thick = 0.075; const pivot = 0.16;
+      this.root.add(parBracket(size, pivot));
+      const body = new THREE.Group();
+      body.position.y = pivot;
+      const shell = rbox(size, thick, size, 0.022);
+      const back = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.7, size * 0.7), grille());
+      back.rotation.x = Math.PI / 2;
+      back.position.y = -thick / 2 - 0.001;
+      const panel = controlPanel(size, fixture.address);
+      panel.rotation.x = Math.PI / 2;
+      panel.position.set(0, -thick / 2 - 0.002, size * 0.3);
+      panel.scale.setScalar(0.6);
+      this.lensMat = lensMaterial([6, 6]);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.84, size * 0.84), this.lensMat);
+      face.rotation.x = -Math.PI / 2;
+      face.position.y = thick / 2 + 0.001;
+      const cover = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.86, size * 0.86), glass());
+      cover.rotation.x = -Math.PI / 2;
+      cover.position.y = thick / 2 + 0.003;
+      body.add(shell, back, panel, face, cover);
+      this.root.add(body);
+      faceY = pivot + thick / 2 + 0.003;
+    } else {
+      const pin = style === 'pin';
+      const r = pin ? 0.055 : 0.11; const len = pin ? 0.14 : 0.26; const pivot = pin ? 0.09 : 0.17;
+      this.root.add(parBracket(r * 2 + 0.02, pivot));
+      const can = new THREE.Group();
+      can.position.y = pivot;
+      const shell = cyl(r, r * 1.04, len, pin ? alu() : housing(), 36);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 1.02, 0.008, 10, 36), steel());
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = len / 2;
+      const rear = cyl(r * 0.6, r * 0.9, 0.05, steel(), 24);
+      rear.position.y = -len / 2 - 0.025;
+      this.lensMat = lensMaterial('fresnel');
+      const face = new THREE.Mesh(new THREE.CircleGeometry(r * 0.94, 36), this.lensMat);
+      face.rotation.x = -Math.PI / 2;
+      face.position.y = len / 2 + 0.001;
+      can.add(shell, rim, rear, face);
+      this.root.add(can);
+      faceY = pivot + len / 2 + 0.002;
+    }
     this.beam = new Beam();
-    this.beam.mesh.position.y = 0.1;
+    this.beam.mesh.position.y = faceY;
     this.beams.push(this.beam);
     this.root.add(this.beam.mesh);
     const light = this.createLight(profile.beamAngle[1]);
-    if (light) { light.position.y = 0.1; this.root.add(light); }
+    if (light) { light.position.y = faceY; this.root.add(light); }
     this.addLabel();
+    this.label.position.y = faceY + 0.25;
   }
 
   update(s, g) {
@@ -238,46 +286,38 @@ class MovingHeadModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
     const style = profile.style || 'spot';
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.28), bodyMaterial());
-    base.position.y = 0.06;
-    const display = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0x2266ff }));
-    display.position.set(0, 0.07, 0.141);
-    this.root.add(base, display);
+    // Real proportions: beam ≈ BeamZ Panther 60, spot ≈ Chauvet Intimidator Spot, wash = round LED head.
+    const dims = {
+      beam: { base: [0.21, 0.075, 0.18], arm: 0.17, span: 0.17 },
+      spot: { base: [0.27, 0.09, 0.21], arm: 0.24, span: 0.19 },
+      wash: { base: [0.29, 0.09, 0.23], arm: 0.22, span: 0.27 },
+    }[style] || { base: [0.27, 0.09, 0.21], arm: 0.24, span: 0.19 };
+    const [bw, bh, bd] = dims.base;
+    this.root.add(movingBase(bw, bh, bd, fixture.address));
 
     this.yoke = new THREE.Group();
-    this.yoke.position.y = 0.12;
-    const armGeo = new THREE.BoxGeometry(0.05, 0.3, 0.1);
-    const armL = new THREE.Mesh(armGeo, bodyMaterial());
-    armL.position.set(-0.16, 0.15, 0);
-    const armR = armL.clone();
-    armR.position.x = 0.16;
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.37, 0.04, 0.12), bodyMaterial());
-    bridge.position.y = 0.02;
-    this.yoke.add(armL, armR, bridge);
+    this.yoke.position.y = 0.01 + bh + 0.018;
+    this.yoke.add(yokeArms(dims.span, dims.arm, Math.min(0.12, bd * 0.62)));
     this.root.add(this.yoke);
 
     this.head = new THREE.Group();
-    this.head.position.y = 0.26;
+    const pivotY = dims.arm - Math.min(0.12, bd * 0.62) * 0.42;
+    this.head.position.y = pivotY;
     this.yoke.add(this.head);
-    let headMesh; let lensR; let lensY;
-    if (style === 'wash') {
-      headMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.26, 28), bodyMaterial());
-      lensR = 0.125; lensY = 0.131;
-    } else if (style === 'beam') {
-      headMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.34, 24), bodyMaterial());
-      headMesh.position.y = 0.02;
-      lensR = 0.085; lensY = 0.191;
-    } else {
-      headMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.125, 0.32, 24), bodyMaterial());
-      headMesh.position.y = 0.01;
-      lensR = 0.09; lensY = 0.171;
+    let built;
+    if (style === 'wash') built = roundHead(0.125, 0.17, 0.105, [7, 7]);
+    else if (style === 'beam') built = roundHead(0.078, 0.2, 0.058, 'fresnel');
+    else built = spotHead(0.16, 0.27, 0.15, 0.052);
+    this.head.add(built.group);
+    // Tilt hubs where the head meets the arms.
+    for (const sgn of [-1, 1]) {
+      const hub = cyl(0.028, 0.028, 0.02, trim(), 20);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.x = sgn * (dims.span / 2 - 0.006);
+      this.head.add(hub);
     }
-    this.head.add(headMesh);
-    this.lensMat = lensMaterial();
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(lensR, 28), this.lensMat);
-    lens.rotation.x = -Math.PI / 2;
-    lens.position.y = lensY;
-    this.head.add(lens);
+    this.lensMat = built.lensMat;
+    const lensY = built.frontY;
 
     // Main beam + 8 extra beams used by the prism effect.
     this.beamOrigin = new THREE.Group();
@@ -296,7 +336,7 @@ class MovingHeadModel extends BaseModel {
     const light = this.createLight(profile.beamAngle[1]);
     if (light) this.beamOrigin.add(light);
     this.addLabel();
-    this.label.position.y = 0.7;
+    this.label.position.y = 0.55;
     this.curPan = 0;
     this.curTilt = 0;
   }
@@ -332,27 +372,51 @@ class PixelModel extends BaseModel {
     const n = Math.max(1, profile.pixels || 1);
     const blinder = profile.kind === 'blinder';
     const cell = blinder ? 0.26 : 0.125;
-    const length = Math.max(profile.dimensions ? profile.dimensions[0] : 0, n * cell + 0.04);
-    const height = blinder ? 0.3 : 0.08;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(length, 0.1, height), bodyMaterial());
-    body.position.y = -0.05;
+    const length = Math.max(profile.dimensions ? profile.dimensions[0] : 0, n * cell + 0.06);
+    const depth = blinder ? 0.3 : 0.09;
+    const thick = blinder ? 0.12 : 0.075;
+    // Aluminium profile with rounded edges, end caps and two mounting feet.
+    const body = rbox(length, thick, depth, blinder ? 0.02 : 0.015);
+    body.position.y = -thick / 2;
     this.root.add(body);
+    for (const sx of [-1, 1]) {
+      const cap = rbox(0.02, thick * 1.05, depth * 1.04, 0.006, trim());
+      cap.position.set(sx * (length / 2 - 0.005), -thick / 2, 0);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, depth * 0.9), steel());
+      foot.position.set(sx * (length / 2 - 0.12), -thick - 0.025, 0);
+      this.root.add(cap, foot);
+    }
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(length * 0.8, depth * 0.6), grille());
+    back.rotation.x = Math.PI / 2;
+    back.position.y = -thick - 0.001;
+    this.root.add(back);
     this.cells = [];
-    const pitch = (length - 0.04) / n;
+    const pitch = (length - 0.06) / n;
     for (let i = 0; i < n; i++) {
-      const mat = lensMaterial();
-      const geo = blinder ? new THREE.CircleGeometry(0.1, 24) : new THREE.PlaneGeometry(pitch * 0.8, 0.05);
-      const lens = new THREE.Mesh(geo, mat);
-      lens.rotation.x = -Math.PI / 2;
-      const x = -length / 2 + 0.02 + pitch * (i + 0.5);
-      lens.position.set(x, 0.001, 0);
-      this.root.add(lens);
+      const mat = lensMaterial(blinder ? 'fresnel' : [3, 1]);
+      const x = -length / 2 + 0.03 + pitch * (i + 0.5);
+      let lensMesh;
+      if (blinder) {
+        lensMesh = new THREE.Mesh(new THREE.CircleGeometry(0.1, 32), mat);
+        const cup = reflector(0.11, 0.06, alu());
+        cup.position.set(x, 0.002, 0);
+        this.root.add(cup);
+      } else {
+        lensMesh = new THREE.Mesh(new THREE.PlaneGeometry(pitch * 0.88, depth * 0.62), mat);
+      }
+      lensMesh.rotation.x = -Math.PI / 2;
+      lensMesh.position.set(x, 0.001, 0);
+      this.root.add(lensMesh);
       const beam = new Beam();
       beam.mesh.position.set(x, 0, 0);
       this.root.add(beam.mesh);
       this.beams.push(beam);
       this.cells.push({ mat, beam });
     }
+    const cover = new THREE.Mesh(new THREE.PlaneGeometry(length - 0.04, depth * 0.8), glass());
+    cover.rotation.x = -Math.PI / 2;
+    cover.position.y = 0.003;
+    this.root.add(cover);
     const light = this.createLight(profile.beamAngle[1] + 10);
     if (light) this.root.add(light);
     this.addLabel();
@@ -386,30 +450,43 @@ class RetroModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
     const pitch = 0.17;
-    // Hexagonal housing (flat sides left/right) with a brushed gold rim.
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.11, 6), bodyMaterial());
+    // Black hexagonal housing with bevelled edges, gold front rim, U bracket behind.
+    const body = hexBody(0.285, 0.1);
     body.rotation.y = Math.PI / 6;
-    body.position.y = -0.116; // back housing; the cups sit in front of it
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.07, 6, 1, true), retroGold());
+    body.position.y = -0.012;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.035, 6, 1, true), retroGold());
     rim.rotation.y = Math.PI / 6;
-    rim.position.y = -0.03;
+    rim.position.y = -0.005;
     this.root.add(body, rim);
+    for (const sx of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.2, 0.04), steel());
+      arm.position.set(sx * 0.27, -0.16, 0);
+      const knob = cyl(0.022, 0.022, 0.014, rubber(), 16);
+      knob.rotation.z = Math.PI / 2;
+      knob.position.set(sx * 0.278, -0.07, 0);
+      this.root.add(arm, knob);
+    }
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.008, 0.04), steel());
+    bar.position.y = -0.26;
+    this.root.add(bar);
     this.cells = [];
     const n = Math.max(1, profile.pixels || 7);
     hex7Layout(pitch).slice(0, n).forEach(([x, z]) => {
-      // Gold reflector cup that glows with the bulb, plus a small hot filament.
-      const cupMat = new THREE.MeshStandardMaterial({ color: 0xb08a40, roughness: 0.35, metalness: 0.8, side: THREE.DoubleSide, emissive: 0x000000 });
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.03, 0.06, 28, 1, true), cupMat);
-      cup.position.set(x, -0.03, z);
-      const back = new THREE.Mesh(new THREE.CircleGeometry(0.03, 20), cupMat);
-      back.rotation.x = -Math.PI / 2;
-      back.position.set(x, -0.059, z);
+      // Gold parabolic reflector that glows with the bulb, a glass bulb and a hot filament.
+      const cupMat = new THREE.MeshStandardMaterial({ color: 0xc8a050, roughness: 0.22, metalness: 0.9, side: THREE.DoubleSide, emissive: 0x000000 });
+      const cup = reflector(0.074, 0.055, cupMat);
+      cup.position.set(x, 0.0, z);
+      const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 14), glass());
+      bulbGlass.position.set(x, -0.03, z);
       const mat = lensMaterial();
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 10), mat);
-      bulb.position.set(x, -0.03, z);
+      const filament = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.028, 8), mat);
+      filament.rotation.z = Math.PI / 2;
+      filament.position.set(x, -0.03, z);
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), mat);
+      glow.position.set(x, -0.03, z);
       const beam = new Beam();
       beam.mesh.position.set(x, 0, z);
-      this.root.add(cup, back, bulb, beam.mesh);
+      this.root.add(cup, bulbGlass, filament, glow, beam.mesh);
       this.beams.push(beam);
       this.cells.push({ mat, cupMat, beam, level: 0 });
     });
@@ -450,7 +527,11 @@ class RetroModel extends BaseModel {
 
 let goldMat = null;
 function retroGold() {
-  return goldMat || (goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a050, roughness: 0.3, metalness: 0.9, side: THREE.DoubleSide }));
+  if (!goldMat) {
+    goldMat = new THREE.MeshStandardMaterial({ color: 0xc9a050, roughness: 0.3, metalness: 0.9, side: THREE.DoubleSide });
+    goldMat.userData.cached = true;
+  }
+  return goldMat;
 }
 
 /** Dimmed filaments shift towards deep orange/red. */
@@ -463,13 +544,20 @@ function warmShift(color, level) {
 class StrobeModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.16), bodyMaterial());
+    // Housing with a polished reflector channel and a xenon-style tube behind glass.
+    const body = rbox(0.42, 0.12, 0.17, 0.02);
     body.position.y = -0.06;
+    const channel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.36, 24, 1, true, Math.PI / 2, Math.PI), alu());
+    channel.rotation.z = Math.PI / 2;
+    channel.position.y = -0.002;
     this.lensMat = lensMaterial();
-    const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.12), this.lensMat);
-    lens.rotation.x = -Math.PI / 2;
-    lens.position.y = 0.001;
-    this.root.add(body, lens);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 16), this.lensMat);
+    tube.rotation.z = Math.PI / 2;
+    tube.position.y = -0.02;
+    const cover = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.13), glass());
+    cover.rotation.x = -Math.PI / 2;
+    cover.position.y = 0.002;
+    this.root.add(body, channel, tube, cover, parBracket(0.44, 0.0, steel()).translateY(-0.2));
     this.flash = new THREE.PointLight(0xffffff, 0, 0, 1.6);
     this.flash.position.y = 0.3;
     if (ctx.allocateLight()) { this.root.add(this.flash); this.hasFlash = true; }
@@ -492,11 +580,19 @@ class StrobeModel extends BaseModel {
 class SparkModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.34), bodyMaterial());
-    body.position.y = 0.12;
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.05, 16), darkMaterial());
-    top.position.y = 0.265;
-    this.root.add(body, top);
+    const body = rbox(0.34, 0.24, 0.34, 0.025);
+    body.position.y = 0.13;
+    const top = cyl(0.045, 0.07, 0.05, alu(), 24);
+    top.position.y = 0.275;
+    const panel = controlPanel(0.34, fixture.address);
+    panel.position.set(0, 0.13, 0.171);
+    this.root.add(body, top, panel, feet(0.34, 0.34));
+    for (const sx of [-1, 1]) {
+      const v = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.14), grille());
+      v.rotation.y = sx * Math.PI / 2;
+      v.position.set(sx * 0.171, 0.13, 0);
+      this.root.add(v);
+    }
     this.sparks = new Particles(2500, { additive: true, hard: true });
     ctx.world.add(this.sparks.points);
     this.carry = 0;
@@ -548,11 +644,15 @@ class SparkModel extends BaseModel {
 class LowFogModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.6), bodyMaterial());
-    body.position.y = 0.175;
-    const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.1), darkMaterial());
-    nozzle.position.set(0, 0.1, 0.33);
-    this.root.add(body, nozzle);
+    const body = rbox(0.5, 0.36, 0.6, 0.03);
+    body.position.y = 0.19;
+    const nozzle = rbox(0.32, 0.08, 0.1, 0.02, trim());
+    nozzle.position.set(0, 0.11, 0.33);
+    const top = handle(0.3);
+    top.position.y = 0.37;
+    const panel = controlPanel(0.4, fixture.address);
+    panel.position.set(0, 0.27, 0.301);
+    this.root.add(body, nozzle, top, panel, feet(0.5, 0.6));
     this.cloud = new Particles(700, { additive: false, flat: true });
     ctx.world.add(this.cloud.points);
     this.carry = 0;
@@ -599,13 +699,21 @@ class LowFogModel extends BaseModel {
 class LaserModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.12), bodyMaterial());
+    const body = rbox(0.26, 0.2, 0.12, 0.015);
     body.position.y = -0.1;
+    for (let i = 0; i < 7; i++) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.16, 0.04), alu());
+      fin.position.set(-0.09 + i * 0.03, -0.1, -0.08);
+      this.root.add(fin);
+    }
     this.lensMat = lensMaterial();
     const aperture = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.03), this.lensMat);
     aperture.rotation.x = -Math.PI / 2;
     aperture.position.y = 0.001;
-    this.root.add(body, aperture);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.06), glass());
+    win.rotation.x = -Math.PI / 2;
+    win.position.y = 0.002;
+    this.root.add(body, aperture, win);
     this.lasers = [];
     for (let i = 0; i < 24; i++) {
       const b = new Beam();
@@ -657,12 +765,21 @@ class LaserModel extends BaseModel {
 class FogModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.25), bodyMaterial());
-    body.position.y = 0.11;
-    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.08, 12), darkMaterial());
+    // Hazer / fog machine (like ADJ Entour): rounded box, top handle, front fan + nozzle, LCD at the back.
+    const body = rbox(0.27, 0.22, 0.42, 0.025);
+    body.position.y = 0.12;
+    const top = handle(0.2);
+    top.rotation.y = Math.PI / 2;
+    top.position.y = 0.23;
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.075, 32), grille());
+    fan.position.set(0.035, 0.12, 0.211);
+    const nozzle = cyl(0.022, 0.03, 0.04, rubber(), 16);
     nozzle.rotation.x = Math.PI / 2;
-    nozzle.position.set(0, 0.13, 0.16);
-    this.root.add(body, nozzle);
+    nozzle.position.set(-0.08, 0.12, 0.225);
+    const panel = controlPanel(0.27, fixture.address);
+    panel.rotation.y = Math.PI;
+    panel.position.set(0, 0.15, -0.211);
+    this.root.add(body, top, fan, nozzle, panel, feet(0.27, 0.42));
     // Puffs: soft sprites that grow and fade while the machine is firing.
     this.puffs = [];
     const tex = ctx.puffTexture;

@@ -144,7 +144,9 @@ export async function addFixturesDialog(app, presetProfileId) {
   const titleEl = h('div', { style: { fontWeight: 600 } });
 
   const autoAddress = () => {
-    const a = nextFreeAddress(app.project, app.profilesById, st.universe, profile.channels.length);
+    // Room for all the fixtures in one block (falls back to the first free spot for one).
+    const a = nextFreeAddress(app.project, app.profilesById, st.universe, profile.channels.length * st.qty)
+      || nextFreeAddress(app.project, app.profilesById, st.universe, profile.channels.length);
     st.address = a || 1;
     addrInput.value = st.address;
   };
@@ -175,7 +177,7 @@ export async function addFixturesDialog(app, presetProfileId) {
     profilePicker(app, profile.id, onPick),
     titleEl,
     h('div', { class: 'grid3' },
-      field('Cantitate', numberInput(st.qty, (v) => { st.qty = v; info(); }, { min: 1, max: 64, integer: true })),
+      field('Cantitate', numberInput(st.qty, (v) => { st.qty = v; autoAddress(); info(); }, { min: 1, max: 64, integer: true })),
       field('Univers', numberInput(st.universe, (v) => { st.universe = v; autoAddress(); info(); }, { min: 1, max: 32768, integer: true })),
       field('Adresă de start', addrInput)),
     infoEl,
@@ -194,9 +196,10 @@ export async function addFixturesDialog(app, presetProfileId) {
 
   const res = await openModal('Adaugă fixturi', content, [
     { label: 'Anulează', value: null },
+    { label: '🖱 Plasează cu mouse-ul', value: 'place' },
     { label: 'Adaugă', primary: true, value: 'add' },
   ]);
-  if (res !== 'add') return;
+  if (res !== 'add' && res !== 'place') return;
 
   const rot = { floor: { x: 0, y: 0, z: 0 }, hang: { x: 180, y: 0, z: 0 }, front: { x: 90, y: 0, z: 0 }, wall: { x: -15, y: 0, z: 0 } }[st.mount];
   const list = [];
@@ -215,6 +218,7 @@ export async function addFixturesDialog(app, presetProfileId) {
     });
     a += ch;
   }
+  if (res === 'place') { app.placeFixtures(list); return; }
   app.addFixtures(list);
   toast(`Am adăugat ${list.length} × ${profile.name}`);
 }
@@ -641,7 +645,7 @@ export async function settingsDialog(app) {
     h('h4', {}, 'Branding pentru clipuri video'),
     brandingForm(),
     h('h4', {}, 'Imagine'),
-    field('Lumină ambientală în sală', range('ambient', 0, 1.5, 0.01)),
+    field('Lumina din sală (candelabre, ambient)', range('houseLight', 0, 1, 0.01)),
     field('Putere lumină pe suprafețe (podea/pereți)', range('lightPower', 0, 3, 0.05)),
     field('Haze / fum', range('haze', 0, 1, 0.01)),
     field('Glow (bloom)', range('bloom', 0, 2, 0.01)),
