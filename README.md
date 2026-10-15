@@ -2,7 +2,7 @@
 
 Vizualizator 3D **gratuit** pentru **SoundSwitch**, în stilul Capture, dar mai simplu. Adaugi fixturile din rigul tău (moving heads, par-uri, retro-uri, bare LED, strobe, scântei reci, fum greu, glob disco, laser), le așezi pe truss sau pe podea și vezi show-ul în timp real, cu fascicule în haze, glow și lumină pe pereți. Poți înregistra apoi clipuri video cu logo-ul tău, pentru Instagram, TikTok sau oferte.
 
-Rulează ca **aplicație pe Mac** (Apple Silicon și Intel) sau pe Windows, ori direct în browser cu Node.js.
+Rulează ca **aplicație pe Mac** (Apple Silicon și Intel) sau pe Windows, ori direct în browser cu Node.js. Interfața e în **română sau engleză**, la alegere (**[English below](#english)**).
 
 Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: SoundSwitch, rekordbox lighting, QLC+, Lightjams, grandMA onPC etc.
 
@@ -10,8 +10,8 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
 
 - **Primește DMX live** prin Art-Net (UDP 6454) și sACN (UDP 5568). Răspunde la ArtPoll, așa că SoundSwitch îl găsește ca nod Art-Net cu numele „FreeVisualizer”.
 - **Scenă 3D** cu fascicule volumetrice, haze reglabil, bloom/glow, lumină reală pe podea, pereți și invitați, plus camere rapide (3D, Față, Sus, Lateral, din cabina DJ, din public).
-- **Fixturi**:
-  - par/uplight RGB, RGBW, RGBWA+UV
+- **Fixturi care arată ca aparatele reale** (display, lentile, grile de ventilație, LED-uri vizibile, materiale de metal, plastic și sticlă):
+  - par/uplight RGB, RGBW, RGBWA+UV (plat cu bracket, par can sau pinspot)
   - moving head Spot, Beam și Wash, cu pan/tilt pe 16 biți, roată de culori, gobo, prismă și zoom
   - bare LED cu pixeli
   - **retro hexagonal cu 7 capete** (1 în centru + 6 în jur): bec cald cu filament care se aprinde și se stinge ca un bec adevărat, sau varianta RGB
@@ -22,6 +22,9 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - **fum greu / „dans în nori”**, un nor jos care se întinde pe ring și ia culoarea luminilor
   - **glob disco** cu pinspot-uri: reflexiile se rotesc pe pereți, tavan și invitați
   - **laser** cu 5 modele (evantai, liquid sky, con, tunel, rază)
+- **Modele 3D reale**: fișierele **GDTF** își aduc modelul 3D al producătorului (bază, braț și cap care se mișcă pe pan/tilt) și poza aparatului. Poți încărca și un model **.glb** în profilul fixturii (**🔍 Poze cu aparatul** caută imagini după model).
+- **Sală realistă**: **sală de evenimente** (parchet, lambriu, ferestre cu draperii, tavan casetat, candelabre, draperie albă în spatele DJ-ului), **sală goală** sau **club (întunecat)**. Slider-ul **Sală** aprinde candelabrele și luminează ambientul; **💡** dă lumină de lucru.
+- **✨ Asistent Claude**: îi scrii ce vrei („Pune 4 BeamZ Panther 60 pe truss de la adresa 200”) și adaugă, așază, mută sau șterge fixturi, cu cheia ta API de la Anthropic.
 - **Clipuri video pentru clienți**: înregistrezi show-ul în format vertical 9:16 (Reels/TikTok), 16:9 sau 1:1, cu logo-ul și textul tău, cameră cinematică automată și, opțional, melodia ta
 - **Șabloane**: „Rig nuntă” (cabină DJ cu truss, retro-uri, 12 uplight-uri, ring de dans cu scântei, glob, fum greu, laser, masa mirilor, mese rotunde) și „Rig club"
 - **Import direct din SoundSwitch**: citește proiectul `.ssproj` și pune în scenă aceleași fixturi, cu aceleași nume, moduri și adrese ca în DMX Map, cu profilele din SoundSwitch
@@ -32,6 +35,8 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - în aplicația pentru Mac / Windows, Fixture.ID se deschide într-o fereastră proprie, iar fișierul descărcat se importă singur
   - editor pentru profilele tale
 - **Editare rapidă**:
+  - **plasare cu mouse-ul**: click pe truss, podea sau perete și fixtura se pune singură cu lumina în direcția corectă
+  - **pad de mutare și rotire**: stânga/dreapta, departe/spre tine, sus/jos, relativ la cum privești scena; ții apăsat și se repetă
   - selecție multiplă: Ctrl/Cmd+click, Shift+trage un dreptunghi, Ctrl/Cmd+A
   - mutare și rotire pe grup
   - aliniere și distribuire egală
@@ -51,7 +56,8 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - salvare pe calculator (Ctrl+S)
   - export și import ca fișier `.json`
   - Undo/Redo
-- Merge **fără internet** (Three.js e inclus). Internetul trebuie doar ca să imporți fixturi din Open Fixture Library.
+- Merge **fără internet** (Three.js e inclus). Internetul trebuie doar ca să imporți fixturi din Open Fixture Library și pentru asistentul Claude.
+- **Limbă**: română sau engleză, din **⚙ Setări → Limbă** sau butonul **RO / EN** din bara de sus.
 
 ## Instalare pe Mac (recomandat)
 
@@ -125,6 +131,7 @@ Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile
 
 1. **Nou → Rig nuntă** îți dă un punct de plecare complet. Îl adaptezi la sala ta.
 2. **Fixturi → + Adaugă fixturi**: alegi profilul, cantitatea, universul și adresa de start, apoi montajul (pe podea, agățat pe truss, spre public). Retro-urile sunt profilele „Retro hexagonal 7 capete”, în 4 variante de canale.
+   - Cu **🖱 Plasează cu mouse-ul** dai click în scenă pentru fiecare fixtură: pe truss se agață cu lumina în jos, pe podea stă cu lumina în sus, pe perete bate spre sală. **Esc** oprește.
 3. Modelul tău nu e în lista generică? Scrie-l în căutarea din **Adaugă fixturi** (de exemplu „panther” sau „intimidator spot 260”):
    - dacă apare la **Open Fixture Library**, dai click și alegi **exact modul DMX** setat pe fixtură;
    - dacă nu, apeși **🔎 Caută pe Fixture.ID**: textul căutat e deja copiat, îl lipești în site și descarci fișierul **.d4**. În aplicația desktop se importă singur; în browser îl tragi peste fereastră.
@@ -133,7 +140,8 @@ Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile
    - Mai multe deodată: **Ctrl/Cmd+click**, sau ții **Shift** și tragi un dreptunghi peste ele.
    - **W** = mutare (tragi de săgețile colorate), **E** = rotire (roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală).
    - Săgeata galbenă arată încotro bate lumina.
-   - În dreapta ai poziția și cele 3 slidere de orientare, cu butoane de ±15°.
+   - În dreapta ai **pad-ul**: **← Stânga / Dreapta →**, **↑ Departe / ↓ Spre tine**, **▲ Sus / ▼ Jos**, cu pași de 1 / 10 / 50 cm, plus rotire și înclinare cu pași de 1–90°. Direcțiile sunt cele de pe ecran, din orice unghi te uiți. Ții apăsat și se repetă; o apăsare = un pas de Undo.
+   - Poziția exactă și cele 3 slidere de orientare sunt sub **Poziție exactă**.
    - Cel mai simplu e **🎯 Țintește**: apeși butonul, apoi dai click în scenă pe punctul unde vrei lumina.
 5. **Scenă**: adaugi truss, cabină DJ, boxe, ecran LED și invitați, și setezi dimensiunile sălii.
 6. **Ctrl+S** salvează proiectul. Cu **Export** iei fișierul `.json` și îl poți muta pe alt laptop.
@@ -145,7 +153,7 @@ Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile
 | Ctrl/Cmd+click · Shift+trage | Selecție multiplă · dreptunghi de selecție |
 | Ctrl/Cmd+A | Selectează toate fixturile |
 | W / E | Mută / rotește selecția |
-| Săgeți · PageUp/PageDown | Mută 25 cm (Shift = 5 cm) · sus/jos |
+| Săgeți · PageUp/PageDown | Mută 25 cm (Shift = 5 cm) relativ la cameră · sus/jos |
 | [ / ] | Rotește ±15° (Shift = ±5°) |
 | F | Centrează camera pe selecție |
 | Ctrl+D | Duplică selecția (cu adresele următoare) |
@@ -156,6 +164,18 @@ Profilele (canalele, roțile de culori, strobe-ul) sunt luate **din definițiile
 | D | Pornește/oprește demo |
 | L | Etichete cu nume și adrese |
 | 1–6 | Camere: 3D, față, sus, lateral, DJ, public |
+
+### Asistentul Claude
+
+1. Îți faci o cheie API pe <https://console.anthropic.com> (Settings → API Keys). Costul se plătește direct la Anthropic, după consum.
+2. **⚙ Setări → Asistent Claude**: lipești cheia și apeși **Salvează**. Modelul implicit e **Claude Opus 5.5**; poți alege și Sonnet 5.5 sau Haiku 5.5 (mai rapide).
+3. Apasă **✨ Asistent** în bara de sus și scrie ce vrei, de exemplu:
+   - „Pune 4 BeamZ Panther 60 pe truss, de la adresa 200, modul 16 canale”
+   - „Adaugă 6 par-uri RGBW pe peretele din spate”
+   - „Ridică spoturile cu 30 cm și îndreaptă-le spre ring”
+4. Claude caută profilul (în proiect, în profilele generice și în Open Fixture Library), adaugă fixturile, le așază și îți spune modul și adresele, ca să le potrivești cu SoundSwitch. Tot ce face un mesaj se anulează cu un singur **Ctrl+Z**.
+
+Cheia rămâne doar pe calculatorul tău, în folderul cu date al aplicației, și nu ajunge niciodată în pagină. Poți folosi și variabila de mediu `ANTHROPIC_API_KEY`.
 
 ## Clipuri video pentru clienți
 
@@ -178,7 +198,8 @@ Ai două surse pentru show:
 ## Pentru dezvoltatori
 
 ```
-server/            Node.js fără dependențe: Art-Net, sACN, SSE către browser, proxy OFL, proiecte
+server/            Node.js: Art-Net, sACN, SSE către browser, proxy OFL, proiecte, modele 3D,
+                   asistentul Claude (assistant.js, singura dependență: @anthropic-ai/sdk)
 desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereastră de prezentare
 .github/workflows/ build automat .dmg (universal) + .exe; Release la fiecare tag v*
 public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendor)
@@ -186,7 +207,11 @@ public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendo
   ofl-import.js    Open Fixture Library → profil FreeVisualizer (pur, testat)
   ss-import.js     proiect SoundSwitch (SoundSwitchVenues.bin) → fixturi + profile (pur, testat)
   d4-import.js     Avolites .d4 (Fixture.ID) → profil; gdtf-import.js / qxf-import.js la fel
-  fixtures3d.js    modelele 3D și fasciculele
+  fixtures3d.js    modelele 3D și fasciculele (piesele în fixture-parts.js, texturile în textures.js)
+  models3d.js      modele .glb / GDTF încărcate pe fixturi
+  venue3d.js       sala de evenimente / sala goală, candelabre
+  assistant.js     panoul asistentului Claude și instrumentele lui
+  i18n.js          română / engleză (dicționarele în public/js/lang/)
   scene3d.js       scena, camera, bloom, selecție
   particles.js     particule (scântei, fum greu, reflexii glob)
   recorder.js      înregistrare clipuri video
@@ -200,4 +225,76 @@ test/              teste (npm test)
 - `npm install && npm run app` pornește aplicația desktop din cod.
 - `npm run dist:mac` construiește `.dmg`-ul; merge doar pe un Mac, altfel îl face GitHub Actions.
 
-Licență: MIT. Three.js este distribuit sub licența MIT (vezi `public/vendor/three/LICENSE`). Datele Open Fixture Library sunt sub licența MIT.
+---
+
+## English
+
+FreeVisualizer is a **free** 3D visualizer for **SoundSwitch**, in the spirit of Capture but simpler. Add the fixtures from your rig (moving heads, pars, retro lights, LED bars, strobes, cold sparks, low fog, mirror ball, laser), put them on the truss or the floor and watch the show live, with volumetric beams in haze, glow and light on the walls. Then record video clips with your logo for Instagram, TikTok or client offers.
+
+It runs as a **Mac app** (Apple Silicon and Intel), on Windows, or in the browser with Node.js, and works with anything that sends **Art-Net** or **sACN (E1.31)**. The interface is in **English or Romanian**: switch in **⚙ Settings → Language** or with the **RO / EN** button in the top bar.
+
+### Features
+
+- **Live DMX** over Art-Net (UDP 6454) and sACN (UDP 5568). Answers ArtPoll, so SoundSwitch sees it as the Art-Net node “FreeVisualizer”.
+- **Realistic fixtures**: pars/uplights, moving head spot / beam / wash (16-bit pan/tilt, color wheel, gobo, prism, zoom), LED pixel bars, the **7-head hexagonal retro** light with warm filament bulbs, strobe/blinder, fog/haze, **cold spark machines**, **low fog**, **mirror ball** with pinspots and **laser**.
+- **Real 3D models**: **GDTF** files bring the manufacturer's 3D model (base, yoke and head moving with pan/tilt) and fixture photo; you can also load a **.glb** model into any profile.
+- **Venues**: a realistic **event venue** (parquet, wainscoting, curtains, coffered ceiling, chandeliers, a white drape behind the DJ), an **empty room** or a **dark club**. The **Room** slider sets the house lights; **💡** turns on work lights.
+- **Import from SoundSwitch**: reads your `.ssproj` project and builds the same fixtures, names, modes and addresses as the SoundSwitch DMX Map, with the SoundSwitch fixture definitions.
+- **Library**: built-in generic profiles, **one search** across your profiles and the [Open Fixture Library](https://open-fixture-library.org) (one-click import), a [Fixture.ID](https://www.fixture.id/) button, and import of **.d4**, **.gdtf**, **.zip** and **.json** files (just drop them on the window).
+- **Fast editing**: **place with the mouse** (truss, floor or wall – the fixture points the right way by itself), a **move & rotate pad** relative to your view, multi-select, group move/rotate, align and distribute, automatic left-to-right DMX re-addressing and **🎯 Aim** (click the spot the light should hit).
+- **✨ Claude assistant**: tell it “Put 4 BeamZ Panther 60 on the truss from address 200” and it finds the profile, adds and places the fixtures and tells you the DMX mode and addresses. It uses your own Anthropic API key.
+- **Patch**: universe and address per fixture, next free address filled in automatically, overlaps flagged, DMX monitor for all 512 channels.
+- **Demo without SoundSwitch** (**▶ Demo**, 126 BPM) and manual channel faders in the inspector.
+- **Video clips**: 9:16, 16:9 or 1:1 with your logo, text, cinematic camera and optional music.
+- **Projects**: autosave, save (Ctrl+S), export/import `.json`, Undo/Redo. Works **offline** (internet is only needed for Open Fixture Library and the Claude assistant).
+
+### Install
+
+- **Mac:** download `FreeVisualizer-…-mac.dmg` from **Releases**, drag the app to **Applications**. First launch: **right-click → Open → Open** (the app is not signed with an Apple Developer account); on macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**. Allow **Local Network** access when asked.
+- **Windows:** download and run `FreeVisualizer-…-windows-setup.exe`.
+- **Browser + Node.js:** install Node.js LTS, download the project (**Code → Download ZIP**), then double-click `start-windows.bat` / `start-mac.command` or run `npm start`. It opens <http://localhost:8080>.
+
+### Connect SoundSwitch
+
+1. Start **FreeVisualizer first**, then SoundSwitch.
+2. In SoundSwitch: **Preferences → Hardware** → enable **Localhost Art-Net Node** (SoundSwitch 2.9+).
+3. In FreeVisualizer use **Fixtures → ⇪ Import from SoundSwitch**, or add the **same fixtures with the same universe, address and DMX mode** as in the SoundSwitch DMX patch.
+4. The indicator in the top-right turns green (“Receiving DMX”).
+
+On another computer: put both on the same network (cable preferred), pick the “FreeVisualizer” Art-Net node or its IP (shown in **⚙ Settings**), and allow UDP **6454** / **5568** in the firewall. By default Art-Net universe 0 shows as **Universe 1**, like in SoundSwitch.
+
+### Claude assistant
+
+1. Create an API key at <https://console.anthropic.com> (Settings → API Keys). Usage is billed by Anthropic.
+2. **⚙ Settings → Claude assistant**: paste the key and press **Save**. The default model is **Claude Opus 5.5**; Sonnet 5.5 and Haiku 5.5 are faster options.
+3. Press **✨ Assistant** in the top bar and type what you want, e.g. “Add 6 RGBW pars on the back wall” or “Raise the spots by 30 cm and aim them at the dance floor”.
+
+Everything one message does is undone with a single **Ctrl+Z**. The key stays on your computer (in the app's data folder) and is never sent to the page. The `ANTHROPIC_API_KEY` environment variable works too.
+
+### Shortcuts
+
+| Key | Action |
+| --- | --- |
+| Ctrl/Cmd+click · Shift+drag | Multi-select · selection box |
+| Ctrl/Cmd+A | Select all fixtures |
+| W / E | Move / rotate the selection |
+| Arrows · PageUp/PageDown | Move 25 cm (Shift = 5 cm) relative to the camera · up/down |
+| [ / ] | Rotate ±15° (Shift = ±5°) |
+| F | Focus the camera on the selection |
+| Ctrl+D | Duplicate (with the next addresses) |
+| Del | Delete |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+S | Save |
+| H | Hide the panels (presentation mode) |
+| D | Demo on/off |
+| L | Name and address labels |
+| 1–6 | Cameras: 3D, front, top, side, DJ, audience |
+
+### Troubleshooting
+
+- **“No DMX data”**: check *Localhost Art-Net Node* and restart SoundSwitch *after* starting FreeVisualizer.
+- **“Port 6454 is busy”**: another visualizer (e.g. Capture) is listening on the port. Close it and start again.
+- **Wrong colors or movement**: the DMX mode (channel count) differs between the profile and SoundSwitch. Check each channel with the “Test channels” faders.
+- **Moving head moves the wrong way**: tick “Invert pan” or “Invert tilt” in the inspector.
+
+Licență / License: MIT. Three.js este distribuit sub licența MIT (vezi `public/vendor/three/LICENSE`). Datele Open Fixture Library sunt sub licența MIT.
