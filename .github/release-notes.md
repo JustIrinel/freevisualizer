@@ -69,7 +69,7 @@ A **free** 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures 
 - **Real 3D models**:
   - **GDTF** files bring the manufacturer's 3D model (base, yoke and head moving with pan/tilt) and the fixture photo;
   - you can also load a **.glb** model into a fixture profile.
-- **Realistic event venue**: parquet floor, wainscoting, windows with curtains, coffered ceiling, chandeliers and a white drape behind the DJ. **Empty room** and **Club (dark)** are there too.
+- **Realistic event hall**: parquet floor, wainscoting, windows with curtains, coffered ceiling, chandeliers and a white drape behind the DJ. **Empty room** and **Club (dark)** are there too.
 - **House lights**:
   - the **Room** slider turns on the chandeliers and lifts the ambient light;
   - **💡** gives you work lights while you place fixtures.

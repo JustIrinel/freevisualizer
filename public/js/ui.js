@@ -7,7 +7,7 @@ import * as dialogs from './dialogs.js';
 import * as ssDialog from './ss-dialog.js';
 import { ROOM_STYLES } from './venue3d.js';
 import { recordDialog } from './recorder.js';
-import { tr, tp } from './i18n.js';
+import { tr, tp, lang, setLang } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,6 +21,7 @@ export function bindStatic(app) {
     import: () => app.importProject(),
     undo: () => app.undo(),
     redo: () => app.redo(),
+    language: () => setLang(lang === 'ro' ? 'en' : 'ro'),
     settings: () => dialogs.settingsDialog(app),
     help: () => dialogs.helpDialog(app),
     'add-fixture': () => dialogs.addFixturesDialog(app),

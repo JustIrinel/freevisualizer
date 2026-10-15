@@ -294,7 +294,7 @@ Everything one message does is undone with a single **Ctrl+Z**. The key stays on
 
 - **“No DMX data”**: check *Localhost Art-Net Node* and restart SoundSwitch *after* starting FreeVisualizer.
 - **“Port 6454 is busy”**: another visualizer (e.g. Capture) is listening on the port. Close it and start again.
-- **Wrong colors or movement**: the DMX mode (channel count) differs between the profile and SoundSwitch. Check each channel with the “Test channels” faders.
+- **Wrong colors or movement**: the DMX mode (channel count) differs between the profile and SoundSwitch. Check each channel with the “Channel test” faders.
 - **Moving head moves the wrong way**: tick “Invert pan” or “Invert tilt” in the inspector.
 
 Licență / License: MIT. Three.js este distribuit sub licența MIT (vezi `public/vendor/three/LICENSE`). Datele Open Fixture Library sunt sub licența MIT.
