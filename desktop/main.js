@@ -27,7 +27,7 @@ const EN = {
   'Anulează#cancel': 'Cancel',
   'Descărcarea „{name}” nu s-a terminat': 'The download “{name}” did not finish',
   'Stare: {state}': 'Status: {state}',
-  'Nu am putut citi fișierul descărcat': 'Couldn\'t read the downloaded file',
+  'Nu am putut citi fișierul descărcat': "Couldn't read the downloaded file",
   'Fixture.ID – descarcă fișierul .d4, se importă singur în FreeVisualizer': 'Fixture.ID – download the .d4 file, it imports into FreeVisualizer automatically',
   'FreeVisualizer – Prezentare': 'FreeVisualizer – Presentation',
   'Despre FreeVisualizer': 'About FreeVisualizer',
@@ -72,7 +72,7 @@ const EN = {
   'Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN)': 'Free 3D visualizer for SoundSwitch (Art-Net / sACN)',
   'Portul Art-Net 6454 este ocupat': 'Art-Net port 6454 is in use',
   'Alt program (SoundSwitch pornit înainte, Capture sau alt vizualizator) folosește deja portul. Închide FreeVisualizer și SoundSwitch, pornește întâi FreeVisualizer, apoi SoundSwitch.\n\nDetalii: {err}': 'Another program (SoundSwitch started first, Capture or another visualizer) is already using the port. Quit FreeVisualizer and SoundSwitch, start FreeVisualizer first, then SoundSwitch.\n\nDetails: {err}',
-  'FreeVisualizer nu a putut porni': 'FreeVisualizer couldn\'t start',
+  'FreeVisualizer nu a putut porni': "FreeVisualizer couldn't start",
 };
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
