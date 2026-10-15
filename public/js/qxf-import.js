@@ -1,6 +1,7 @@
 // QLC+ fixture definition (.qxf) → FreeVisualizer profile.
 import { parseXml, child, children } from './xml-lite.js';
 import { DEFAULT_STROBE_RANGES } from './profiles.js';
+import { tr } from './i18n.js';
 
 const PRESETS = {
   IntensityMasterDimmer: 'dimmer', IntensityDimmer: 'dimmer',
@@ -105,12 +106,12 @@ function convertChannel(def, fixtureType) {
 
 export function parseQxf(text) {
   const root = parseXml(text);
-  if (root.name !== 'FixtureDefinition') throw new Error('Fișierul nu este o definiție QLC+ (.qxf)');
+  if (root.name !== 'FixtureDefinition') throw new Error(tr('Fișierul nu este o definiție QLC+ (.qxf)'));
   return root;
 }
 
 export function listQxfModes(root) {
-  return children(root, 'Mode').map((m, index) => ({ index, name: m.attrs.Name || `Mod ${index + 1}`, channels: children(m, 'Channel').length }));
+  return children(root, 'Mode').map((m, index) => ({ index, name: m.attrs.Name || tr('Mod {n}', { n: index + 1 }), channels: children(m, 'Channel').length }));
 }
 
 function lensAndFocus(node) {
@@ -132,11 +133,11 @@ function lensAndFocus(node) {
 
 export function qxfToProfile(root, modeIndex = 0) {
   const manufacturer = child(root, 'Manufacturer')?.text || '';
-  const model = child(root, 'Model')?.text || 'Fixtură';
+  const model = child(root, 'Model')?.text || tr('Fixtură');
   const fixtureType = child(root, 'Type')?.text || '';
   const defs = new Map(children(root, 'Channel').map((c) => [c.attrs.Name, c]));
   const mode = children(root, 'Mode')[modeIndex];
-  if (!mode) throw new Error('Modul selectat nu există');
+  if (!mode) throw new Error(tr('Modul selectat nu există'));
 
   const list = children(mode, 'Channel')
     .map((c) => ({ number: Number(c.attrs.Number), name: c.text }))

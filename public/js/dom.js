@@ -1,4 +1,5 @@
 // Tiny DOM helpers (no framework).
+import { tr } from './i18n.js';
 
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -33,7 +34,7 @@ export function toast(msg, type = 'info', ms = 3200) {
  * Resolves with the clicked button's value (or null when dismissed).
  * A button's onClick may return false to keep the dialog open.
  */
-export function openModal(title, content, buttons = [{ label: 'Închide', value: null }], opts = {}) {
+export function openModal(title, content, buttons = [{ label: tr('Închide'), value: null }], opts = {}) {
   const dlg = document.getElementById('modal');
   const body = document.getElementById('modalBody');
   body.innerHTML = '';
@@ -57,7 +58,7 @@ export function openModal(title, content, buttons = [{ label: 'Închide', value:
       },
     }, b.label)));
     body.append(
-      h('div', { class: 'modal-head' }, h('h2', {}, title), h('button', { class: 'icon', onclick: () => finish(null), title: 'Închide' }, '✕')),
+      h('div', { class: 'modal-head' }, h('h2', {}, title), h('button', { class: 'icon', onclick: () => finish(null), title: tr('Închide') }, '✕')),
       h('div', { class: 'modal-content' }, content),
       foot,
     );

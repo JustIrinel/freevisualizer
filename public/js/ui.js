@@ -7,6 +7,7 @@ import * as dialogs from './dialogs.js';
 import * as ssDialog from './ss-dialog.js';
 import { ROOM_STYLES } from './venue3d.js';
 import { recordDialog } from './recorder.js';
+import { tr, tp } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,7 +31,7 @@ export function bindStatic(app) {
     'new-profile': () => dialogs.profileEditor(app, null),
     'import-profile': () => dialogs.importProfileFile(app),
     fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()),
-    'hide-ui': () => { document.body.classList.toggle('ui-hidden'); app.vis.resize(); if (document.body.classList.contains('ui-hidden')) toast('Apasă H ca să revii la panouri.'); },
+    'hide-ui': () => { document.body.classList.toggle('ui-hidden'); app.vis.resize(); if (document.body.classList.contains('ui-hidden')) toast(tr('Apasă H ca să revii la panouri.')); },
     demo: () => app.toggleDemo(),
     record: () => recordDialog(app),
     present: () => window.freevisDesktop && window.freevisDesktop.togglePresent(),
@@ -60,7 +61,7 @@ export function bindStatic(app) {
     if (dirs.length) {
       try {
         const source = await ssDialog.venuesFromEntry(dirs[0]);
-        if (!source) throw new Error('Folderul nu e un proiect SoundSwitch (.ssproj)');
+        if (!source) throw new Error(tr('Folderul nu e un proiect SoundSwitch (.ssproj)'));
         await ssDialog.importSoundSwitch(app, source);
       } catch (err) {
         toast(err.message, 'error', 8000);
@@ -76,7 +77,7 @@ export function bindStatic(app) {
     window.freevisDesktop.onMenu((action) => { if (actions[action]) actions[action](); });
     // Files downloaded in the Fixture.ID window.
     window.freevisDesktop.onFixtureFile?.((f) => {
-      toast(`Am primit „${f.name}” de pe Fixture.ID`);
+      toast(tr('Am primit „{name}” de pe Fixture.ID', { name: f.name }));
       dialogs.importFixtureFile(app, new File([f.data], f.name));
     });
   }
@@ -108,7 +109,7 @@ export function bindStatic(app) {
   bloom.addEventListener('input', () => app.setSetting('bloom', parseFloat(bloom.value)));
 
   $('demoBtn').addEventListener('click', () => app.toggleDemo());
-  $('projectName').addEventListener('change', (e) => { app.project.name = e.target.value.trim() || 'Proiect nou'; app.saveSoon(); });
+  $('projectName').addEventListener('change', (e) => { app.project.name = e.target.value.trim() || tr('Proiect nou'); app.saveSoon(); });
   $('fixtureFilter').addEventListener('input', () => renderFixtureList(app));
   $('profileFilter').addEventListener('input', () => renderProfileList(app));
 
@@ -121,7 +122,7 @@ export function setTransformMode(app, mode) {
   app.vis.setTransformMode(mode);
   if (mode === 'rotate' && !rotateHintShown) {
     rotateHintShown = true;
-    toast('Rotire: trage de cercuri – roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală. Mai simplu: sliderele din dreapta sau 🎯 Țintește.', 'info', 9000);
+    toast(tr('Rotire: trage de cercuri – roșu = înclinare față/spate, verde = rotire stânga/dreapta, albastru = înclinare laterală. Mai simplu: sliderele din dreapta sau 🎯 Țintește.'), 'info', 9000);
   }
   document.querySelectorAll('[data-tmode]').forEach((b) => b.classList.toggle('active', b.dataset.tmode === mode));
 }
@@ -195,7 +196,7 @@ function renderFixtureList(app) {
     const hay = `${f.name} ${p.name} ${f.universe}.${f.address}`.toLowerCase();
     if (q && !hay.includes(q)) continue;
     if (f.universe !== lastU) {
-      list.append(h('div', { class: 'group-title' }, `Univers ${f.universe}`));
+      list.append(h('div', { class: 'group-title' }, tr('Univers {u}', { u: f.universe })));
       lastU = f.universe;
     }
     shown++;
@@ -203,7 +204,7 @@ function renderFixtureList(app) {
     list.append(h('div', {
       class: `item ${app.selectedIds.includes(f.id) ? 'selected' : ''} ${conflicts.has(f.id) ? 'conflict' : ''}`,
       'data-id': f.id,
-      title: `${p.name}${conflicts.has(f.id) ? '\n⚠ Adrese suprapuse!' : ''}\nCtrl/Cmd+click: adaugă la selecție · Shift+click: interval`,
+      title: `${p.name}${conflicts.has(f.id) ? `\n${tr('⚠ Adrese suprapuse!')}` : ''}\n${tr('Ctrl/Cmd+click: adaugă la selecție · Shift+click: interval')}`,
       onclick: (e) => listClick(app, f.id, e, () => [...document.querySelectorAll('#fixtureList .item[data-id]')].map((x) => x.dataset.id)),
       ondblclick: () => app.vis.focusSelected(),
     },
@@ -212,13 +213,18 @@ function renderFixtureList(app) {
     h('span', { class: 'meta' }, `${f.address}–${end}`)));
   }
   if (!app.project.fixtures.length) {
-    list.append(h('div', { class: 'muted', style: { padding: '16px 6px' } }, 'Nicio fixtură încă. Apasă „+ Adaugă fixturi” și alege din bibliotecă (sau caută modelul tău exact în Open Fixture Library).'));
+    list.append(h('div', { class: 'muted', style: { padding: '16px 6px' } }, tr('Nicio fixtură încă. Apasă „+ Adaugă fixturi” și alege din bibliotecă (sau caută modelul tău exact în Open Fixture Library).')));
   } else if (!shown) {
-    list.append(h('div', { class: 'muted', style: { padding: '8px' } }, 'Niciun rezultat.'));
+    list.append(h('div', { class: 'muted', style: { padding: '8px' } }, tr('Niciun rezultat.')));
   }
   const universes = new Set(app.project.fixtures.map((f) => f.universe));
   const channels = app.project.fixtures.reduce((s, f) => s + app.profile(f.profileId).channels.length, 0);
-  $('patchSummary').textContent = `${app.project.fixtures.length} fixturi · ${channels} canale · ${universes.size} univers(uri)${conflicts.size ? ` · ⚠ ${conflicts.size} conflicte de adresă` : ''}`;
+  $('patchSummary').textContent = [
+    tp(app.project.fixtures.length, '1 fixtură', '{n} fixturi'),
+    tp(channels, '1 canal', '{n} canale'),
+    tp(universes.size, '1 univers', '{n} universuri'),
+    conflicts.size ? tp(conflicts.size, '⚠ 1 conflict de adresă', '⚠ {n} conflicte de adresă') : null,
+  ].filter(Boolean).join(' · ');
 }
 
 function renderPropList(app) {
@@ -231,7 +237,7 @@ function renderPropList(app) {
       onclick: (e) => listClick(app, p.id, e, () => app.project.props.map((x) => x.id)),
     }, h('span', { class: 'name' }, p.name), h('span', { class: 'tag' }, (PROP_TYPES[p.type] || {}).label || p.type)));
   }
-  if (!app.project.props.length) list.append(h('div', { class: 'muted small' }, 'Nimic adăugat.'));
+  if (!app.project.props.length) list.append(h('div', { class: 'muted small' }, tr('Nimic adăugat.')));
 }
 
 export function renderProfileList(app) {
@@ -239,8 +245,8 @@ export function renderProfileList(app) {
   const q = $('profileFilter').value.toLowerCase().trim();
   list.innerHTML = '';
   const groups = [
-    ['Profilele proiectului', app.project.profiles],
-    ['Generice (incluse)', app.builtins],
+    [tr('Profilele proiectului'), app.project.profiles],
+    [tr('Generice (incluse)'), app.builtins],
   ];
   for (const [title, profiles] of groups) {
     const items = profiles.filter((p) => !q || `${p.manufacturer} ${p.name} ${KINDS[p.kind]}`.toLowerCase().includes(q));
@@ -248,9 +254,9 @@ export function renderProfileList(app) {
     list.append(h('div', { class: 'group-title' }, title));
     for (const p of items) {
       const used = app.project.fixtures.filter((f) => f.profileId === p.id).length;
-      list.append(h('div', { class: 'item', title: `${p.manufacturer ? p.manufacturer + ' · ' : ''}${p.name}\n${p.channels.length} canale · ${KINDS[p.kind]}`, onclick: () => dialogs.profileActions(app, p) },
+      list.append(h('div', { class: 'item', title: `${p.manufacturer ? p.manufacturer + ' · ' : ''}${p.name}\n${tp(p.channels.length, '1 canal', '{n} canale')} · ${KINDS[p.kind]}`, onclick: () => dialogs.profileActions(app, p) },
         h('span', { class: 'name' }, p.thumbnail ? h('img', { class: 'profile-thumb', src: `/api/models/${p.thumbnail}`, alt: '' }) : null, p.manufacturer && p.source !== 'builtin' ? `${p.manufacturer} ${p.name}` : p.name),
-        p.model ? h('span', { class: 'tag', title: 'Are model 3D real' }, '3D') : null,
+        p.model ? h('span', { class: 'tag', title: tr('Are model 3D real') }, '3D') : null,
         used ? h('span', { class: 'tag' }, `×${used}`) : null,
         h('span', { class: 'meta' }, `${p.channels.length}ch`)));
     }
@@ -264,16 +270,16 @@ function renderRoomForm(app) {
   const style = h('select', {}, Object.entries(ROOM_STYLES).map(([k, label]) => h('option', { value: k, selected: (r.style || 'dark') === k }, label)));
   style.addEventListener('change', () => app.updateRoom({ style: style.value }));
   form.append(
-    field('Tip sală', style),
+    field(tr('Tip sală'), style),
     h('div', { class: 'grid3' },
-      field('Lățime (m)', numberInput(r.width, (v) => app.updateRoom({ width: v }), { min: 4, max: 200, step: 1 })),
-      field('Adâncime (m)', numberInput(r.depth, (v) => app.updateRoom({ depth: v }), { min: 4, max: 200, step: 1 })),
-      field('Înălțime (m)', numberInput(r.height, (v) => app.updateRoom({ height: v }), { min: 2, max: 40, step: 0.5 }))),
+      field(tr('Lățime (m)'), numberInput(r.width, (v) => app.updateRoom({ width: v }), { min: 4, max: 200, step: 1 })),
+      field(tr('Adâncime (m)'), numberInput(r.depth, (v) => app.updateRoom({ depth: v }), { min: 4, max: 200, step: 1 })),
+      field(tr('Înălțime (m)'), numberInput(r.height, (v) => app.updateRoom({ height: v }), { min: 2, max: 40, step: 0.5 }))),
     h('div', { class: 'grid2' },
-      field('Podea', colorInput(r.floorColor, (v) => app.updateRoom({ floorColor: v }))),
-      field('Pereți', colorInput(r.wallColor, (v) => app.updateRoom({ wallColor: v })))),
-    h('label', { class: 'inline' }, checkbox(r.walls !== false, (v) => app.updateRoom({ walls: v })), 'Pereți'),
-    h('label', { class: 'inline' }, checkbox(r.grid !== false, (v) => app.updateRoom({ grid: v })), 'Grilă pe podea'),
+      field(tr('Podea'), colorInput(r.floorColor, (v) => app.updateRoom({ floorColor: v }))),
+      field(tr('Pereți'), colorInput(r.wallColor, (v) => app.updateRoom({ wallColor: v })))),
+    h('label', { class: 'inline' }, checkbox(r.walls !== false, (v) => app.updateRoom({ walls: v })), tr('Pereți')),
+    h('label', { class: 'inline' }, checkbox(r.grid !== false, (v) => app.updateRoom({ grid: v })), tr('Grilă pe podea')),
   );
 }
 
@@ -292,7 +298,7 @@ function checkbox(value, onChange) {
 // ------------------------------------------------------------------ inspector
 function positionInputs(app, id) {
   const item = app.findItem(id);
-  const names = { x: 'Stânga ↔ dreapta', y: 'Înălțime', z: 'Spate ↕ față' };
+  const names = { x: tr('Stânga ↔ dreapta'), y: tr('Înălțime'), z: tr('Spate ↕ față') };
   const wrap = h('div', { class: 'xyz', 'data-xyz': 'position' });
   for (const axis of ['x', 'y', 'z']) {
     const input = numberInput(item.position[axis], (v) => app.updateItem(id, { position: { ...app.findItem(id).position, [axis]: v } }), { step: 0.05 });
@@ -303,9 +309,9 @@ function positionInputs(app, id) {
 }
 
 const ROT_AXES = [
-  ['x', 'Înclinare față / spate', 'Apleacă fixtura înainte sau înapoi'],
-  ['y', 'Rotire stânga / dreapta', 'Rotește fixtura în jurul axei verticale'],
-  ['z', 'Înclinare laterală', 'Apleacă fixtura spre stânga sau spre dreapta'],
+  ['x', tr('Înclinare față / spate'), tr('Apleacă fixtura înainte sau înapoi')],
+  ['y', tr('Rotire stânga / dreapta'), tr('Rotește fixtura în jurul axei verticale')],
+  ['z', tr('Înclinare laterală'), tr('Apleacă fixtura spre stânga sau spre dreapta')],
 ];
 
 /** One slider per axis with a numeric field and ±15° buttons. */
@@ -373,7 +379,7 @@ function holdButton(label, title, act, app) {
 function movePad(app) {
   const steps = padSteps();
   const stepRow = (key, values, fmt) => {
-    const row = h('div', { class: 'pad-steps' }, h('span', { class: 'muted small' }, 'Pas:'));
+    const row = h('div', { class: 'pad-steps' }, h('span', { class: 'muted small' }, tr('Pas:')));
     for (const v of values) {
       const b = h('button', { class: steps[key] === v ? 'active' : '' }, fmt(v));
       b.addEventListener('click', () => {
@@ -388,46 +394,46 @@ function movePad(app) {
   const mv = (dir) => (record) => app.nudge(dir, steps.move, { record });
   const rt = (axis, sign) => (record) => app.rotateSelection(axis, sign * steps.turn, { record });
   return h('div', { class: 'pad' },
-    h('div', { class: 'pad-title' }, 'Mută', stepRow('move', [0.01, 0.1, 0.5], (v) => (v < 0.1 ? '1 cm' : v < 0.5 ? '10 cm' : '50 cm'))),
+    h('div', { class: 'pad-title' }, tr('Mută'), stepRow('move', [0.01, 0.1, 0.5], (v) => (v < 0.1 ? '1 cm' : v < 0.5 ? '10 cm' : '50 cm'))),
     h('div', { class: 'pad-grid' },
-      h('span'), holdButton('⇡ Departe', 'Mai departe de tine (în spate)', mv('away'), app), h('span'),
-      h('span'), holdButton('▲ Sus', 'Mai sus', mv('up'), app),
-      holdButton('⟵ Stânga', 'Spre stânga, cum vezi pe ecran', mv('left'), app), h('span', { class: 'pad-center' }, '✥'), holdButton('Dreapta ⟶', 'Spre dreapta, cum vezi pe ecran', mv('right'), app),
+      h('span'), holdButton(tr('⇡ Departe'), tr('Mai departe de tine (în spate)'), mv('away'), app), h('span'),
+      h('span'), holdButton(tr('▲ Sus'), tr('Mai sus'), mv('up'), app),
+      holdButton(tr('⟵ Stânga'), tr('Spre stânga, cum vezi pe ecran'), mv('left'), app), h('span', { class: 'pad-center' }, '✥'), holdButton(tr('Dreapta ⟶'), tr('Spre dreapta, cum vezi pe ecran'), mv('right'), app),
       h('span'), h('span'),
-      h('span'), holdButton('⇣ Spre tine', 'Mai aproape de tine (în față)', mv('toward'), app), h('span'),
-      h('span'), holdButton('▼ Jos', 'Mai jos', mv('down'), app)),
-    h('div', { class: 'pad-title' }, 'Rotește', stepRow('turn', [1, 5, 15, 45, 90], (v) => `${v}°`)),
+      h('span'), holdButton(tr('⇣ Spre tine'), tr('Mai aproape de tine (în față)'), mv('toward'), app), h('span'),
+      h('span'), holdButton(tr('▼ Jos'), tr('Mai jos'), mv('down'), app)),
+    h('div', { class: 'pad-title' }, tr('Rotește'), stepRow('turn', [1, 5, 15, 45, 90], (v) => `${v}°`)),
     h('div', { class: 'pad-rot' },
-      holdButton('⟲ Rotire stânga', 'Rotește în jurul axei verticale', rt('y', -1), app), holdButton('Rotire dreapta ⟳', 'Rotește în jurul axei verticale', rt('y', 1), app),
-      holdButton('⤒ Înclină înainte', 'Apleacă fixtura înainte', rt('x', 1), app), holdButton('Înclină înapoi ⤓', 'Apleacă fixtura înapoi', rt('x', -1), app),
-      holdButton('↶ Lateral stânga', 'Apleacă fixtura spre stânga', rt('z', 1), app), holdButton('Lateral dreapta ↷', 'Apleacă fixtura spre dreapta', rt('z', -1), app)));
+      holdButton(tr('⟲ Rotire stânga'), tr('Rotește în jurul axei verticale'), rt('y', -1), app), holdButton(tr('Rotire dreapta ⟳'), tr('Rotește în jurul axei verticale'), rt('y', 1), app),
+      holdButton(tr('⤒ Înclină înainte'), tr('Apleacă fixtura înainte'), rt('x', 1), app), holdButton(tr('Înclină înapoi ⤓'), tr('Apleacă fixtura înapoi'), rt('x', -1), app),
+      holdButton(tr('↶ Lateral stânga'), tr('Apleacă fixtura spre stânga'), rt('z', 1), app), holdButton(tr('Lateral dreapta ↷'), tr('Apleacă fixtura spre dreapta'), rt('z', -1), app)));
 }
 
 const MOUNTS = [
-  ['Pe podea ↑', { x: 0, y: 0, z: 0 }],
-  ['Agățat ↓', { x: 180, y: 0, z: 0 }],
-  ['Spre public →', { x: 90, y: 0, z: 0 }],
-  ['Spre scenă ←', { x: -90, y: 0, z: 0 }],
+  [tr('Pe podea ↑'), { x: 0, y: 0, z: 0 }],
+  [tr('Agățat ↓'), { x: 180, y: 0, z: 0 }],
+  [tr('Spre public →'), { x: 90, y: 0, z: 0 }],
+  [tr('Spre scenă ←'), { x: -90, y: 0, z: 0 }],
 ];
 
 function aimButton(app) {
   return h('button', {
     class: 'aim-btn',
-    title: 'Apasă, apoi dă click în scenă pe punctul spre care vrei să bată lumina (podea, perete, glob, ring…)',
+    title: tr('Apasă, apoi dă click în scenă pe punctul spre care vrei să bată lumina (podea, perete, glob, ring…)'),
     onclick: () => {
-      toast('🎯 Dă click în scenă pe punctul spre care să bată lumina (Esc anulează).', 'info', 5000);
+      toast(tr('🎯 Dă click în scenă pe punctul spre care să bată lumina (Esc anulează).'), 'info', 5000);
       app.vis.startAim((point) => app.aimSelectionAt(point));
     },
-  }, '🎯 Țintește un punct');
+  }, tr('🎯 Țintește un punct'));
 }
 
 /** Position, rotation, mounting presets and aiming for one object. */
 function transformSection(app, item, isFixture) {
   return [
     movePad(app),
-    h('details', { class: 'exact' }, h('summary', {}, 'Poziție exactă (m)'), positionInputs(app, item.id)),
-    h('h4', {}, 'Orientare'),
-    isFixture ? h('div', { class: 'muted small' }, 'Săgeata galbenă din scenă arată încotro bate lumina.') : null,
+    h('details', { class: 'exact' }, h('summary', {}, tr('Poziție exactă (m)')), positionInputs(app, item.id)),
+    h('h4', {}, tr('Orientare')),
+    isFixture ? h('div', { class: 'muted small' }, tr('Săgeata galbenă din scenă arată încotro bate lumina.')) : null,
     rotationControls(app, item.id),
     isFixture ? h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', {
       onclick: () => app.updateItem(item.id, { rotation: { ...rot, y: app.findItem(item.id).rotation.y } }),
@@ -456,40 +462,40 @@ function renderGroupInspector(app, el) {
   const start = numberInput(fixtures.length ? Math.min(...fixtures.map((f) => f.address)) : 1, () => {}, { min: 1, max: 512, integer: true });
   const totalCh = fixtures.reduce((s, f) => s + app.profile(f.profileId).channels.length, 0);
   el.append(
-    h('h3', {}, `${n} elemente selectate`),
-    h('div', { class: 'sub' }, fixtures.length ? `${fixtures.length} fixturi · ${totalCh} canale` : 'Elemente de scenă'),
+    h('h3', {}, tr('{n} elemente selectate', { n })),
+    h('div', { class: 'sub' }, fixtures.length ? `${tp(fixtures.length, '1 fixtură', '{n} fixturi')} · ${tp(totalCh, '1 canal', '{n} canale')}` : tr('Elemente de scenă')),
     h('div', { class: 'list group-list' }, items.map((it) => h('div', { class: 'item' },
       h('span', { class: 'name' }, it.name),
       app.isFixture(it.id) ? h('span', { class: 'meta' }, `U${it.universe} · ${it.address}`) : null,
-      h('button', { class: 'icon', title: 'Scoate din selecție', onclick: () => app.toggleSelect(it.id) }, '✕')))),
-    h('h4', {}, 'Mută / rotește tot grupul'),
+      h('button', { class: 'icon', title: tr('Scoate din selecție'), onclick: () => app.toggleSelect(it.id) }, '✕')))),
+    h('h4', {}, tr('Mută / rotește tot grupul')),
     movePad(app),
-    h('h4', {}, 'Aliniază și distribuie'),
+    h('h4', {}, tr('Aliniază și distribuie')),
     h('div', { class: 'grid2' },
-      h('button', { title: 'Toate la aceeași înălțime ca ultimul selectat', onclick: () => app.alignSelection('y') }, 'Aceeași înălțime'),
-      h('button', { title: 'Toate pe aceeași linie față/spate', onclick: () => app.alignSelection('z') }, 'Aceeași linie Z'),
-      h('button', { title: 'Toate pe aceeași linie stânga/dreapta', onclick: () => app.alignSelection('x') }, 'Aceeași linie X')),
+      h('button', { title: tr('Toate la aceeași înălțime ca ultimul selectat'), onclick: () => app.alignSelection('y') }, tr('Aceeași înălțime')),
+      h('button', { title: tr('Toate pe aceeași linie față/spate'), onclick: () => app.alignSelection('z') }, tr('Aceeași linie Z')),
+      h('button', { title: tr('Toate pe aceeași linie stânga/dreapta'), onclick: () => app.alignSelection('x') }, tr('Aceeași linie X'))),
     h('div', { class: 'grid2' },
-      h('button', { onclick: () => app.distributeSelection('x') }, 'Distribuie egal pe X'),
-      h('button', { onclick: () => app.distributeSelection('z') }, 'Distribuie egal pe Z')),
-    fixtures.length ? h('h4', {}, 'Montaj') : null,
+      h('button', { onclick: () => app.distributeSelection('x') }, tr('Distribuie egal pe X')),
+      h('button', { onclick: () => app.distributeSelection('z') }, tr('Distribuie egal pe Z'))),
+    fixtures.length ? h('h4', {}, tr('Montaj')) : null,
     fixtures.length ? h('div', { class: 'preset-buttons' }, MOUNTS.map(([label, rot]) => h('button', {
       onclick: () => app.updateItems(fixtures.map((f) => f.id), (f) => ({ rotation: { ...rot, y: f.rotation.y } })),
     }, label))) : null,
     fixtures.length ? aimButton(app) : null,
-    fixtures.length ? h('h4', {}, 'Adrese DMX (de la stânga la dreapta)') : null,
+    fixtures.length ? h('h4', {}, tr('Adrese DMX (de la stânga la dreapta)')) : null,
     fixtures.length ? h('div', { class: 'grid3' },
-      field('Univers', universe), field('Adresă start', start),
-      h('button', { style: { alignSelf: 'end' }, onclick: () => app.readdressSelection(Number(universe.value), Number(start.value)) }, 'Re-adresează')) : null,
-    fixtures.length ? h('button', { onclick: () => dialogs.changeProfileGroupDialog(app, fixtures) }, 'Schimbă profilul pentru toate…') : null,
-    fixtures.length ? h('h4', {}, 'Test') : null,
+      field(tr('Univers'), universe), field(tr('Adresă start'), start),
+      h('button', { style: { alignSelf: 'end' }, onclick: () => app.readdressSelection(Number(universe.value), Number(start.value)) }, tr('Re-adresează'))) : null,
+    fixtures.length ? h('button', { onclick: () => dialogs.changeProfileGroupDialog(app, fixtures) }, tr('Schimbă profilul pentru toate…')) : null,
+    fixtures.length ? h('h4', {}, tr('Test')) : null,
     fixtures.length ? h('div', { class: 'grid2' },
-      h('button', { onclick: () => fixtures.forEach((f) => app.profile(f.profileId).channels.forEach((c, i) => app.dmx.setOverride(f.universe, f.address + i, locateValue(c)))) }, '💡 Găsește toate'),
-      h('button', { onclick: () => fixtures.forEach((f) => app.dmx.clearOverrides(f.universe, f.address, app.profile(f.profileId).channels.length)) }, 'Eliberează toate')) : null,
-    h('h4', {}, 'Acțiuni'),
+      h('button', { onclick: () => fixtures.forEach((f) => app.profile(f.profileId).channels.forEach((c, i) => app.dmx.setOverride(f.universe, f.address + i, locateValue(c)))) }, tr('💡 Găsește toate')),
+      h('button', { onclick: () => fixtures.forEach((f) => app.dmx.clearOverrides(f.universe, f.address, app.profile(f.profileId).channels.length)) }, tr('Eliberează toate'))) : null,
+    h('h4', {}, tr('Acțiuni')),
     h('div', { class: 'grid2' },
-      h('button', { onclick: () => app.duplicateMany(app.selectedIds) }, 'Duplică grupul'),
-      h('button', { class: 'danger', onclick: () => app.removeItems(app.selectedIds) }, `Șterge ${n}`)),
+      h('button', { onclick: () => app.duplicateMany(app.selectedIds) }, tr('Duplică grupul')),
+      h('button', { class: 'danger', onclick: () => app.removeItems(app.selectedIds) }, tr('Șterge {n}', { n }))),
   );
 }
 
@@ -501,9 +507,9 @@ export function renderInspector(app) {
   const item = id && app.findItem(id);
   if (!item) {
     el.append(h('div', { class: 'inspector-empty' },
-      h('p', {}, 'Selectează o fixtură sau un element (click în scenă sau în listă).'),
-      h('p', { class: 'small' }, 'Mai multe deodată: Ctrl/Cmd+click, sau Shift + trage cu mouse-ul un dreptunghi în scenă. Ctrl/Cmd+A selectează toate fixturile.'),
-      h('p', { class: 'small' }, 'Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere')));
+      h('p', {}, tr('Selectează o fixtură sau un element (click în scenă sau în listă).')),
+      h('p', { class: 'small' }, tr('Mai multe deodată: Ctrl/Cmd+click, sau Shift + trage cu mouse-ul un dreptunghi în scenă. Ctrl/Cmd+A selectează toate fixturile.')),
+      h('p', { class: 'small' }, tr('Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere'))));
     return;
   }
   if (app.selectedIds.length > 1) { renderGroupInspector(app, el); return; }
@@ -517,23 +523,23 @@ function renderFixtureInspector(app, el, f) {
   const nameInput = h('input', { value: f.name });
   nameInput.addEventListener('change', () => app.updateItem(f.id, { name: nameInput.value.trim() || f.name }));
   el.append(
-    h('h3', {}, h('span', { class: 'swatch', 'data-swatch': f.id, style: { width: '12px', height: '12px', borderRadius: '3px', display: 'inline-block' } }), 'Fixtură'),
+    h('h3', {}, h('span', { class: 'swatch', 'data-swatch': f.id, style: { width: '12px', height: '12px', borderRadius: '3px', display: 'inline-block' } }), tr('Fixtură')),
     h('div', { class: 'form' },
-      field('Nume', nameInput),
-      h('div', { class: 'sub' }, `${p.manufacturer ? p.manufacturer + ' · ' : ''}${p.name} · ${p.channels.length} canale · ${KINDS[p.kind]}${p.kind === 'moving' ? ' ' + (MOVING_STYLES[p.style] || '') : ''}`),
+      field(tr('Nume'), nameInput),
+      h('div', { class: 'sub' }, `${p.manufacturer ? p.manufacturer + ' · ' : ''}${p.name} · ${tp(p.channels.length, '1 canal', '{n} canale')} · ${KINDS[p.kind]}${p.kind === 'moving' ? ' ' + (MOVING_STYLES[p.style] || '') : ''}`),
       h('div', { class: 'grid2' },
-        field('Univers', numberInput(f.universe, (v) => app.updateItem(f.id, { universe: v }), { min: 1, max: 32768, integer: true })),
-        field('Adresă DMX', numberInput(f.address, (v) => app.updateItem(f.id, { address: v }), { min: 1, max: 512, integer: true }))),
-      h('div', { class: 'muted small' }, `Canale ${f.address}–${fixtureEnd(f, p)} în universul ${f.universe}`),
-      conflicts.has(f.id) ? h('div', { class: 'warn-box' }, '⚠ Adresele se suprapun cu altă fixtură (sau depășesc 512).') : null,
-      h('button', { onclick: () => dialogs.changeProfileDialog(app, f) }, 'Schimbă profilul…'),
+        field(tr('Univers'), numberInput(f.universe, (v) => app.updateItem(f.id, { universe: v }), { min: 1, max: 32768, integer: true })),
+        field(tr('Adresă DMX'), numberInput(f.address, (v) => app.updateItem(f.id, { address: v }), { min: 1, max: 512, integer: true }))),
+      h('div', { class: 'muted small' }, tr('Canale {a}–{b} în universul {u}', { a: f.address, b: fixtureEnd(f, p), u: f.universe })),
+      conflicts.has(f.id) ? h('div', { class: 'warn-box' }, tr('⚠ Adresele se suprapun cu altă fixtură (sau depășesc 512).')) : null,
+      h('button', { onclick: () => dialogs.changeProfileDialog(app, f) }, tr('Schimbă profilul…')),
       ...transformSection(app, f, true),
       p.kind === 'moving' ? h('div', { class: 'grid2' },
-        h('label', { class: 'inline' }, checkbox(f.invertPan, (v) => app.updateItem(f.id, { invertPan: v })), 'Inversează pan'),
-        h('label', { class: 'inline' }, checkbox(f.invertTilt, (v) => app.updateItem(f.id, { invertTilt: v })), 'Inversează tilt')) : null,
+        h('label', { class: 'inline' }, checkbox(f.invertPan, (v) => app.updateItem(f.id, { invertPan: v })), tr('Inversează pan')),
+        h('label', { class: 'inline' }, checkbox(f.invertTilt, (v) => app.updateItem(f.id, { invertTilt: v })), tr('Inversează tilt'))) : null,
       h('div', { class: 'grid2' },
-        h('button', { onclick: () => app.duplicate(f.id) }, 'Duplică'),
-        h('button', { class: 'danger', onclick: () => app.removeItem(f.id) }, 'Șterge')),
+        h('button', { onclick: () => app.duplicate(f.id) }, tr('Duplică')),
+        h('button', { class: 'danger', onclick: () => app.removeItem(f.id) }, tr('Șterge'))),
     ),
     renderFaders(app, f, p),
   );
@@ -556,7 +562,7 @@ function renderFaders(app, f, p) {
     const addr = f.address + i;
     const range = h('input', { type: 'range', min: 0, max: 255, step: 1, value: 0 });
     const val = h('span', { class: 'val' }, '0');
-    const row = h('div', { class: 'fader', title: `Canal ${addr}` }, h('span', { class: 'num' }, i + 1), h('span', { class: 'lbl' }, channelLabel(c)), range, val);
+    const row = h('div', { class: 'fader', title: tr('Canal {n}', { n: addr }) }, h('span', { class: 'num' }, i + 1), h('span', { class: 'lbl' }, channelLabel(c)), range, val);
     range.addEventListener('input', () => {
       app.dmx.setOverride(f.universe, addr, Number(range.value));
       val.textContent = range.value;
@@ -582,11 +588,11 @@ function renderFaders(app, f, p) {
   sync();
   const release = () => { app.dmx.clearOverrides(f.universe, f.address, p.channels.length); sync(); };
   return h('div', {},
-    h('h4', {}, 'Test canale (control manual)'),
-    h('div', { class: 'muted small', style: { marginBottom: '6px' } }, 'Mișcă un fader ca să preiei controlul canalului (suprascrie SoundSwitch/Demo).'),
+    h('h4', {}, tr('Test canale (control manual)')),
+    h('div', { class: 'muted small', style: { marginBottom: '6px' } }, tr('Mișcă un fader ca să preiei controlul canalului (suprascrie SoundSwitch/Demo).')),
     h('div', { class: 'grid2', style: { marginBottom: '6px' } },
-      h('button', { onclick: () => { p.channels.forEach((c, i) => app.dmx.setOverride(f.universe, f.address + i, locateValue(c))); sync(); } }, '💡 Găsește (Locate)'),
-      h('button', { onclick: release }, 'Eliberează')),
+      h('button', { onclick: () => { p.channels.forEach((c, i) => app.dmx.setOverride(f.universe, f.address + i, locateValue(c))); sync(); } }, tr('💡 Găsește (Locate)')),
+      h('button', { onclick: release }, tr('Eliberează'))),
     box);
 }
 
@@ -594,18 +600,18 @@ function renderPropInspector(app, el, pr) {
   const def = PROP_TYPES[pr.type] || { params: {} };
   const nameInput = h('input', { value: pr.name });
   nameInput.addEventListener('change', () => app.updateItem(pr.id, { name: nameInput.value.trim() || pr.name }));
-  const labels = { length: 'Lungime (m)', width: 'Lățime (m)', height: 'Înălțime (m)', depth: 'Adâncime (m)', count: 'Număr persoane', diameter: 'Diametru (m)', drop: 'Tijă (m)', rpm: 'Rotații / minut' };
+  const labels = { length: tr('Lungime (m)'), width: tr('Lățime (m)'), height: tr('Înălțime (m)'), depth: tr('Adâncime (m)'), count: tr('Număr persoane'), diameter: tr('Diametru (m)'), drop: tr('Tijă (m)'), rpm: tr('Rotații / minut') };
   const params = { ...def.params, ...pr.params };
   el.append(
     h('h3', {}, def.label || pr.type),
     h('div', { class: 'form' },
-      field('Nume', nameInput),
+      field(tr('Nume'), nameInput),
       h('div', { class: 'grid2' }, Object.entries(params).map(([k, v]) => field(labels[k] || k, numberInput(v, (nv) => app.updateItem(pr.id, { params: { ...params, ...app.findItem(pr.id).params, [k]: nv } }, { rebuild: true }), { min: k === 'count' ? 1 : 0.05, step: k === 'count' ? 1 : 0.1, integer: k === 'count' })))),
-      pr.type === 'wall' ? field('Culoare', colorInput(pr.color || '#2a2a30', (v) => app.updateItem(pr.id, { color: v }, { rebuild: true }))) : null,
+      pr.type === 'wall' ? field(tr('Culoare'), colorInput(pr.color || '#2a2a30', (v) => app.updateItem(pr.id, { color: v }, { rebuild: true }))) : null,
       ...transformSection(app, pr, false),
       h('div', { class: 'grid2' },
-        h('button', { onclick: () => app.duplicate(pr.id) }, 'Duplică'),
-        h('button', { class: 'danger', onclick: () => app.removeItem(pr.id) }, 'Șterge')),
+        h('button', { onclick: () => app.duplicate(pr.id) }, tr('Duplică')),
+        h('button', { class: 'danger', onclick: () => app.removeItem(pr.id) }, tr('Șterge'))),
     ),
   );
 }
@@ -616,22 +622,22 @@ export function updateStatus(app) {
   const txt = pill.querySelector('.txt');
   const dmx = app.dmx;
   $('demoBtn').classList.toggle('on', dmx.useDemo);
-  $('demoBtn').textContent = dmx.useDemo ? '■ Oprește demo' : '▶ Demo';
+  $('demoBtn').textContent = dmx.useDemo ? tr('■ Oprește demo') : '▶ Demo';
   let cls = 'wait';
-  let text = 'Aștept date Art-Net / sACN…';
-  if (!dmx.connected) { cls = 'bad'; text = 'Server oprit – pornește FreeVisualizer'; }
-  else if (dmx.useDemo) { cls = 'demo'; text = 'DEMO intern activ'; }
+  let text = tr('Aștept date Art-Net / sACN…');
+  if (!dmx.connected) { cls = 'bad'; text = tr('Server oprit – pornește FreeVisualizer'); }
+  else if (dmx.useDemo) { cls = 'demo'; text = tr('DEMO intern activ'); }
   else if (dmx.receiving) {
     cls = 'ok';
     const now = Date.now();
     const act = [...dmx.activeInputs.values()].filter((a) => now - a.at < 3000);
     const names = act.map((a) => `U${a.display}`).sort().join(', ');
-    text = `Primesc DMX · ${Math.round(dmx.packetsPerSecond)} pkt/s · ${names}`;
+    text = tr('Primesc DMX · {pps} pkt/s · {u}', { pps: Math.round(dmx.packetsPerSecond), u: names });
   }
   pill.className = `status-pill ${cls}`;
   txt.textContent = text;
   const err = dmx.status && (dmx.status.artnet.error || dmx.status.sacn.error);
-  pill.title = err ? `Eroare: ${err}` : 'Starea intrării DMX';
+  pill.title = err ? tr('Eroare: {err}', { err }) : tr('Starea intrării DMX');
 
   const showHint = dmx.connected && !dmx.useDemo && !dmx.receiving && app.project.fixtures.length > 0 && performance.now() - app.startedAt > 4000;
   $('noSignal').classList.toggle('hidden', !showHint);

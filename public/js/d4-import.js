@@ -14,6 +14,7 @@
 // to a cell (pixel).
 import { parseXml, child, children, descendants } from './xml-lite.js';
 import { DEFAULT_STROBE_RANGES } from './profiles.js';
+import { tr } from './i18n.js';
 
 const COLOR_NAMES = [
   [/uv|black ?light|ultra ?violet/, '#7a3cff'],
@@ -131,7 +132,7 @@ const FINE = { dimmer: 'dimmerFine', pan: 'panFine', tilt: 'tiltFine' };
 
 export function parseD4(text) {
   const root = parseXml(text);
-  if (root.name !== 'Fixture') throw new Error('Fișierul nu este o personalitate Avolites (.d4)');
+  if (root.name !== 'Fixture') throw new Error(tr('Fișierul nu este o personalitate Avolites (.d4)'));
   return root;
 }
 
@@ -165,7 +166,7 @@ export function listD4Modes(root) {
     const entries = modeEntries(m);
     const offs = entries.flatMap((e) => e.offsets);
     const base = offs.includes(0) ? 0 : Math.min(...offs, 1);
-    return { index, name: m.attrs.Name || `Mod ${index + 1}`, channels: offs.length ? Math.max(...offs) - base + 1 : 0 };
+    return { index, name: m.attrs.Name || tr('Mod {n}', { n: index + 1 }), channels: offs.length ? Math.max(...offs) - base + 1 : 0 };
   });
 }
 
@@ -189,13 +190,13 @@ function physical(mode, root) {
 
 export function d4ToProfile(root, modeIndex = 0) {
   const mode = children(root, 'Mode')[modeIndex];
-  if (!mode) throw new Error('Modul selectat nu există');
+  if (!mode) throw new Error(tr('Modul selectat nu există'));
   const defs = new Map();
   for (const control of children(root, 'Control')) for (const a of children(control, 'Attribute')) if (a.attrs.ID) defs.set(a.attrs.ID, a);
 
   const entries = modeEntries(mode);
   const offs = entries.flatMap((e) => e.offsets);
-  if (!offs.length) throw new Error('Modul nu are canale');
+  if (!offs.length) throw new Error(tr('Modul nu are canale'));
   const base = offs.includes(0) ? 0 : Math.min(...offs);
   const channels = [];
   for (const e of entries) {
@@ -209,7 +210,7 @@ export function d4ToProfile(root, modeIndex = 0) {
 
   const cells = new Set(entries.filter((e) => e.cell != null).map((e) => e.cell)).size;
   if (cells <= 1) channels.forEach((c) => { delete c.pixel; });
-  const name = root.attrs.Name || 'Fixtură';
+  const name = root.attrs.Name || tr('Fixtură');
   const manufacturer = root.attrs.Company || '';
   const hasPanTilt = channels.some((c) => c.type === 'pan' || c.type === 'tilt');
   const hasMix = channels.some((c) => ['red', 'green', 'blue'].includes(c.type));

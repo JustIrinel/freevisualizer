@@ -1,6 +1,8 @@
 // Converts an Open Fixture Library (https://open-fixture-library.org) fixture
 // definition into a FreeVisualizer profile. Pure module: runs in browser and Node.
 
+import { tr } from './i18n.js';
+
 const COLOR_MAP = {
   red: 'red', green: 'green', blue: 'blue', white: 'white', amber: 'amber', uv: 'uv', lime: 'lime',
   cyan: 'cyan', magenta: 'magenta', yellow: 'yellow', 'warm white': 'warmWhite', 'cold white': 'coldWhite', indigo: 'uv',
@@ -269,12 +271,12 @@ function guessKind(fixture, channels) {
 
 /** Returns the list of modes: [{ index, name, channels }]. */
 export function listModes(fixture) {
-  return (fixture.modes || []).map((m, index) => ({ index, name: m.name || m.shortName || `Mod ${index + 1}`, shortName: m.shortName, channels: expandModeChannels(fixture, m).length }));
+  return (fixture.modes || []).map((m, index) => ({ index, name: m.name || m.shortName || tr('Mod {n}', { n: index + 1 }), shortName: m.shortName, channels: expandModeChannels(fixture, m).length }));
 }
 
 export function oflToProfile(fixture, modeIndex = 0, key = fixture.__key || '') {
   const mode = (fixture.modes || [])[modeIndex];
-  if (!mode) throw new Error('Modul selectat nu există în fixtură');
+  if (!mode) throw new Error(tr('Modul selectat nu există în fixtură'));
   const items = expandModeChannels(fixture, mode);
   const channels = items.map((item) => {
     if (item.name == null) return { type: 'none', label: '' };

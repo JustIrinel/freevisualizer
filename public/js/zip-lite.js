@@ -1,6 +1,8 @@
 // Minimal ZIP reader (stored + deflate) for .gdtf files, using the platform's
 // DecompressionStream. Works in modern browsers, Electron and Node 18+.
 
+import { tr } from './i18n.js';
+
 /** @returns Map(fileName -> async () => Uint8Array) */
 export function readZip(buffer) {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -9,7 +11,7 @@ export function readZip(buffer) {
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
     if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
   }
-  if (eocd < 0) throw new Error('Fișierul nu este o arhivă validă (ZIP/GDTF)');
+  if (eocd < 0) throw new Error(tr('Fișierul nu este o arhivă validă (ZIP/GDTF)'));
   const count = view.getUint16(eocd + 10, true);
   let p = view.getUint32(eocd + 16, true);
   const files = new Map();
@@ -30,7 +32,7 @@ export function readZip(buffer) {
       const start = localOffset + 30 + lnameLen + lextraLen;
       const data = bytes.subarray(start, start + compSize);
       if (method === 0) return data.slice();
-      if (method !== 8) throw new Error(`Compresie ZIP nesuportată (${method})`);
+      if (method !== 8) throw new Error(tr('Compresie ZIP nesuportată ({method})', { method }));
       const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
       return new Uint8Array(await new Response(stream).arrayBuffer());
     });
@@ -41,7 +43,7 @@ export function readZip(buffer) {
 export async function readZipText(buffer, fileName) {
   const files = readZip(buffer);
   const key = [...files.keys()].find((k) => k.toLowerCase() === fileName.toLowerCase());
-  if (!key) throw new Error(`Lipsește ${fileName} din arhivă`);
+  if (!key) throw new Error(tr('Lipsește {file} din arhivă', { file: fileName }));
   return new TextDecoder().decode(await files.get(key)());
 }
 

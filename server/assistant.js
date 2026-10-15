@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { tr } = require('./i18n');
 
 const MODELS = {
   'claude-opus-5-5': 'Claude Opus 5.5',
@@ -114,13 +115,13 @@ function createAssistant(dataDir) {
   const key = () => cfg.apiKey || process.env.ANTHROPIC_API_KEY || '';
 
   let sdk = null;
-  async function loadSdk() {
+  async function loadSdk(lang) {
     if (!sdk) {
       try {
         const mod = await import('@anthropic-ai/sdk');
         sdk = mod.default || mod.Anthropic || mod;
       } catch (_) {
-        throw Object.assign(new Error('Lipsește pachetul @anthropic-ai/sdk. Rulează „npm install” în folderul FreeVisualizer.'), { status: 500 });
+        throw Object.assign(new Error(tr(lang, 'Lipsește pachetul @anthropic-ai/sdk. Rulează „npm install” în folderul FreeVisualizer.')), { status: 500 });
       }
     }
     return sdk;
@@ -139,10 +140,10 @@ function createAssistant(dataDir) {
   }
 
   /** One turn of the conversation; the page sends the full history (append-only). */
-  async function turn(messages) {
-    if (!key()) throw Object.assign(new Error('Adaugă cheia API Claude în Setări → Asistent.'), { status: 400 });
-    if (!Array.isArray(messages) || !messages.length) throw Object.assign(new Error('Conversație goală'), { status: 400 });
-    const Anthropic = await loadSdk();
+  async function turn(messages, lang) {
+    if (!key()) throw Object.assign(new Error(tr(lang, 'Adaugă cheia API Claude în Setări → Asistent.')), { status: 400 });
+    if (!Array.isArray(messages) || !messages.length) throw Object.assign(new Error(tr(lang, 'Conversație goală')), { status: 400 });
+    const Anthropic = await loadSdk(lang);
     const client = new Anthropic({ apiKey: key() });
     const params = {
       model: cfg.model,
@@ -159,12 +160,12 @@ function createAssistant(dataDir) {
         ? await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
         : await client.messages.create(params);
     } catch (err) {
-      if (err instanceof Anthropic.AuthenticationError) throw Object.assign(new Error('Cheia API nu e validă. Verific-o în Setări → Asistent.'), { status: 401 });
-      if (err instanceof Anthropic.PermissionDeniedError) throw Object.assign(new Error('Cheia API nu are acces la acest model.'), { status: 403 });
-      if (err instanceof Anthropic.RateLimitError) throw Object.assign(new Error('Prea multe cereri deodată. Mai încearcă peste un minut.'), { status: 429 });
-      if (err instanceof Anthropic.BadRequestError) throw Object.assign(new Error(`Cerere respinsă de Claude: ${err.message}`), { status: 400 });
-      if (err instanceof Anthropic.APIConnectionError) throw Object.assign(new Error('Nu mă pot conecta la Claude. Verifică internetul.'), { status: 502 });
-      if (err instanceof Anthropic.APIError) throw Object.assign(new Error(`Eroare Claude (${err.status}): ${err.message}`), { status: 502 });
+      if (err instanceof Anthropic.AuthenticationError) throw Object.assign(new Error(tr(lang, 'Cheia API nu e validă. Verific-o în Setări → Asistent.')), { status: 401 });
+      if (err instanceof Anthropic.PermissionDeniedError) throw Object.assign(new Error(tr(lang, 'Cheia API nu are acces la acest model.')), { status: 403 });
+      if (err instanceof Anthropic.RateLimitError) throw Object.assign(new Error(tr(lang, 'Prea multe cereri deodată. Mai încearcă peste un minut.')), { status: 429 });
+      if (err instanceof Anthropic.BadRequestError) throw Object.assign(new Error(tr(lang, 'Cerere respinsă de Claude: {err}', { err: err.message })), { status: 400 });
+      if (err instanceof Anthropic.APIConnectionError) throw Object.assign(new Error(tr(lang, 'Nu mă pot conecta la Claude. Verifică internetul.')), { status: 502 });
+      if (err instanceof Anthropic.APIError) throw Object.assign(new Error(tr(lang, 'Eroare Claude ({status}): {err}', { status: err.status, err: err.message })), { status: 502 });
       throw err;
     }
     return {

@@ -20,6 +20,7 @@
 //                        group tree (the left panel of SoundSwitch), where the
 //                        names typed by the user are.
 import { DEFAULT_STROBE_RANGES, goboRanges } from './profiles.js';
+import { tr } from './i18n.js';
 
 class Reader {
   constructor(buffer) {
@@ -313,12 +314,12 @@ function readTree(r, from) {
 export function parseSoundSwitchVenues(buffer) {
   const r = new Reader(buffer);
   const warnings = [];
-  if (r.n < 64) throw new Error('Fișierul SoundSwitch e gol sau incomplet');
+  if (r.n < 64) throw new Error(tr('Fișierul SoundSwitch e gol sau incomplet'));
   let venue = 'SoundSwitch';
   for (let i = 0; i < 128; i++) { const s = r.str(i, 128); if (s) { venue = s.s; break; } }
 
   const defs = findDefinitions(r);
-  if (!defs.length) throw new Error('Nu am găsit fixturi în proiectul SoundSwitch');
+  if (!defs.length) throw new Error(tr('Nu am găsit fixturi în proiectul SoundSwitch'));
   const records = findPatchRecords(r, defs[0].body);
   const defsEnd = records.length ? records[0].start : r.n;
   defs.forEach((d, k) => { d.end = k + 1 < defs.length ? defs[k + 1].start : defsEnd; });
@@ -333,8 +334,8 @@ export function parseSoundSwitchVenues(buffer) {
       if (p < pos) continue;
       const limit = h + 1 < headers.length ? headers[h + 1] : d.end;
       let mode = readMode(r, p, limit);
-      if (!mode || !mode.cells.some((c) => c.attrs.length)) { mode = scanMode(r, p, limit); warnings.push(`${d.name}: un mod a fost citit aproximativ`); }
-      if (!mode.name) mode.name = `Mod ${d.modes.length + 1}`;
+      if (!mode || !mode.cells.some((c) => c.attrs.length)) { mode = scanMode(r, p, limit); warnings.push(tr('{name}: un mod a fost citit aproximativ', { name: d.name })); }
+      if (!mode.name) mode.name = tr('Mod {n}', { n: d.modes.length + 1 });
       d.modes.push(mode);
       pos = mode.end;
     }
@@ -372,7 +373,7 @@ export function parseSoundSwitchVenues(buffer) {
       if (leaf.group) fx.group = leaf.group;
     });
   } else if (records.length) {
-    warnings.push('Numele fixturilor nu au putut fi citite; folosesc numele modelului.');
+    warnings.push(tr('Numele fixturilor nu au putut fi citite; folosesc numele modelului.'));
   }
   fixtures.sort((a, b) => a.universe - b.universe || a.address - b.address);
   // Missing names get the model name; repeated names get a number (in DMX order).
@@ -434,7 +435,7 @@ function convertAttribute(a, def) {
 /** One SoundSwitch definition + mode → FreeVisualizer profile. */
 export function ssProfile(def, modeIndex) {
   const mode = def.modes[modeIndex] || def.modes[0];
-  if (!mode) throw new Error(`${def.name}: nu are moduri DMX`);
+  if (!mode) throw new Error(tr('{name}: nu are moduri DMX', { name: def.name }));
   const channels = [];
   const colorCells = mode.cells.filter((c) => c.attrs.some((a) => COLOR_TYPES.has(TYPE[a.type] || typeByName(a.name))));
   const pixelOf = new Map(colorCells.length > 1 ? colorCells.map((c, i) => [c, i]) : []);
@@ -449,7 +450,7 @@ export function ssProfile(def, modeIndex) {
     }
   }
   const count = Math.max(channels.length, mode.channelCount || 0);
-  for (let i = 0; i < count; i++) if (!channels[i]) channels[i] = { type: 'none', label: `Canal ${i + 1}` };
+  for (let i = 0; i < count; i++) if (!channels[i]) channels[i] = { type: 'none', label: tr('Canal {n}', { n: i + 1 }) };
 
   const has = (t) => channels.some((c) => c.type === t);
   const text = `${def.name} ${def.manufacturer}`;

@@ -18,6 +18,83 @@ const FIXTURE_ID_URL = process.env.FREEVIS_FIXTURE_ID_URL || 'https://www.fixtur
 // Downloads from the Fixture.ID window that we import instead of saving.
 const FIXTURE_FILE = /\.(d4|gdtf|zip|qxf|xml)$/i;
 
+// Menu and dialog language, chosen in the page (Setări) and kept in <userData>/prefs.json.
+const EN = {
+  'Alege proiectul SoundSwitch (.ssproj)': 'Choose the SoundSwitch project (.ssproj)',
+  'Proiect SoundSwitch': 'SoundSwitch project',
+  'În folderul ales nu există un proiect SoundSwitch. Alege folderul care se termină în .ssproj (de obicei în Muzică → SoundSwitch).': 'There is no SoundSwitch project in the chosen folder. Choose the folder that ends in .ssproj (usually in Music → SoundSwitch).',
+  'Ce proiect SoundSwitch import?': 'Which SoundSwitch project should I import?',
+  'Anulează#cancel': 'Cancel',
+  'Descărcarea „{name}” nu s-a terminat': 'The download “{name}” did not finish',
+  'Stare: {state}': 'Status: {state}',
+  'Nu am putut citi fișierul descărcat': 'Couldn\'t read the downloaded file',
+  'Fixture.ID – descarcă fișierul .d4, se importă singur în FreeVisualizer': 'Fixture.ID – download the .d4 file, it imports into FreeVisualizer automatically',
+  'FreeVisualizer – Prezentare': 'FreeVisualizer – Presentation',
+  'Despre FreeVisualizer': 'About FreeVisualizer',
+  'Setări…': 'Settings…',
+  'Ascunde FreeVisualizer': 'Hide FreeVisualizer',
+  'Ascunde celelalte': 'Hide Others',
+  'Arată tot': 'Show All',
+  'Ieșire din FreeVisualizer': 'Quit FreeVisualizer',
+  'Fișier': 'File',
+  'Proiect nou…': 'New Project…',
+  'Importă din SoundSwitch…': 'Import from SoundSwitch…',
+  'Deschide…': 'Open…',
+  'Salvează': 'Save',
+  'Export proiect…': 'Export Project…',
+  'Import proiect…': 'Import Project…',
+  'Înregistrează clip video…': 'Record Video Clip…',
+  'Ieșire': 'Exit',
+  'Editare': 'Edit',
+  'Anulează': 'Undo',
+  'Refă': 'Redo',
+  'Taie': 'Cut',
+  'Copiază': 'Copy',
+  'Lipește': 'Paste',
+  'Selectează tot': 'Select All',
+  'Adaugă fixturi…': 'Add Fixtures…',
+  'Caută pe Fixture.ID…': 'Search Fixture.ID…',
+  'Vizualizare': 'View',
+  'Pornește / oprește demo': 'Start / Stop Demo',
+  'Ascunde panourile': 'Hide Panels',
+  'Fereastră de prezentare (al doilea monitor)': 'Presentation Window (Second Display)',
+  'Ecran complet': 'Full Screen',
+  'Mărime normală': 'Actual Size',
+  'Mărește': 'Zoom In',
+  'Micșorează': 'Zoom Out',
+  'Reîncarcă': 'Reload',
+  'Unelte dezvoltator': 'Developer Tools',
+  'Fereastră': 'Window',
+  'Ajutor': 'Help',
+  'Conectare SoundSwitch': 'Connecting SoundSwitch',
+  'Fixture.ID (fișiere .d4)': 'Fixture.ID (.d4 files)',
+  'Folderul cu date (proiecte)': 'Data Folder (Projects)',
+  'Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN)': 'Free 3D visualizer for SoundSwitch (Art-Net / sACN)',
+  'Portul Art-Net 6454 este ocupat': 'Art-Net port 6454 is in use',
+  'Alt program (SoundSwitch pornit înainte, Capture sau alt vizualizator) folosește deja portul. Închide FreeVisualizer și SoundSwitch, pornește întâi FreeVisualizer, apoi SoundSwitch.\n\nDetalii: {err}': 'Another program (SoundSwitch started first, Capture or another visualizer) is already using the port. Quit FreeVisualizer and SoundSwitch, start FreeVisualizer first, then SoundSwitch.\n\nDetails: {err}',
+  'FreeVisualizer nu a putut porni': 'FreeVisualizer couldn\'t start',
+};
+
+const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
+
+function loadLang() {
+  try {
+    const l = JSON.parse(fs.readFileSync(prefsFile(), 'utf8')).lang;
+    return l === 'en' ? 'en' : 'ro';
+  } catch (_) {
+    return 'ro';
+  }
+}
+
+let lang = loadLang();
+
+/** L('Text românesc', { x }) – a '#context' suffix tells apart keys with the same Romanian text. */
+function L(ro, vars) {
+  let out = (lang === 'en' && EN[ro]) || ro.replace(/#\w+$/, '');
+  if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m));
+  return out;
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
@@ -93,10 +170,10 @@ function projectsIn(dir) {
 async function pickSoundSwitch() {
   const props = isMac ? ['openDirectory', 'openFile'] : ['openDirectory'];
   const r = await dialog.showOpenDialog(mainWindow, {
-    title: 'Alege proiectul SoundSwitch (.ssproj)',
+    title: L('Alege proiectul SoundSwitch (.ssproj)'),
     defaultPath: soundSwitchFolder(),
     properties: props,
-    filters: isMac ? [{ name: 'Proiect SoundSwitch', extensions: ['ssproj', 'zip', 'bin'] }] : undefined,
+    filters: isMac ? [{ name: L('Proiect SoundSwitch'), extensions: ['ssproj', 'zip', 'bin'] }] : undefined,
   });
   if (r.canceled || !r.filePaths.length) return null;
   let target = r.filePaths[0];
@@ -107,12 +184,12 @@ async function pickSoundSwitch() {
   }
   if (!fs.existsSync(path.join(target, VENUES_FILE))) {
     const found = projectsIn(target);
-    if (!found.length) return { error: 'În folderul ales nu există un proiect SoundSwitch. Alege folderul care se termină în .ssproj (de obicei în Muzică → SoundSwitch).' };
+    if (!found.length) return { error: L('În folderul ales nu există un proiect SoundSwitch. Alege folderul care se termină în .ssproj (de obicei în Muzică → SoundSwitch).') };
     if (found.length === 1) target = found[0];
     else {
       const list = found.slice(0, 12);
       const pick = await dialog.showMessageBox(mainWindow, {
-        type: 'question', message: 'Ce proiect SoundSwitch import?', buttons: [...list.map(name), 'Anulează'], cancelId: list.length,
+        type: 'question', message: L('Ce proiect SoundSwitch import?'), buttons: [...list.map(name), L('Anulează#cancel')], cancelId: list.length,
       });
       if (pick.response >= list.length) return null;
       target = list[pick.response];
@@ -130,7 +207,7 @@ function onFixtureDownload(_event, item) {
   item.setSavePath(tmp);
   item.once('done', async (_e, state) => {
     if (state !== 'completed') {
-      dialog.showMessageBox({ type: 'warning', message: `Descărcarea „${name}” nu s-a terminat`, detail: `Stare: ${state}` });
+      dialog.showMessageBox({ type: 'warning', message: L('Descărcarea „{name}” nu s-a terminat', { name }), detail: L('Stare: {state}', { state }) });
       return;
     }
     try {
@@ -141,7 +218,7 @@ function onFixtureDownload(_event, item) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     } catch (err) {
-      dialog.showErrorBox('Nu am putut citi fișierul descărcat', err.message);
+      dialog.showErrorBox(L('Nu am putut citi fișierul descărcat'), err.message);
     }
   });
 }
@@ -159,7 +236,7 @@ function openFixtureIdWindow() {
   fixtureIdWindow = new BrowserWindow({
     width: 1200,
     height: 860,
-    title: 'Fixture.ID – descarcă fișierul .d4, se importă singur în FreeVisualizer',
+    title: L('Fixture.ID – descarcă fișierul .d4, se importă singur în FreeVisualizer'),
     backgroundColor: '#ffffff',
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
@@ -183,7 +260,7 @@ function togglePresentWindow() {
     width: target.bounds.width,
     height: target.bounds.height,
     backgroundColor: '#000000',
-    title: 'FreeVisualizer – Prezentare',
+    title: L('FreeVisualizer – Prezentare'),
     fullscreen: target.id !== primary.id,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -198,24 +275,29 @@ function togglePresentWindow() {
 }
 
 function buildMenu() {
-  const item = (label, action, accelerator) => ({ label, accelerator, click: () => sendMenu(action) });
+  app.setAboutPanelOptions({
+    applicationName: 'FreeVisualizer',
+    applicationVersion: app.getVersion(),
+    copyright: L('Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN)'),
+  });
+  const item = (label, action, accelerator) => ({ label: L(label), accelerator, click: () => sendMenu(action) });
   const template = [
     ...(isMac ? [{
       label: 'FreeVisualizer',
       submenu: [
-        { role: 'about', label: 'Despre FreeVisualizer' },
+        { role: 'about', label: L('Despre FreeVisualizer') },
         { type: 'separator' },
         item('Setări…', 'settings', 'Cmd+,'),
         { type: 'separator' },
-        { role: 'hide', label: 'Ascunde FreeVisualizer' },
-        { role: 'hideOthers', label: 'Ascunde celelalte' },
-        { role: 'unhide', label: 'Arată tot' },
+        { role: 'hide', label: L('Ascunde FreeVisualizer') },
+        { role: 'hideOthers', label: L('Ascunde celelalte') },
+        { role: 'unhide', label: L('Arată tot') },
         { type: 'separator' },
-        { role: 'quit', label: 'Ieșire din FreeVisualizer' },
+        { role: 'quit', label: L('Ieșire din FreeVisualizer') },
       ],
     }] : []),
     {
-      label: 'Fișier',
+      label: L('Fișier'),
       submenu: [
         item('Proiect nou…', 'new', 'CmdOrCtrl+N'),
         item('Importă din SoundSwitch…', 'import-soundswitch'),
@@ -226,49 +308,49 @@ function buildMenu() {
         item('Import proiect…', 'import', 'CmdOrCtrl+I'),
         { type: 'separator' },
         item('Înregistrează clip video…', 'record'),
-        ...(isMac ? [] : [{ type: 'separator' }, item('Setări…', 'settings'), { role: 'quit', label: 'Ieșire' }]),
+        ...(isMac ? [] : [{ type: 'separator' }, item('Setări…', 'settings'), { role: 'quit', label: L('Ieșire') }]),
       ],
     },
     {
-      label: 'Editare',
+      label: L('Editare'),
       submenu: [
         item('Anulează', 'undo', 'CmdOrCtrl+Z'),
         item('Refă', 'redo', isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y'),
         { type: 'separator' },
-        { role: 'cut', label: 'Taie' },
-        { role: 'copy', label: 'Copiază' },
-        { role: 'paste', label: 'Lipește' },
-        { role: 'selectAll', label: 'Selectează tot' },
+        { role: 'cut', label: L('Taie') },
+        { role: 'copy', label: L('Copiază') },
+        { role: 'paste', label: L('Lipește') },
+        { role: 'selectAll', label: L('Selectează tot') },
         { type: 'separator' },
         item('Adaugă fixturi…', 'add-fixture', 'CmdOrCtrl+Shift+A'),
-        { label: 'Caută pe Fixture.ID…', click: openFixtureIdWindow },
+        { label: L('Caută pe Fixture.ID…'), click: openFixtureIdWindow },
       ],
     },
     {
-      label: 'Vizualizare',
+      label: L('Vizualizare'),
       submenu: [
         item('Pornește / oprește demo', 'demo'),
         item('Ascunde panourile', 'hide-ui'),
-        { label: 'Fereastră de prezentare (al doilea monitor)', accelerator: 'CmdOrCtrl+P', click: togglePresentWindow },
+        { label: L('Fereastră de prezentare (al doilea monitor)'), accelerator: 'CmdOrCtrl+P', click: togglePresentWindow },
         { type: 'separator' },
-        { role: 'togglefullscreen', label: 'Ecran complet' },
-        { role: 'resetZoom', label: 'Mărime normală' },
-        { role: 'zoomIn', label: 'Mărește' },
-        { role: 'zoomOut', label: 'Micșorează' },
+        { role: 'togglefullscreen', label: L('Ecran complet') },
+        { role: 'resetZoom', label: L('Mărime normală') },
+        { role: 'zoomIn', label: L('Mărește') },
+        { role: 'zoomOut', label: L('Micșorează') },
         { type: 'separator' },
-        { role: 'reload', label: 'Reîncarcă' },
-        { role: 'toggleDevTools', label: 'Unelte dezvoltator' },
+        { role: 'reload', label: L('Reîncarcă') },
+        { role: 'toggleDevTools', label: L('Unelte dezvoltator') },
       ],
     },
-    { role: 'windowMenu', label: 'Fereastră' },
+    { role: 'windowMenu', label: L('Fereastră') },
     {
       role: 'help',
-      label: 'Ajutor',
+      label: L('Ajutor'),
       submenu: [
         item('Conectare SoundSwitch', 'help'),
-        { label: 'Fixture.ID (fișiere .d4)', click: openFixtureIdWindow },
+        { label: L('Fixture.ID (fișiere .d4)'), click: openFixtureIdWindow },
         { label: 'Open Fixture Library', click: () => shell.openExternal('https://open-fixture-library.org') },
-        { label: 'Folderul cu date (proiecte)', click: () => shell.openPath(app.getPath('userData')) },
+        { label: L('Folderul cu date (proiecte)'), click: () => shell.openPath(app.getPath('userData')) },
       ],
     },
   ];
@@ -283,13 +365,14 @@ ipcMain.handle('desktop-info', () => ({
 ipcMain.on('toggle-present', () => togglePresentWindow());
 ipcMain.on('open-fixture-id', () => openFixtureIdWindow());
 ipcMain.handle('pick-soundswitch', () => pickSoundSwitch());
+ipcMain.on('set-language', (_e, next) => {
+  if ((next !== 'ro' && next !== 'en') || next === lang) return;
+  lang = next;
+  try { fs.writeFileSync(prefsFile(), JSON.stringify({ lang })); } catch (_) { /* read-only profile */ }
+  buildMenu();
+});
 
 app.whenReady().then(async () => {
-  app.setAboutPanelOptions({
-    applicationName: 'FreeVisualizer',
-    applicationVersion: app.getVersion(),
-    copyright: 'Vizualizator 3D gratuit pentru SoundSwitch (Art-Net / sACN)',
-  });
   server = createApp({ dataDir: app.getPath('userData'), port: 8080 });
   try {
     const { port, stats } = await server.start();
@@ -297,14 +380,14 @@ app.whenReady().then(async () => {
     if (stats.artnet.error) {
       dialog.showMessageBox({
         type: 'warning',
-        message: 'Portul Art-Net 6454 este ocupat',
-        detail: 'Alt program (SoundSwitch pornit înainte, Capture sau alt vizualizator) folosește deja portul. '
+        message: L('Portul Art-Net 6454 este ocupat'),
+        detail: L('Alt program (SoundSwitch pornit înainte, Capture sau alt vizualizator) folosește deja portul. '
           + 'Închide FreeVisualizer și SoundSwitch, pornește întâi FreeVisualizer, apoi SoundSwitch.\n\n'
-          + `Detalii: ${stats.artnet.error}`,
+          + 'Detalii: {err}', { err: stats.artnet.error }),
       });
     }
   } catch (err) {
-    dialog.showErrorBox('FreeVisualizer nu a putut porni', err.message);
+    dialog.showErrorBox(L('FreeVisualizer nu a putut porni'), err.message);
     app.quit();
     return;
   }

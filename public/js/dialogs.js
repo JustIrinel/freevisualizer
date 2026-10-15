@@ -12,6 +12,7 @@ import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
 import { importSoundSwitch, venuesFromZip, soundSwitchImportDialog } from './ss-dialog.js';
 import { loadBrand, saveBrand } from './recorder.js';
+import { tr, tp, lang } from './i18n.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
 // ------------------------------------------------------------------ online search
@@ -26,19 +27,19 @@ export async function openFixtureId(query = '') {
   if (window.freevisDesktop?.openFixtureId) {
     window.freevisDesktop.openFixtureId();
     toast(q
-      ? `Am deschis Fixture.ID. „${q}” e copiat: lipește-l în căutarea site-ului (Ctrl/Cmd+V). Fișierul descărcat (.d4) se importă singur.`
-      : 'Am deschis Fixture.ID. Fișierul descărcat (.d4) se importă singur în FreeVisualizer.', 'info', 9000);
+      ? tr('Am deschis Fixture.ID. „{q}” e copiat: lipește-l în căutarea site-ului (Ctrl/Cmd+V). Fișierul descărcat (.d4) se importă singur.', { q })
+      : tr('Am deschis Fixture.ID. Fișierul descărcat (.d4) se importă singur în FreeVisualizer.'), 'info', 9000);
   } else {
     window.open(FIXTURE_ID_URL, '_blank', 'noopener');
     toast(q
-      ? `„${q}” e copiat pentru căutarea pe Fixture.ID. Descarcă fișierul .d4 și trage-l peste fereastra FreeVisualizer.`
-      : 'Descarcă fișierul .d4 de pe Fixture.ID și trage-l peste fereastra FreeVisualizer.', 'info', 9000);
+      ? tr('„{q}” e copiat pentru căutarea pe Fixture.ID. Descarcă fișierul .d4 și trage-l peste fereastra FreeVisualizer.', { q })
+      : tr('Descarcă fișierul .d4 de pe Fixture.ID și trage-l peste fereastra FreeVisualizer.'), 'info', 9000);
   }
 }
 
 async function importOflFixture(app, key) {
   try {
-    toast('Descarc definiția fixturii…');
+    toast(tr('Descarc definiția fixturii…'));
     const res = await fetch(`/api/ofl/fixture?key=${encodeURIComponent(key)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -59,7 +60,7 @@ function onlineResults(app) {
   let seq = 0;
   let query = '';
   const fixtureIdRow = () => h('div', { class: 'item online-row', onclick: () => openFixtureId(query) },
-    h('span', { class: 'name' }, query.length >= 2 ? `🔎 Caută „${query}” pe Fixture.ID` : '🔎 Caută pe Fixture.ID'),
+    h('span', { class: 'name' }, query.length >= 2 ? tr('🔎 Caută „{q}” pe Fixture.ID', { q: query }) : tr('🔎 Caută pe Fixture.ID')),
     h('span', { class: 'meta' }, '.d4 / .gdtf ↗'));
   const render = (body) => {
     el.innerHTML = '';
@@ -70,19 +71,19 @@ function onlineResults(app) {
   const note = (text, cls = 'muted') => h('div', { class: cls, style: { padding: '6px 10px' } }, text);
   const run = async () => {
     const my = ++seq;
-    if (query.length < 2) { render(note('Scrie cel puțin 2 caractere…')); return; }
-    render(note('Caut…'));
+    if (query.length < 2) { render(note(tr('Scrie cel puțin 2 caractere…'))); return; }
+    render(note(tr('Caut…')));
     try {
       const res = await fetch(`/api/ofl/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (my !== seq) return;
-      if (!res.ok) throw new Error(data.error || 'eroare');
-      if (!data.length) { render(note('Nimic în Open Fixture Library. Încearcă pe Fixture.ID ↓')); return; }
+      if (!res.ok) throw new Error(data.error || tr('eroare'));
+      if (!data.length) { render(note(tr('Nimic în Open Fixture Library. Încearcă pe Fixture.ID ↓'))); return; }
       render(h('div', {}, data.slice(0, 40).map((r) => h('div', { class: 'item', onclick: () => importOflFixture(app, r.key) },
-        h('span', { class: 'name' }, `${r.manufacturer} ${r.name}`), h('span', { class: 'tag' }, 'OFL'), h('span', { class: 'meta' }, 'importă')))));
+        h('span', { class: 'name' }, `${r.manufacturer} ${r.name}`), h('span', { class: 'tag' }, 'OFL'), h('span', { class: 'meta' }, tr('importă'))))));
     } catch (err) {
       if (my !== seq) return;
-      render(note(`Open Fixture Library nu răspunde (${err.message}). Verifică internetul.`, 'warn-box'));
+      render(note(tr('Open Fixture Library nu răspunde ({err}). Verifică internetul.', { err: err.message }), 'warn-box'));
     }
   };
   return {
@@ -90,7 +91,7 @@ function onlineResults(app) {
     update(q) {
       query = q.trim();
       clearTimeout(timer);
-      if (query.length < 2) { seq++; render(note('Scrie cel puțin 2 caractere…')); return; }
+      if (query.length < 2) { seq++; render(note(tr('Scrie cel puțin 2 caractere…'))); return; }
       timer = setTimeout(run, 300);
     },
   };
@@ -99,13 +100,13 @@ function onlineResults(app) {
 // ------------------------------------------------------------------ profile picker
 function profilePicker(app, selectedId, onPick) {
   let current = selectedId;
-  const search = h('input', { type: 'search', placeholder: 'Caută model sau producător (ex: panther, intimidator, par rgbw…)' });
+  const search = h('input', { type: 'search', placeholder: tr('Caută model sau producător (ex: panther, intimidator, par rgbw…)') });
   const list = h('div', { class: 'pick-list' });
   const online = onlineResults(app);
   const render = () => {
     const q = search.value.toLowerCase().trim();
     list.innerHTML = '';
-    const groups = [['Profilele proiectului', app.project.profiles], ['Generice', app.builtins]];
+    const groups = [[tr('Profilele proiectului'), app.project.profiles], [tr('Generice'), app.builtins]];
     let found = 0;
     for (const [title, profiles] of groups) {
       const items = profiles.filter((p) => !q || `${p.manufacturer} ${p.name} ${KINDS[p.kind]}`.toLowerCase().includes(q));
@@ -119,7 +120,7 @@ function profilePicker(app, selectedId, onPick) {
         }, h('span', { class: 'name' }, p.manufacturer && p.source !== 'builtin' ? `${p.manufacturer} ${p.name}` : p.name), h('span', { class: 'tag' }, KINDS[p.kind]), h('span', { class: 'meta' }, `${p.channels.length}ch`)));
       }
     }
-    if (q && !found) list.append(h('div', { class: 'muted', style: { padding: '6px 10px' } }, 'Niciun profil local. Uită-te mai jos, în bibliotecile online.'));
+    if (q && !found) list.append(h('div', { class: 'muted', style: { padding: '6px 10px' } }, tr('Niciun profil local. Uită-te mai jos, în bibliotecile online.')));
     list.append(online.el);
   };
   search.addEventListener('input', () => { render(); online.update(search.value); });
@@ -127,7 +128,7 @@ function profilePicker(app, selectedId, onPick) {
   online.update('');
   setTimeout(() => search.focus(), 50);
   return h('div', { class: 'form' }, search, list,
-    h('div', { class: 'muted small' }, 'Ai deja fișierul (.d4, .gdtf, .json)? Trage-l peste fereastră. Poți crea și un profil nou din Bibliotecă.'));
+    h('div', { class: 'muted small' }, tr('Ai deja fișierul (.d4, .gdtf, .json)? Trage-l peste fereastră. Poți crea și un profil nou din Bibliotecă.')));
 }
 
 // ------------------------------------------------------------------ add fixtures
@@ -139,7 +140,7 @@ export async function addFixturesDialog(app, presetProfileId) {
   st.universe = lastU;
 
   const addrInput = numberInput(1, (v) => { st.address = v; info(); }, { min: 1, max: 512, integer: true });
-  const prefixInput = h('input', { placeholder: 'ex: Spot, Uplight…' });
+  const prefixInput = h('input', { placeholder: tr('ex: Spot, Uplight…') });
   prefixInput.addEventListener('input', () => { st.prefix = prefixInput.value; });
   const infoEl = h('div', { class: 'muted small' });
   const titleEl = h('div', { style: { fontWeight: 600 } });
@@ -151,12 +152,12 @@ export async function addFixturesDialog(app, presetProfileId) {
     st.address = a || 1;
     addrInput.value = st.address;
   };
-  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: 'Bară LED', strobe: 'Strobe', blinder: 'Blinder', retro: 'Retro', pinspot: 'Pinspot', spark: 'Scântei', lowfog: 'Fum greu', laser: 'Laser', fog: 'Fum' }[p.kind] || 'Fixtură');
+  const defaultPrefix = (p) => ({ moving: p.style === 'beam' ? 'Beam' : p.style === 'wash' ? 'Wash' : 'Spot', par: 'Par', bar: tr('Bară LED'), strobe: 'Strobe', blinder: 'Blinder', retro: 'Retro', pinspot: 'Pinspot', spark: tr('Scântei'), lowfog: tr('Fum greu'), laser: 'Laser', fog: tr('Fum') }[p.kind] || tr('Fixtură'));
   const info = () => {
     const ch = profile.channels.length;
     const last = st.address + ch * st.qty - 1;
     titleEl.textContent = profile.name;
-    infoEl.textContent = `${st.qty} × ${ch} canale → adrese ${st.address}–${last} în universul ${st.universe}${last > 512 ? ' (continuă în universul următor)' : ''}`;
+    infoEl.textContent = tr('{qty} × {ch} canale → adrese {from}–{to} în universul {u}', { qty: st.qty, ch, from: st.address, to: last, u: st.universe }) + (last > 512 ? tr(' (continuă în universul următor)') : '');
   };
   const onPick = (p) => {
     profile = p;
@@ -166,7 +167,7 @@ export async function addFixturesDialog(app, presetProfileId) {
     info();
   };
   prefixInput.addEventListener('change', () => { st.prefixTouched = true; });
-  const mountSel = h('select', {}, h('option', { value: 'floor' }, 'Pe podea (lumină în sus)'), h('option', { value: 'hang' }, 'Agățat pe truss (în jos)'), h('option', { value: 'front' }, 'Spre public'), h('option', { value: 'wall' }, 'Spre perete (wash)'));
+  const mountSel = h('select', {}, h('option', { value: 'floor' }, tr('Pe podea (lumină în sus)')), h('option', { value: 'hang' }, tr('Agățat pe truss (în jos)')), h('option', { value: 'front' }, tr('Spre public')), h('option', { value: 'wall' }, tr('Spre perete (wash)')));
   mountSel.addEventListener('change', () => {
     st.mount = mountSel.value;
     if (st.mount === 'hang' && st.y < 1) { st.y = 3.58; yInput.value = 3.58; }
@@ -178,27 +179,27 @@ export async function addFixturesDialog(app, presetProfileId) {
     profilePicker(app, profile.id, onPick),
     titleEl,
     h('div', { class: 'grid3' },
-      field('Cantitate', numberInput(st.qty, (v) => { st.qty = v; autoAddress(); info(); }, { min: 1, max: 64, integer: true })),
-      field('Univers', numberInput(st.universe, (v) => { st.universe = v; autoAddress(); info(); }, { min: 1, max: 32768, integer: true })),
-      field('Adresă de start', addrInput)),
+      field(tr('Cantitate'), numberInput(st.qty, (v) => { st.qty = v; autoAddress(); info(); }, { min: 1, max: 64, integer: true })),
+      field(tr('Univers'), numberInput(st.universe, (v) => { st.universe = v; autoAddress(); info(); }, { min: 1, max: 32768, integer: true })),
+      field(tr('Adresă de start'), addrInput)),
     infoEl,
-    h('div', { class: 'grid2' }, field('Nume (prefix)', prefixInput), field('Montaj', mountSel)),
+    h('div', { class: 'grid2' }, field(tr('Nume (prefix)'), prefixInput), field(tr('Montaj'), mountSel)),
     h('div', { class: 'grid3' },
       field('Start X (m)', numberInput(st.x, (v) => { st.x = v; }, { step: 0.5 })),
-      field('Înălțime Y (m)', yInput),
+      field(tr('Înălțime Y (m)'), yInput),
       field('Z (m)', numberInput(st.z, (v) => { st.z = v; }, { step: 0.5 }))),
-    field('Distanță între fixturi pe X (m)', numberInput(st.spacing, (v) => { st.spacing = v; }, { step: 0.25 })),
-    h('div', { class: 'muted small' }, 'Sfat: folosește aceleași adrese ca în SoundSwitch (DMX Patch). Poziția o poți ajusta oricând trăgând fixtura cu mouse-ul.'),
+    field(tr('Distanță între fixturi pe X (m)'), numberInput(st.spacing, (v) => { st.spacing = v; }, { step: 0.25 })),
+    h('div', { class: 'muted small' }, tr('Sfat: folosește aceleași adrese ca în SoundSwitch (DMX Patch). Poziția o poți ajusta oricând trăgând fixtura cu mouse-ul.')),
   );
   prefixInput.value = defaultPrefix(profile);
   st.prefix = prefixInput.value;
   autoAddress();
   info();
 
-  const res = await openModal('Adaugă fixturi', content, [
-    { label: 'Anulează', value: null },
-    { label: '🖱 Plasează cu mouse-ul', value: 'place' },
-    { label: 'Adaugă', primary: true, value: 'add' },
+  const res = await openModal(tr('Adaugă fixturi'), content, [
+    { label: tr('Anulează'), value: null },
+    { label: tr('🖱 Plasează cu mouse-ul'), value: 'place' },
+    { label: tr('Adaugă'), primary: true, value: 'add' },
   ]);
   if (res !== 'add' && res !== 'place') return;
 
@@ -221,24 +222,24 @@ export async function addFixturesDialog(app, presetProfileId) {
   }
   if (res === 'place') { app.placeFixtures(list); return; }
   app.addFixtures(list);
-  toast(`Am adăugat ${list.length} × ${profile.name}`);
+  toast(tr('Am adăugat {n} × {name}', { n: list.length, name: profile.name }));
 }
 
 export async function changeProfileGroupDialog(app, fixtures) {
   let chosen = null;
-  const res = await openModal(`Profil pentru ${fixtures.length} fixturi`, profilePicker(app, fixtures[0].profileId, (p) => { chosen = p; }), [
-    { label: 'Anulează', value: null }, { label: 'Aplică la toate', primary: true, value: 'ok' },
+  const res = await openModal(tr('Profil pentru {n} fixturi', { n: fixtures.length }), profilePicker(app, fixtures[0].profileId, (p) => { chosen = p; }), [
+    { label: tr('Anulează'), value: null }, { label: tr('Aplică la toate'), primary: true, value: 'ok' },
   ]);
   if (res === 'ok' && chosen) {
     app.updateItems(fixtures.map((f) => f.id), () => ({ profileId: chosen.id }), { rebuild: true });
-    if (app.conflicts().size) toast('Atenție: noul profil are alt număr de canale – folosește „Re-adresează”.', 'error', 6000);
+    if (app.conflicts().size) toast(tr('Atenție: noul profil are alt număr de canale – folosește „Re-adresează”.'), 'error', 6000);
   }
 }
 
 export async function changeProfileDialog(app, f) {
   let chosen = app.profile(f.profileId);
-  const res = await openModal(`Profil pentru „${f.name}”`, profilePicker(app, f.profileId, (p) => { chosen = p; }), [
-    { label: 'Anulează', value: null }, { label: 'Aplică', primary: true, value: 'ok' },
+  const res = await openModal(tr('Profil pentru „{name}”', { name: f.name }), profilePicker(app, f.profileId, (p) => { chosen = p; }), [
+    { label: tr('Anulează'), value: null }, { label: tr('Aplică'), primary: true, value: 'ok' },
   ]);
   if (res === 'ok' && chosen) app.updateItem(f.id, { profileId: chosen.id }, { rebuild: true });
 }
@@ -247,18 +248,18 @@ export async function changeProfileDialog(app, f) {
 export async function profileActions(app, p) {
   const used = app.project.fixtures.filter((f) => f.profileId === p.id).length;
   const content = h('div', { class: 'form' },
-    h('div', { class: 'muted' }, `${p.manufacturer || 'Generic'} · ${KINDS[p.kind]}${p.kind === 'moving' ? ' ' + MOVING_STYLES[p.style] : ''} · ${p.channels.length} canale · unghi ${p.beamAngle[0]}°${p.beamAngle[1] !== p.beamAngle[0] ? '–' + p.beamAngle[1] + '°' : ''}${p.pixels > 1 ? ` · ${p.pixels} pixeli` : ''}`),
+    h('div', { class: 'muted' }, `${p.manufacturer || 'Generic'} · ${KINDS[p.kind]}${p.kind === 'moving' ? ' ' + MOVING_STYLES[p.style] : ''} · ${tr('{n} canale', { n: p.channels.length })} · ${tr('unghi')} ${p.beamAngle[0]}°${p.beamAngle[1] !== p.beamAngle[0] ? '–' + p.beamAngle[1] + '°' : ''}${p.pixels > 1 ? ` · ${tr('{n} pixeli', { n: p.pixels })}` : ''}`),
     h('table', { class: 'channels-table' },
-      h('tr', {}, h('th', {}, '#'), h('th', {}, 'Funcție')),
+      h('tr', {}, h('th', {}, '#'), h('th', {}, tr('Funcție'))),
       p.channels.map((c, i) => h('tr', {}, h('td', { class: 'muted' }, i + 1), h('td', {}, channelLabel(c))))),
-    used ? h('div', { class: 'muted small' }, `Folosit de ${used} fixturi în proiect.`) : null,
+    used ? h('div', { class: 'muted small' }, tp(used, 'Folosit de o fixtură în proiect.', 'Folosit de {n} fixturi în proiect.')) : null,
   );
   const buttons = [
-    { label: p.source === 'builtin' ? 'Copiază și editează' : 'Editează', onClick: () => { setTimeout(() => profileEditor(app, p), 0); } },
-    { label: 'Export profil', onClick: () => { downloadJson({ freevisProfile: 1, ...cloneProfile(p) }, `${p.name.replace(/[^\p{L}\p{N} _.-]/gu, '')}.profile.json`); return false; } },
+    { label: p.source === 'builtin' ? tr('Copiază și editează') : tr('Editează'), onClick: () => { setTimeout(() => profileEditor(app, p), 0); } },
+    { label: tr('Export profil'), onClick: () => { downloadJson({ freevisProfile: 1, ...cloneProfile(p) }, `${p.name.replace(/[^\p{L}\p{N} _.-]/gu, '')}.profile.json`); return false; } },
   ];
-  if (p.source !== 'builtin') buttons.push({ label: 'Șterge', danger: true, onClick: () => app.deleteProfile(p.id) });
-  buttons.push({ label: 'Adaugă în scenă', primary: true, onClick: () => { setTimeout(() => addFixturesDialog(app, p.id), 0); } });
+  if (p.source !== 'builtin') buttons.push({ label: tr('Șterge'), danger: true, onClick: () => app.deleteProfile(p.id) });
+  buttons.push({ label: tr('Adaugă în scenă'), primary: true, onClick: () => { setTimeout(() => addFixturesDialog(app, p.id), 0); } });
   await openModal(p.name, content, buttons);
 }
 
@@ -272,16 +273,16 @@ function rangesEditor(c, onChange) {
       const to = numberInput(r.to, (v) => { r.to = v; onChange(); }, { min: 0, max: 255, integer: true });
       let mid; let extra1 = h('span'); let extra2 = h('span');
       if (kind === 'strobe') {
-        mid = h('select', {}, ['open', 'closed', 'strobe', 'pulse', 'random'].map((m) => h('option', { value: m }, { open: 'Deschis', closed: 'Închis', strobe: 'Strobe', pulse: 'Puls', random: 'Aleator' }[m])));
+        mid = h('select', {}, ['open', 'closed', 'strobe', 'pulse', 'random'].map((m) => h('option', { value: m }, { open: tr('Deschis'), closed: tr('Închis'), strobe: 'Strobe', pulse: tr('Puls'), random: tr('Aleator') }[m])));
         mid.value = r.mode || 'open';
         mid.addEventListener('change', () => { r.mode = mid.value; if (r.mode !== 'open' && r.mode !== 'closed') { r.hzFrom ??= 1; r.hzTo ??= 20; } onChange(); render(); });
         if (r.mode !== 'open' && r.mode !== 'closed') {
           extra1 = numberInput(r.hzFrom ?? 1, (v) => { r.hzFrom = v; onChange(); }, { min: 0.1, max: 50, step: 0.5 });
           extra2 = numberInput(r.hzTo ?? 20, (v) => { r.hzTo = v; onChange(); }, { min: 0.1, max: 50, step: 0.5 });
-          extra1.title = 'Hz de la'; extra2.title = 'Hz până la';
+          extra1.title = tr('Hz de la'); extra2.title = tr('Hz până la');
         }
       } else if (kind === 'colorWheel') {
-        mid = h('select', {}, h('option', { value: 'color' }, 'Culoare'), h('option', { value: 'rotate' }, 'Rotire (scroll)'));
+        mid = h('select', {}, h('option', { value: 'color' }, tr('Culoare')), h('option', { value: 'rotate' }, tr('Rotire (scroll)')));
         mid.value = r.mode === 'rotate' ? 'rotate' : 'color';
         mid.addEventListener('change', () => { if (mid.value === 'rotate') { delete r.color; r.mode = 'rotate'; } else { delete r.mode; r.color = '#ffffff'; } onChange(); render(); });
         if (r.mode !== 'rotate') {
@@ -290,13 +291,13 @@ function rangesEditor(c, onChange) {
         }
       } else if (kind === 'gobo') {
         mid = numberInput(r.gobo ?? 0, (v) => { r.gobo = v; onChange(); }, { min: 0, max: 30, integer: true });
-        mid.title = 'Gobo (0 = deschis)';
+        mid.title = tr('Gobo (0 = deschis)');
         extra1 = h('label', { class: 'inline', title: 'Shake' }, h('input', { type: 'checkbox', checked: !!r.shake, onchange: (e) => { r.shake = e.target.checked; onChange(); } }), 'shake');
       } else if (kind === 'prism') {
         mid = numberInput(r.prism ?? 0, (v) => { r.prism = v; onChange(); }, { min: 0, max: 8, integer: true });
-        mid.title = 'Fațete (0 = fără prismă)';
+        mid.title = tr('Fațete (0 = fără prismă)');
       }
-      const del = h('button', { class: 'icon', title: 'Șterge interval', onclick: () => { c.ranges.splice(i, 1); onChange(); render(); } }, '✕');
+      const del = h('button', { class: 'icon', title: tr('Șterge interval'), onclick: () => { c.ranges.splice(i, 1); onChange(); render(); } }, '✕');
       wrap.append(h('div', { class: 'r' }, from, to, mid, extra1, extra2, del));
     });
     wrap.append(h('button', { onclick: () => {
@@ -310,7 +311,7 @@ function rangesEditor(c, onChange) {
       if (kind === 'prism') r.prism = 3;
       c.ranges.push(r);
       onChange(); render();
-    } }, '+ interval'));
+    } }, tr('+ interval')));
   };
   render();
   return wrap;
@@ -330,43 +331,43 @@ function defaultRanges(type) {
 function modelSection(p, rerender) {
   const box = h('div', { class: 'model-box' });
   const info = p.model
-    ? (p.model.type === 'gdtf' ? `Model 3D din GDTF (${Object.keys(p.model.files).length} piese)` : 'Model 3D încărcat (.glb)')
-    : 'Model desenat de FreeVisualizer după tipul fixturii.';
+    ? (p.model.type === 'gdtf' ? tr('Model 3D din GDTF ({n} piese)', { n: Object.keys(p.model.files).length }) : tr('Model 3D încărcat (.glb)'))
+    : tr('Model desenat de FreeVisualizer după tipul fixturii.');
   const upload = h('button', {
     onclick: async () => {
       const f = await pickFile('.glb');
       if (!f) return;
       try {
-        toast('Încarc modelul 3D…');
+        toast(tr('Încarc modelul 3D…'));
         const file = await uploadAsset(new Uint8Array(await f.arrayBuffer()), 'glb');
         p.model = { type: 'glb', file, rotX: 0 };
-        toast('Model încărcat. Se vede după „Salvează”.');
+        toast(tr('Model încărcat. Se vede după „Salvează”.'));
         rerender();
-      } catch (err) { toast(`Nu am putut încărca modelul: ${err.message}`, 'error'); }
+      } catch (err) { toast(tr('Nu am putut încărca modelul: {err}', { err: err.message }), 'error'); }
     },
-  }, p.model ? 'Schimbă modelul (.glb)…' : 'Încarcă model 3D (.glb)…');
-  const orient = h('select', {}, [[0, 'Normal'], [180, 'Întors'], [90, 'Culcat (față în sus)'], [-90, 'Culcat (spate în sus)']]
+  }, p.model ? tr('Schimbă modelul (.glb)…') : tr('Încarcă model 3D (.glb)…'));
+  const orient = h('select', {}, [[0, 'Normal'], [180, tr('Întors')], [90, tr('Culcat (față în sus)')], [-90, tr('Culcat (spate în sus)')]]
     .map(([v, l]) => h('option', { value: v, selected: Number(p.model?.rotX || 0) === v }, l)));
   orient.addEventListener('change', () => { p.model.rotX = Number(orient.value); });
   const query = encodeURIComponent(`${p.manufacturer || ''} ${p.name.replace(/\(.*\)/, '')}`.trim());
   box.append(
-    h('h4', {}, 'Aspect 3D'),
+    h('h4', {}, tr('Aspect 3D')),
     h('div', { class: 'model-row' },
       p.thumbnail ? h('img', { class: 'thumb', src: `/api/models/${p.thumbnail}`, alt: '' }) : null,
       h('div', { class: 'grow' },
         h('div', { class: 'small' }, info),
         h('div', { class: 'row' }, upload,
-          p.model ? h('button', { onclick: () => { delete p.model; rerender(); } }, 'Folosește modelul desenat') : null,
-          h('a', { href: `https://www.google.com/search?tbm=isch&q=${query}`, target: '_blank', rel: 'noopener', class: 'small' }, '🔍 Poze cu aparatul')),
-        p.model ? field('Orientare model', orient, 'Dacă modelul apare culcat sau cu capul în jos') : null,
-        h('div', { class: 'muted small' }, 'Modelele .glb cu piese numite Base / Yoke / Head se mișcă pe pan/tilt. Modelele din fișierele GDTF se iau automat.'))),
+          p.model ? h('button', { onclick: () => { delete p.model; rerender(); } }, tr('Folosește modelul desenat')) : null,
+          h('a', { href: `https://www.google.com/search?tbm=isch&q=${query}`, target: '_blank', rel: 'noopener', class: 'small' }, tr('🔍 Poze cu aparatul'))),
+        p.model ? field(tr('Orientare model'), orient, tr('Dacă modelul apare culcat sau cu capul în jos')) : null,
+        h('div', { class: 'muted small' }, tr('Modelele .glb cu piese numite Base / Yoke / Head se mișcă pe pan/tilt. Modelele din fișierele GDTF se iau automat.')))),
   );
   return box;
 }
 
 export async function profileEditor(app, source) {
-  const p = source ? cloneProfile(source) : normalizeProfile({ id: uid('prof'), name: 'Profil nou', manufacturer: '', kind: 'par', source: 'custom', channels: [{ type: 'dimmer' }, { type: 'red' }, { type: 'green' }, { type: 'blue' }] });
-  if (p.source === 'builtin') { p.id = uid('prof'); p.source = 'custom'; p.name = `${p.name} (copie)`; p.manufacturer = ''; }
+  const p = source ? cloneProfile(source) : normalizeProfile({ id: uid('prof'), name: tr('Profil nou'), manufacturer: '', kind: 'par', source: 'custom', channels: [{ type: 'dimmer' }, { type: 'red' }, { type: 'green' }, { type: 'blue' }] });
+  if (p.source === 'builtin') { p.id = uid('prof'); p.source = 'custom'; p.name = tr('{name} (copie)', { name: p.name }); p.manufacturer = ''; }
   p.channels = p.channels.map((c) => ({ ...c }));
 
   const body = h('div', { class: 'form' });
@@ -386,25 +387,25 @@ export async function profileEditor(app, source) {
     color.addEventListener('change', () => { p.defaultColor = color.value; });
 
     body.append(
-      h('div', { class: 'grid2' }, field('Nume', name), field('Producător', man)),
+      h('div', { class: 'grid2' }, field(tr('Nume'), name), field(tr('Producător'), man)),
       h('div', { class: 'grid3' },
-        field('Tip', kind),
-        p.kind === 'moving' ? field('Stil', style) : field('Pixeli / celule', numberInput(p.pixels || 1, (v) => { p.pixels = v; }, { min: 1, max: 64, integer: true })),
-        field('Culoare implicită', color, 'Culoarea folosită când profilul nu are canale de culoare (ex. halogen, blinder)')),
+        field(tr('Tip'), kind),
+        p.kind === 'moving' ? field(tr('Stil'), style) : field(tr('Pixeli / celule'), numberInput(p.pixels || 1, (v) => { p.pixels = v; }, { min: 1, max: 64, integer: true })),
+        field(tr('Culoare implicită'), color, tr('Culoarea folosită când profilul nu are canale de culoare (ex. halogen, blinder)'))),
       h('div', { class: 'grid3' },
-        field('Unghi min (°)', numberInput(p.beamAngle[0], (v) => { p.beamAngle[0] = v; }, { min: 1, max: 170, step: 1 })),
-        field('Unghi max (°) – zoom', numberInput(p.beamAngle[1], (v) => { p.beamAngle[1] = v; }, { min: 1, max: 170, step: 1 })),
+        field(tr('Unghi min (°)'), numberInput(p.beamAngle[0], (v) => { p.beamAngle[0] = v; }, { min: 1, max: 170, step: 1 })),
+        field(tr('Unghi max (°) – zoom'), numberInput(p.beamAngle[1], (v) => { p.beamAngle[1] = v; }, { min: 1, max: 170, step: 1 })),
         p.kind === 'moving' ? h('div', { class: 'grid2' },
           field('Pan (°)', numberInput(p.panRange, (v) => { p.panRange = v; }, { min: 0, max: 720, step: 1 })),
           field('Tilt (°)', numberInput(p.tiltRange, (v) => { p.tiltRange = v; }, { min: 0, max: 360, step: 1 })))
-          : p.kind === 'retro' ? h('label', { class: 'inline', title: 'Becurile se aprind/sting lin și se înroșesc când sunt dimate, ca filamentele adevărate' },
-            h('input', { type: 'checkbox', checked: p.tungsten !== false, onchange: (e) => { p.tungsten = e.target.checked; } }), 'Emulare bec cu filament')
+          : p.kind === 'retro' ? h('label', { class: 'inline', title: tr('Becurile se aprind/sting lin și se înroșesc când sunt dimate, ca filamentele adevărate') },
+            h('input', { type: 'checkbox', checked: p.tungsten !== false, onchange: (e) => { p.tungsten = e.target.checked; } }), tr('Emulare bec cu filament'))
             : h('span')),
       modelSection(p, render),
-      h('h4', {}, `Canale (${p.channels.length})`),
+      h('h4', {}, tr('Canale ({n})', { n: p.channels.length })),
     );
 
-    const table = h('table', { class: 'channels-table' }, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Funcție'), h('th', {}, 'Pixel'), h('th', {}, 'Etichetă'), h('th', {}, '')));
+    const table = h('table', { class: 'channels-table' }, h('tr', {}, h('th', {}, '#'), h('th', {}, tr('Funcție')), h('th', {}, 'Pixel'), h('th', {}, tr('Etichetă')), h('th', {}, '')));
     p.channels.forEach((c, i) => {
       const type = h('select', {}, groupedTypeOptions());
       type.value = c.type;
@@ -419,9 +420,9 @@ export async function profileEditor(app, source) {
       const label = h('input', { value: c.label || '' });
       label.addEventListener('change', () => { c.label = label.value || undefined; });
       const actions = h('div', { style: { display: 'flex', gap: '2px' } },
-        h('button', { class: 'icon', title: 'Mută sus', onclick: () => { if (i > 0) { [p.channels[i - 1], p.channels[i]] = [p.channels[i], p.channels[i - 1]]; render(); } } }, '↑'),
-        h('button', { class: 'icon', title: 'Mută jos', onclick: () => { if (i < p.channels.length - 1) { [p.channels[i + 1], p.channels[i]] = [p.channels[i], p.channels[i + 1]]; render(); } } }, '↓'),
-        h('button', { class: 'icon', title: 'Șterge', onclick: () => { p.channels.splice(i, 1); render(); } }, '✕'));
+        h('button', { class: 'icon', title: tr('Mută sus'), onclick: () => { if (i > 0) { [p.channels[i - 1], p.channels[i]] = [p.channels[i], p.channels[i - 1]]; render(); } } }, '↑'),
+        h('button', { class: 'icon', title: tr('Mută jos'), onclick: () => { if (i < p.channels.length - 1) { [p.channels[i + 1], p.channels[i]] = [p.channels[i], p.channels[i + 1]]; render(); } } }, '↓'),
+        h('button', { class: 'icon', title: tr('Șterge'), onclick: () => { p.channels.splice(i, 1); render(); } }, '✕'));
       table.append(h('tr', {}, h('td', { class: 'muted' }, i + 1), h('td', {}, type, RANGE_TYPES.has(c.type) ? rangesEditor(c, () => {}) : null), h('td', {}, pixel), h('td', {}, label), h('td', {}, actions)));
     });
     body.append(table);
@@ -429,8 +430,8 @@ export async function profileEditor(app, source) {
     const pxCount = h('input', { type: 'number', min: 1, max: 64, value: 8, style: { width: '64px' } });
     const pxPattern = h('select', {}, ['RGB', 'RGBW', 'RGBA', 'RGBWA', 'RGBWAUV'].map((x) => h('option', { value: x }, x)));
     body.append(h('div', { class: 'row' },
-      h('button', { onclick: () => { p.channels.push({ type: 'none' }); render(); } }, '+ Canal'),
-      h('span', { class: 'muted small', style: { marginLeft: 'auto' } }, 'Generează pixeli:'), pxCount, pxPattern,
+      h('button', { onclick: () => { p.channels.push({ type: 'none' }); render(); } }, tr('+ Canal')),
+      h('span', { class: 'muted small', style: { marginLeft: 'auto' } }, tr('Generează pixeli:')), pxCount, pxPattern,
       h('button', { onclick: () => {
         const n = Math.max(1, parseInt(pxCount.value, 10) || 1);
         const map = { R: 'red', G: 'green', B: 'blue', W: 'white', A: 'amber', U: 'uv' };
@@ -439,16 +440,16 @@ export async function profileEditor(app, source) {
         p.pixels = Math.max(p.pixels || 1, n);
         if (p.kind === 'par') p.kind = 'bar';
         render();
-      } }, 'Adaugă')));
+      } }, tr('Adaugă'))));
   };
   render();
 
-  await openModal(source && source.source !== 'builtin' ? `Editează: ${source.name}` : 'Profil nou', body, [
-    { label: 'Anulează', value: null },
-    { label: 'Salvează profilul', primary: true, onClick: () => {
-      if (!p.channels.length) { toast('Profilul trebuie să aibă cel puțin un canal', 'error'); return false; }
+  await openModal(source && source.source !== 'builtin' ? tr('Editează: {name}', { name: source.name }) : tr('Profil nou'), body, [
+    { label: tr('Anulează'), value: null },
+    { label: tr('Salvează profilul'), primary: true, onClick: () => {
+      if (!p.channels.length) { toast(tr('Profilul trebuie să aibă cel puțin un canal'), 'error'); return false; }
       const saved = app.saveProfile(p);
-      toast(`Profil salvat: ${saved.name}`);
+      toast(tr('Profil salvat: {name}', { name: saved.name }));
       return true;
     } },
   ], { width: 'min(900px, calc(100vw - 32px))' });
@@ -467,31 +468,31 @@ function groupedTypeOptions() {
  */
 async function chooseModeAndImportGeneric(app, source) {
   const { modes } = source;
-  if (!modes.length) { toast('Fixtura nu are moduri DMX definite', 'error'); return null; }
+  if (!modes.length) { toast(tr('Fixtura nu are moduri DMX definite'), 'error'); return null; }
   // Preselect the mode with the most channels (usually the "full" mode).
   let chosen = modes.reduce((best, m) => (m.channels > best.channels ? m : best), modes[0]).index;
   const list = h('div', { class: 'mode-list' }, modes.map((m) => {
     const radio = h('input', { type: 'radio', name: 'importmode', value: m.index, checked: m.index === chosen });
     radio.addEventListener('change', () => { chosen = m.index; });
-    return h('label', {}, radio, h('span', { class: 'grow' }, m.name), h('span', { class: 'muted' }, `${m.channels} canale`));
+    return h('label', {}, radio, h('span', { class: 'grow' }, m.name), h('span', { class: 'muted' }, tr('{n} canale', { n: m.channels })));
   }));
   const res = await openModal(source.title, h('div', { class: 'form' },
-    h('p', {}, 'Alege modul DMX ', h('b', {}, 'identic'), ' cu cel setat pe fixtură și în SoundSwitch:'),
+    h('p', {}, tr('Alege modul DMX '), h('b', {}, tr('identic')), tr(' cu cel setat pe fixtură și în SoundSwitch:')),
     list), [
-    { label: 'Anulează', value: null },
-    { label: 'Importă', value: 'import' },
-    { label: 'Importă și adaugă în scenă', primary: true, value: 'add' },
+    { label: tr('Anulează'), value: null },
+    { label: tr('Importă'), value: 'import' },
+    { label: tr('Importă și adaugă în scenă'), primary: true, value: 'add' },
   ]);
   if (!res) return null;
   try {
     const profile = source.convert(chosen);
     const existing = app.project.profiles.find((p) => p.id === profile.id);
     const saved = app.saveProfile(existing ? { ...profile, id: existing.id } : profile);
-    toast(`Profil importat: ${saved.name}`);
+    toast(tr('Profil importat: {name}', { name: saved.name }));
     if (res === 'add') setTimeout(() => addFixturesDialog(app, saved.id), 0);
     return saved;
   } catch (err) {
-    toast(`Import eșuat: ${err.message}`, 'error');
+    toast(tr('Import eșuat: {err}', { err: err.message }), 'error');
     return null;
   }
 }
@@ -512,8 +513,8 @@ async function pickFromArchive(app, files) {
     radio.addEventListener('change', () => { chosen = i; });
     return h('label', {}, radio, h('span', { class: 'grow' }, f.name));
   }));
-  const res = await openModal('Arhiva conține mai multe fixturi', h('div', { class: 'form' }, h('p', {}, 'Alege fișierul de importat:'), list),
-    [{ label: 'Anulează', value: null }, { label: 'Continuă', primary: true, value: 'ok' }]);
+  const res = await openModal(tr('Arhiva conține mai multe fixturi'), h('div', { class: 'form' }, h('p', {}, tr('Alege fișierul de importat:')), list),
+    [{ label: tr('Anulează'), value: null }, { label: tr('Continuă'), primary: true, value: 'ok' }]);
   if (!res) return null;
   const f = files[chosen];
   return importFixtureFile(app, new File([f.bytes], f.name));
@@ -533,7 +534,7 @@ export async function importFixtureFile(app, file) {
       const ss = await venuesFromZip(new Uint8Array(await file.arrayBuffer()));
       if (ss) return importSoundSwitch(app, ss);
       const files = await fixtureFilesInZip(await file.arrayBuffer());
-      if (!files.length) throw new Error('arhiva nu conține fișiere .d4, .gdtf sau .json');
+      if (!files.length) throw new Error(tr('arhiva nu conține fișiere .d4, .gdtf sau .json'));
       if (files.length === 1) return importFixtureFile(app, new File([files[0].bytes], files[0].name));
       return pickFromArchive(app, files);
     }
@@ -581,35 +582,35 @@ export async function importFixtureFile(app, file) {
       p.id = app.profilesById[p.id] ? uid('prof') : (p.id || uid('prof'));
       p.source = 'custom';
       const saved = app.saveProfile(p);
-      toast(`Profil importat: ${saved.name}`);
+      toast(tr('Profil importat: {name}', { name: saved.name }));
       return saved;
     }
     if (Array.isArray(data.fixtures)) {
       app.checkpoint();
       app.loadProject(data);
-      toast(`Proiect deschis: „${app.project.name}”`);
+      toast(tr('Proiect deschis: „{name}”', { name: app.project.name }));
       return null;
     }
-    throw new Error('format necunoscut');
+    throw new Error(tr('format necunoscut'));
   } catch (err) {
-    toast(`Nu am putut importa „${name}”: ${err.message}`, 'error', 6000);
+    toast(tr('Nu am putut importa „{name}”: {err}', { name, err: err.message }), 'error', 6000);
     return null;
   }
 }
 
 /** Library search: Open Fixture Library + Fixture.ID. */
 export async function oflDialog(app) {
-  const search = h('input', { type: 'search', placeholder: 'Model sau producător (ex: panther, intimidator spot 260, slimpar)' });
+  const search = h('input', { type: 'search', placeholder: tr('Model sau producător (ex: panther, intimidator spot 260, slimpar)') });
   const online = onlineResults(app);
   const results = h('div', { class: 'pick-list' }, online.el);
   search.addEventListener('input', () => online.update(search.value));
   online.update('');
   setTimeout(() => search.focus(), 50);
-  await openModal('Caută fixturi', h('div', { class: 'form' },
-    h('p', { class: 'muted' }, 'Caută în ', h('b', {}, 'Open Fixture Library'), ' (import direct) și pe ', h('b', {}, 'Fixture.ID'),
-      ' (fișiere .d4). Ai nevoie de internet doar la import – apoi profilul e salvat în proiect.'),
+  await openModal(tr('Caută fixturi'), h('div', { class: 'form' },
+    h('p', { class: 'muted' }, tr('Caută în '), h('b', {}, 'Open Fixture Library'), tr(' (import direct) și pe '), h('b', {}, 'Fixture.ID'),
+      tr(' (fișiere .d4). Ai nevoie de internet doar la import – apoi profilul e salvat în proiect.')),
     search, results),
-  [{ label: 'Închide', value: null }]);
+  [{ label: tr('Închide'), value: null }]);
 }
 
 export async function importProfileFile(app) {
@@ -619,29 +620,29 @@ export async function importProfileFile(app) {
 
 // ------------------------------------------------------------------ projects
 export async function newProjectDialog(app) {
-  const res = await openModal('Proiect nou', h('div', { class: 'form' },
-    h('p', {}, 'Alege de unde pornești. Proiectul curent rămâne salvat automat în browser până creezi altul – exportă-l sau salvează-l dacă vrei să-l păstrezi.'),
+  const res = await openModal(tr('Proiect nou'), h('div', { class: 'form' },
+    h('p', {}, tr('Alege de unde pornești. Proiectul curent rămâne salvat automat în browser până creezi altul – exportă-l sau salvează-l dacă vrei să-l păstrezi.')),
     h('ul', { class: 'small muted' },
-      h('li', {}, h('b', {}, 'Din SoundSwitch: '), 'citește proiectul tău .ssproj – aceleași fixturi, moduri și adrese ca în DMX Map.'),
-      h('li', {}, h('b', {}, 'Nuntă: '), 'cabină DJ cu truss, retro-uri, uplight-uri pe pereți, ring de dans cu scântei reci, glob disco, fum greu, laser.'),
-      h('li', {}, h('b', {}, 'Club: '), 'truss cu moving heads, bare LED, strobe, ecran LED.'))), [
-    { label: 'Anulează', value: null },
-    { label: 'Din SoundSwitch…', value: 'soundswitch' },
-    { label: 'Proiect gol', value: 'empty' },
-    { label: 'Rig club', value: 'club' },
-    { label: 'Rig nuntă', primary: true, value: 'wedding' },
+      h('li', {}, h('b', {}, tr('Din SoundSwitch: ')), tr('citește proiectul tău .ssproj – aceleași fixturi, moduri și adrese ca în DMX Map.')),
+      h('li', {}, h('b', {}, tr('Nuntă: ')), tr('cabină DJ cu truss, retro-uri, uplight-uri pe pereți, ring de dans cu scântei reci, glob disco, fum greu, laser.')),
+      h('li', {}, h('b', {}, 'Club: '), tr('truss cu moving heads, bare LED, strobe, ecran LED.')))), [
+    { label: tr('Anulează'), value: null },
+    { label: tr('Din SoundSwitch…'), value: 'soundswitch' },
+    { label: tr('Proiect gol'), value: 'empty' },
+    { label: tr('Rig club'), value: 'club' },
+    { label: tr('Rig nuntă'), primary: true, value: 'wedding' },
   ]);
   if (res === 'soundswitch') soundSwitchImportDialog(app);
   else if (res) app.newProject(res);
 }
 
 export async function openProjectDialog(app) {
-  const list = h('div', { class: 'pick-list' }, h('div', { class: 'muted', style: { padding: '10px' } }, 'Se încarcă…'));
+  const list = h('div', { class: 'pick-list' }, h('div', { class: 'muted', style: { padding: '10px' } }, tr('Se încarcă…')));
   const refresh = async () => {
     try {
       const items = await listServerProjects();
       list.innerHTML = '';
-      if (!items.length) list.append(h('div', { class: 'muted', style: { padding: '10px' } }, 'Niciun proiect salvat încă. Folosește „Salvează” (Ctrl+S).'));
+      if (!items.length) list.append(h('div', { class: 'muted', style: { padding: '10px' } }, tr('Niciun proiect salvat încă. Folosește „Salvează” (Ctrl+S).')));
       for (const it of items) {
         list.append(h('div', { class: 'item', onclick: async () => {
           try {
@@ -649,14 +650,14 @@ export async function openProjectDialog(app) {
             app.checkpoint();
             app.loadProject(p);
             closeModal();
-            toast(`Deschis: ${it.name}`);
+            toast(tr('Deschis: {name}', { name: it.name }));
           } catch (err) { toast(err.message, 'error'); }
         } },
         h('span', { class: 'name' }, it.name),
-        h('span', { class: 'meta' }, new Date(it.modified).toLocaleString('ro-RO')),
-        h('button', { class: 'icon danger', title: 'Șterge', onclick: async (e) => {
+        h('span', { class: 'meta' }, new Date(it.modified).toLocaleString(lang === 'en' ? 'en-GB' : 'ro-RO')),
+        h('button', { class: 'icon danger', title: tr('Șterge'), onclick: async (e) => {
           e.stopPropagation();
-          if (!confirm(`Ștergi proiectul „${it.name}”?`)) return;
+          if (!confirm(tr('Ștergi proiectul „{name}”?', { name: it.name }))) return;
           await deleteServerProject(it.name);
           refresh();
         } }, '🗑')));
@@ -667,9 +668,9 @@ export async function openProjectDialog(app) {
     }
   };
   refresh();
-  await openModal('Deschide proiect', h('div', { class: 'form' }, list), [
-    { label: 'Din fișier…', onClick: () => { setTimeout(() => app.importProject(), 0); } },
-    { label: 'Închide', value: null },
+  await openModal(tr('Deschide proiect'), h('div', { class: 'form' }, list), [
+    { label: tr('Din fișier…'), onClick: () => { setTimeout(() => app.importProject(), 0); } },
+    { label: tr('Închide'), value: null },
   ]);
 }
 
@@ -679,8 +680,8 @@ export async function settingsDialog(app) {
   let info = null;
   try { info = await (await fetch('/api/info')).json(); } catch (_) { /* server offline */ }
   const offset = h('select', {},
-    h('option', { value: '1' }, 'Art-Net 0 = Universul 1 (recomandat pentru SoundSwitch)'),
-    h('option', { value: '0' }, 'Art-Net 0 = Universul 0 (numerotare brută)'));
+    h('option', { value: '1' }, tr('Art-Net 0 = Universul 1 (recomandat pentru SoundSwitch)')),
+    h('option', { value: '0' }, tr('Art-Net 0 = Universul 0 (numerotare brută)')));
   offset.value = String(s.artnetOffset);
   offset.addEventListener('change', () => { app.setSetting('artnetOffset', Number(offset.value)); app.monitor.refreshUniverses(); });
   const sacn = h('input', { value: info ? info.settings.sacnUniverses.join(', ') : '1, 2, 3, 4' });
@@ -690,22 +691,22 @@ export async function settingsDialog(app) {
     return el;
   };
   const content = h('div', { class: 'form' },
-    h('h4', {}, 'Intrare DMX'),
-    field('Numerotare universuri Art-Net', offset),
-    field('Universuri sACN (E1.31) ascultate', sacn, 'Lista universurilor sACN multicast la care se abonează serverul'),
-    info ? h('div', { class: 'muted small' }, `Server pe portul ${info.port}. IP-urile acestui calculator: ${info.interfaces.map((i) => `${i.address} (${i.name})`).join(', ') || '—'}`) : h('div', { class: 'warn-box' }, 'Serverul nu răspunde.'),
-    h('h4', {}, 'Branding pentru clipuri video'),
+    h('h4', {}, tr('Intrare DMX')),
+    field(tr('Numerotare universuri Art-Net'), offset),
+    field(tr('Universuri sACN (E1.31) ascultate'), sacn, tr('Lista universurilor sACN multicast la care se abonează serverul')),
+    info ? h('div', { class: 'muted small' }, tr('Server pe portul {port}. IP-urile acestui calculator: {ips}', { port: info.port, ips: info.interfaces.map((i) => `${i.address} (${i.name})`).join(', ') || '—' })) : h('div', { class: 'warn-box' }, tr('Serverul nu răspunde.')),
+    h('h4', {}, tr('Branding pentru clipuri video')),
     brandingForm(),
-    h('h4', {}, 'Asistent Claude'),
+    h('h4', {}, tr('Asistent Claude')),
     await assistantSettings(),
-    h('h4', {}, 'Imagine'),
-    field('Lumina din sală (candelabre, ambient)', range('houseLight', 0, 1, 0.01)),
-    field('Putere lumină pe suprafețe (podea/pereți)', range('lightPower', 0, 3, 0.05)),
-    field('Haze / fum', range('haze', 0, 1, 0.01)),
+    h('h4', {}, tr('Imagine')),
+    field(tr('Lumina din sală (candelabre, ambient)'), range('houseLight', 0, 1, 0.01)),
+    field(tr('Putere lumină pe suprafețe (podea/pereți)'), range('lightPower', 0, 3, 0.05)),
+    field(tr('Haze / fum'), range('haze', 0, 1, 0.01)),
     field('Glow (bloom)', range('bloom', 0, 2, 0.01)),
   );
-  await openModal('Setări', content, [
-    { label: 'Gata', primary: true, onClick: async () => {
+  await openModal(tr('Setări'), content, [
+    { label: tr('Gata'), primary: true, onClick: async () => {
       const list = sacn.value.split(/[ ,;]+/).map(Number).filter((n) => n >= 1 && n <= 63999);
       try {
         await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sacnUniverses: list }) });
@@ -718,36 +719,36 @@ export async function settingsDialog(app) {
 async function assistantSettings() {
   let st = { configured: false, models: {}, model: 'claude-opus-5-5' };
   try { st = await (await fetch('/api/assistant/status')).json(); } catch (_) { /* offline */ }
-  const key = h('input', { type: 'password', placeholder: st.configured ? '•••••••• (cheie salvată)' : 'sk-ant-…', autocomplete: 'off' });
+  const key = h('input', { type: 'password', placeholder: st.configured ? tr('•••••••• (cheie salvată)') : 'sk-ant-…', autocomplete: 'off' });
   key.addEventListener('keydown', (e) => e.stopPropagation());
   const model = h('select', {}, Object.entries(st.models || {}).map(([id, label]) => h('option', { value: id, selected: id === st.model }, label)));
-  const msg = h('span', { class: 'muted small' }, st.configured ? (st.source === 'env' ? 'Cheie din variabila ANTHROPIC_API_KEY.' : 'Cheie salvată pe acest calculator.') : 'Nicio cheie salvată.');
+  const msg = h('span', { class: 'muted small' }, st.configured ? (st.source === 'env' ? tr('Cheie din variabila ANTHROPIC_API_KEY.') : tr('Cheie salvată pe acest calculator.')) : tr('Nicio cheie salvată.'));
   const post = async (body, text) => {
     const res = await fetch('/api/assistant/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) { msg.textContent = text; key.value = ''; }
   };
   return h('div', { class: 'form' },
-    h('div', { class: 'grid2' }, field('Cheie API', key), field('Model', model)),
+    h('div', { class: 'grid2' }, field(tr('Cheie API'), key), field('Model', model)),
     h('div', { class: 'row' },
-      h('button', { onclick: () => post({ ...(key.value ? { apiKey: key.value } : {}), model: model.value }, 'Salvat.') }, 'Salvează'),
-      h('button', { onclick: () => post({ apiKey: '' }, 'Cheia a fost ștearsă.') }, 'Șterge cheia'),
+      h('button', { onclick: () => post({ ...(key.value ? { apiKey: key.value } : {}), model: model.value }, tr('Salvat.')) }, tr('Salvează')),
+      h('button', { onclick: () => post({ apiKey: '' }, tr('Cheia a fost ștearsă.')) }, tr('Șterge cheia')),
       msg),
-    h('div', { class: 'muted small' }, 'Cheia rămâne doar pe acest calculator și nu este afișată în pagină. Costul se plătește direct la Anthropic, după consum. ',
-      h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'Obține o cheie ↗')));
+    h('div', { class: 'muted small' }, tr('Cheia rămâne doar pe acest calculator și nu este afișată în pagină. Costul se plătește direct la Anthropic, după consum. '),
+      h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, tr('Obține o cheie ↗'))));
 }
 
 function brandingForm() {
   const brand = loadBrand();
-  const text = h('input', { value: brand.text || '', placeholder: 'ex: DJ Matei' });
-  const sub = h('input', { value: brand.subtitle || '', placeholder: 'ex: djmatei.ro' });
+  const text = h('input', { value: brand.text || '', placeholder: tr('ex: DJ Matei') });
+  const sub = h('input', { value: brand.subtitle || '', placeholder: tr('ex: djmatei.ro') });
   const preview = h('div', { class: 'row' });
   const renderPreview = () => {
     preview.innerHTML = '';
     if (brand.logo) {
       preview.append(h('img', { src: brand.logo, class: 'brand-logo', alt: 'Logo' }),
-        h('button', { onclick: () => { brand.logo = null; saveBrand(brand); renderPreview(); } }, 'Șterge logo'));
+        h('button', { onclick: () => { brand.logo = null; saveBrand(brand); renderPreview(); } }, tr('Șterge logo')));
     } else {
-      preview.append(h('span', { class: 'muted small' }, 'Niciun logo încărcat.'));
+      preview.append(h('span', { class: 'muted small' }, tr('Niciun logo încărcat.')));
     }
   };
   const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/svg+xml,image/webp' });
@@ -774,8 +775,8 @@ function brandingForm() {
   sub.addEventListener('change', save);
   renderPreview();
   return h('div', { class: 'form' },
-    h('div', { class: 'grid2' }, field('Nume', text), field('Site / Instagram', sub)),
-    field('Logo (PNG transparent recomandat)', file),
+    h('div', { class: 'grid2' }, field(tr('Nume'), text), field('Site / Instagram', sub)),
+    field(tr('Logo (PNG transparent recomandat)'), file),
     preview);
 }
 
@@ -783,35 +784,35 @@ export async function helpDialog(app) {
   let ips = '';
   try { const info = await (await fetch('/api/info')).json(); ips = info.interfaces.map((i) => i.address).join(', '); } catch (_) { /* offline */ }
   const content = h('div', { class: 'form' },
-    h('h4', {}, 'SoundSwitch pe același calculator'),
+    h('h4', {}, tr('SoundSwitch pe același calculator')),
     h('ol', {},
-      h('li', {}, 'Pornește ', h('b', {}, 'întâi FreeVisualizer'), ', apoi SoundSwitch.'),
-      h('li', {}, 'În SoundSwitch: ', h('code', {}, 'Preferences → Hardware'), ' → bifează ', h('b', {}, 'Localhost Art-Net Node'), ' (disponibil din SoundSwitch 2.9).'),
-      h('li', {}, 'Dacă nu apare imediat, repornește SoundSwitch (el caută nodurile Art-Net la pornire).'),
-      h('li', {}, 'În FreeVisualizer adaugă aceleași fixturi, cu ', h('b', {}, 'același univers, aceeași adresă DMX și același mod (nr. de canale)'), ' ca în DMX Patch-ul din SoundSwitch.'),
-      h('li', {}, 'Indicatorul din dreapta sus devine verde: „Primesc DMX”. Gata – pune muzică și Autoloops!')),
-    h('h4', {}, 'SoundSwitch pe alt calculator (în rețea)'),
+      h('li', {}, tr('Pornește '), h('b', {}, tr('întâi FreeVisualizer')), tr(', apoi SoundSwitch.')),
+      h('li', {}, tr('În SoundSwitch: '), h('code', {}, 'Preferences → Hardware'), tr(' → bifează '), h('b', {}, 'Localhost Art-Net Node'), tr(' (disponibil din SoundSwitch 2.9).')),
+      h('li', {}, tr('Dacă nu apare imediat, repornește SoundSwitch (el caută nodurile Art-Net la pornire).')),
+      h('li', {}, tr('În FreeVisualizer adaugă aceleași fixturi, cu '), h('b', {}, tr('același univers, aceeași adresă DMX și același mod (nr. de canale)')), tr(' ca în DMX Patch-ul din SoundSwitch.')),
+      h('li', {}, tr('Indicatorul din dreapta sus devine verde: „Primesc DMX”. Gata – pune muzică și Autoloops!'))),
+    h('h4', {}, tr('SoundSwitch pe alt calculator (în rețea)')),
     h('ol', {},
-      h('li', {}, 'Ambele calculatoare în aceeași rețea, ideal prin cablu (multe routere Wi-Fi blochează Art-Net).'),
-      h('li', {}, `În SoundSwitch alege nodul Art-Net „FreeVisualizer” sau IP-ul acestui calculator: `, h('code', {}, ips || 'vezi Setări')),
-      h('li', {}, 'Permite aplicația Node.js în firewall (porturile UDP 6454 pentru Art-Net și 5568 pentru sACN).')),
-    h('h4', {}, 'Fixturile din SoundSwitch'),
+      h('li', {}, tr('Ambele calculatoare în aceeași rețea, ideal prin cablu (multe routere Wi-Fi blochează Art-Net).')),
+      h('li', {}, tr('În SoundSwitch alege nodul Art-Net „FreeVisualizer” sau IP-ul acestui calculator: '), h('code', {}, ips || tr('vezi Setări'))),
+      h('li', {}, tr('Permite aplicația Node.js în firewall (porturile UDP 6454 pentru Art-Net și 5568 pentru sACN).'))),
+    h('h4', {}, tr('Fixturile din SoundSwitch')),
     h('ol', {},
-      h('li', {}, 'Fixturi → ', h('b', {}, '⇪ Importă din SoundSwitch'), ' și alegi proiectul (folderul .ssproj din Muzică → SoundSwitch). Sau tragi folderul peste fereastră.'),
-      h('li', {}, 'Primești aceleași fixturi, moduri și adrese ca în DMX Map. Le muți apoi unde sunt în sală.'),
-      h('li', {}, 'Ai schimbat ceva în SoundSwitch? Salvezi proiectul acolo și imporți din nou cu „Actualizează proiectul curent” – pozițiile rămân.')),
-    h('h4', {}, 'Fixturi care nu sunt în listă'),
+      h('li', {}, tr('Fixturi → '), h('b', {}, tr('⇪ Importă din SoundSwitch')), tr(' și alegi proiectul (folderul .ssproj din Muzică → SoundSwitch). Sau tragi folderul peste fereastră.')),
+      h('li', {}, tr('Primești aceleași fixturi, moduri și adrese ca în DMX Map. Le muți apoi unde sunt în sală.')),
+      h('li', {}, tr('Ai schimbat ceva în SoundSwitch? Salvezi proiectul acolo și imporți din nou cu „Actualizează proiectul curent” – pozițiile rămân.'))),
+    h('h4', {}, tr('Fixturi care nu sunt în listă')),
     h('ol', {},
-      h('li', {}, 'În „Adaugă fixturi” scrie modelul: caută deodată în profilele tale, în ', h('b', {}, 'Open Fixture Library'), ' și îți dă un buton spre ', h('b', {}, 'Fixture.ID'), '.'),
-      h('li', {}, 'De pe Fixture.ID descarci fișierul ', h('b', {}, '.d4'), '. În aplicația desktop se importă singur; în browser îl tragi peste fereastră.'),
-      h('li', {}, 'Alege ', h('b', {}, 'același mod DMX'), ' ca în SoundSwitch.')),
-    h('h4', {}, 'Probleme frecvente'),
+      h('li', {}, tr('În „Adaugă fixturi” scrie modelul: caută deodată în profilele tale, în '), h('b', {}, 'Open Fixture Library'), tr(' și îți dă un buton spre '), h('b', {}, 'Fixture.ID'), '.'),
+      h('li', {}, tr('De pe Fixture.ID descarci fișierul '), h('b', {}, '.d4'), tr('. În aplicația desktop se importă singur; în browser îl tragi peste fereastră.')),
+      h('li', {}, tr('Alege '), h('b', {}, tr('același mod DMX')), tr(' ca în SoundSwitch.'))),
+    h('h4', {}, tr('Probleme frecvente')),
     h('ol', {},
-      h('li', {}, h('b', {}, 'Universul nu se potrivește: '), 'deschide tab-ul DMX – vezi ce universuri sosesc. Poți schimba numerotarea Art-Net din Setări.'),
-      h('li', {}, h('b', {}, 'Culorile/mișcarea sunt greșite: '), 'modul DMX al profilului diferă de cel din SoundSwitch. Folosește „Test canale” din inspector ca să verifici fiecare canal.'),
-      h('li', {}, h('b', {}, 'Portul 6454 e ocupat: '), 'închide alte vizualizatoare / SoundSwitch, pornește FreeVisualizer, apoi SoundSwitch.')),
-    h('h4', {}, 'Scurtături'),
-    h('p', { class: 'small' }, 'Ctrl/Cmd+click sau Shift+trage = selecție multiplă · Ctrl/Cmd+A toate · W mută · E rotește · săgeți/PageUp/PageDown mută · [ ] rotesc · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere'),
+      h('li', {}, h('b', {}, tr('Universul nu se potrivește: ')), tr('deschide tab-ul DMX – vezi ce universuri sosesc. Poți schimba numerotarea Art-Net din Setări.')),
+      h('li', {}, h('b', {}, tr('Culorile/mișcarea sunt greșite: ')), tr('modul DMX al profilului diferă de cel din SoundSwitch. Folosește „Test canale” din inspector ca să verifici fiecare canal.')),
+      h('li', {}, h('b', {}, tr('Portul 6454 e ocupat: ')), tr('închide alte vizualizatoare / SoundSwitch, pornește FreeVisualizer, apoi SoundSwitch.'))),
+    h('h4', {}, tr('Scurtături')),
+    h('p', { class: 'small' }, tr('Ctrl/Cmd+click sau Shift+trage = selecție multiplă · Ctrl/Cmd+A toate · W mută · E rotește · săgeți/PageUp/PageDown mută · [ ] rotesc · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere')),
   );
-  await openModal('Conectare SoundSwitch', content, [{ label: 'Am înțeles', primary: true, value: null }]);
+  await openModal(tr('Conectare SoundSwitch'), content, [{ label: tr('Am înțeles'), primary: true, value: null }]);
 }

@@ -11,6 +11,7 @@ const { ArtNetReceiver, ipv4Interfaces } = require('./artnet');
 const { SacnReceiver } = require('./sacn');
 const { OflService } = require('./ofl');
 const { createAssistant } = require('./assistant');
+const { tr, langOf } = require('./i18n');
 
 const PUBLIC = path.resolve(__dirname, '..', 'public');
 const FLUSH_MS = 20;
@@ -39,7 +40,7 @@ function readRaw(req, limit = 60 * 1024 * 1024) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > limit) { reject(new Error('Fișier prea mare')); req.destroy(); return; }
+      if (size > limit) { reject(new Error(tr(req, 'Fișier prea mare'))); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(chunks)));
@@ -211,10 +212,10 @@ function createApp(opts = {}) {
     const projMatch = p.match(/^\/api\/projects\/(.+)$/);
     if (projMatch) {
       const name = safeName(decodeURIComponent(projMatch[1]));
-      if (!name) return sendJson(res, 400, { error: 'Nume invalid' });
+      if (!name) return sendJson(res, 400, { error: tr(req, 'Nume invalid') });
       const file = path.join(DATA, 'projects', `${name}.json`);
       if (req.method === 'GET') {
-        if (!fs.existsSync(file)) return sendJson(res, 404, { error: 'Proiectul nu există' });
+        if (!fs.existsSync(file)) return sendJson(res, 404, { error: tr(req, 'Proiectul nu există') });
         res.writeHead(200, { 'content-type': MIME['.json'] });
         return res.end(fs.readFileSync(file));
       }
@@ -238,7 +239,7 @@ function createApp(opts = {}) {
     if (p === '/api/assistant' && req.method === 'POST') {
       try {
         const body = JSON.parse(await readBody(req));
-        return sendJson(res, 200, await assistant.turn(body.messages));
+        return sendJson(res, 200, await assistant.turn(body.messages, langOf(req)));
       } catch (err) {
         return sendJson(res, err.status || 500, { error: err.message });
       }
@@ -247,9 +248,9 @@ function createApp(opts = {}) {
     // 3D models and thumbnails for profiles (from .glb uploads and GDTF files), stored by content hash.
     if (p === '/api/models' && req.method === 'POST') {
       const ext = String(url.searchParams.get('ext') || '').toLowerCase();
-      if (!MODEL_EXT[ext]) return sendJson(res, 400, { error: 'Format nesuportat' });
+      if (!MODEL_EXT[ext]) return sendJson(res, 400, { error: tr(req, 'Format nesuportat') });
       const buf = await readRaw(req);
-      if (!buf.length) return sendJson(res, 400, { error: 'Fișier gol' });
+      if (!buf.length) return sendJson(res, 400, { error: tr(req, 'Fișier gol') });
       const file = `${crypto.createHash('sha1').update(buf).digest('hex')}.${ext}`;
       const dest = path.join(MODELS, file);
       if (!fs.existsSync(dest)) fs.writeFileSync(dest, buf);
@@ -258,9 +259,9 @@ function createApp(opts = {}) {
     const modelMatch = /^\/api\/models\/([^/]+)$/.exec(p);
     if (modelMatch && req.method === 'GET') {
       const file = modelMatch[1];
-      if (!MODEL_FILE.test(file)) return sendJson(res, 400, { error: 'Nume invalid' });
+      if (!MODEL_FILE.test(file)) return sendJson(res, 400, { error: tr(req, 'Nume invalid') });
       const full = path.join(MODELS, file);
-      if (!fs.existsSync(full)) return sendJson(res, 404, { error: 'Modelul nu există' });
+      if (!fs.existsSync(full)) return sendJson(res, 404, { error: tr(req, 'Modelul nu există') });
       res.writeHead(200, { 'content-type': MODEL_EXT[file.split('.').pop()], 'cache-control': 'max-age=31536000, immutable' });
       fs.createReadStream(full).pipe(res);
       return undefined;
@@ -270,15 +271,15 @@ function createApp(opts = {}) {
       try {
         return sendJson(res, 200, await ofl.search(url.searchParams.get('q')));
       } catch (err) {
-        return sendJson(res, 502, { error: `Nu pot accesa Open Fixture Library (${err.message}). Verifică internetul sau importă fișierul .json manual.` });
+        return sendJson(res, 502, { error: tr(req, 'Nu pot accesa Open Fixture Library ({err}). Verifică internetul sau importă fișierul .json manual.', { err: err.message }) });
       }
     }
 
     if (p === '/api/ofl/fixture') {
       try {
-        return sendJson(res, 200, await ofl.fixture(url.searchParams.get('key') || ''));
+        return sendJson(res, 200, await ofl.fixture(url.searchParams.get('key') || '', langOf(req)));
       } catch (err) {
-        return sendJson(res, 502, { error: `Nu pot descărca fixtura (${err.message}).` });
+        return sendJson(res, 502, { error: tr(req, 'Nu pot descărca fixtura ({err}).', { err: err.message }) });
       }
     }
 

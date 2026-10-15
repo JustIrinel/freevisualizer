@@ -1,5 +1,6 @@
 // Project model: fixtures, props, room, custom profiles and view settings.
 import { uid } from './profiles.js';
+import { tr } from './i18n.js';
 
 export const PROJECT_VERSION = 1;
 export const AUTOSAVE_KEY = 'freevis.autosave.v1';
@@ -8,7 +9,7 @@ export function defaultSettings() {
   return { haze: 0.5, bloom: 0.9, ambient: 0.08, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, artnetOffset: 1 };
 }
 
-export function emptyProject(name = 'Proiect nou') {
+export function emptyProject(name = tr('Proiect nou')) {
   return {
     version: PROJECT_VERSION,
     name,
@@ -33,21 +34,21 @@ function prop(type, name, position, rotation = v(0, 0, 0), params = {}) {
 
 /** A small club / wedding rig so the first start already looks like a show. */
 export function demoProject() {
-  const p = emptyProject('Rig demo – nuntă / club');
+  const p = emptyProject(tr('Rig demo – nuntă / club'));
   p.room.style = 'dark';
   p.room.floorColor = '#2c2c31';
   p.room.wallColor = '#6e6a66';
   const trussZ = -7.5;
   const trussY = 3.75;
   p.props.push(
-    prop('column', 'Stâlp stânga', v(-4.6, 0, trussZ), v(0, 0, 0), { length: 3.6 }),
-    prop('column', 'Stâlp dreapta', v(4.6, 0, trussZ), v(0, 0, 0), { length: 3.6 }),
-    prop('truss', 'Truss față', v(0, trussY, trussZ), v(0, 0, 0), { length: 9.5 }),
-    prop('booth', 'Cabină DJ', v(0, 0, -6.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
-    prop('speaker', 'Boxă stânga', v(-2.4, 0, -6.2)),
-    prop('speaker', 'Boxă dreapta', v(2.4, 0, -6.2)),
-    prop('screen', 'Ecran LED', v(0, 1.4, -9.85), v(0, 0, 0), { width: 4, height: 2.25 }),
-    prop('crowd', 'Invitați', v(0, 0, 1.5), v(0, 0, 0), { width: 12, depth: 8, count: 70 }),
+    prop('column', tr('Stâlp stânga'), v(-4.6, 0, trussZ), v(0, 0, 0), { length: 3.6 }),
+    prop('column', tr('Stâlp dreapta'), v(4.6, 0, trussZ), v(0, 0, 0), { length: 3.6 }),
+    prop('truss', tr('Truss față'), v(0, trussY, trussZ), v(0, 0, 0), { length: 9.5 }),
+    prop('booth', tr('Cabină DJ'), v(0, 0, -6.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
+    prop('speaker', tr('Boxă stânga'), v(-2.4, 0, -6.2)),
+    prop('speaker', tr('Boxă dreapta'), v(2.4, 0, -6.2)),
+    prop('screen', tr('Ecran LED'), v(0, 1.4, -9.85), v(0, 0, 0), { width: 4, height: 2.25 }),
+    prop('crowd', tr('Invitați'), v(0, 0, 1.5), v(0, 0, 0), { width: 12, depth: 8, count: 70 }),
   );
 
   const hang = v(180, 0, 0);
@@ -64,10 +65,10 @@ export function demoProject() {
     fixture('Uplight 6', 'gen-par-rgbwauv-6', 1, 91, v(11.6, 0, -2), v(0, 0, -14)),
   );
   p.fixtures.push(
-    fixture('Bară LED 1', 'gen-bar-8x-rgb-26', 1, 101, v(-3, 0.05, -9.4), v(-18, 0, 0)),
-    fixture('Bară LED 2', 'gen-bar-8x-rgb-26', 1, 127, v(3, 0.05, -9.4), v(-18, 0, 0)),
+    fixture(tr('Bară LED {n}', { n: 1 }), 'gen-bar-8x-rgb-26', 1, 101, v(-3, 0.05, -9.4), v(-18, 0, 0)),
+    fixture(tr('Bară LED {n}', { n: 2 }), 'gen-bar-8x-rgb-26', 1, 127, v(3, 0.05, -9.4), v(-18, 0, 0)),
     fixture('Strobe', 'gen-strobe-2', 1, 161, v(0, trussY, trussZ + 0.22), v(70, 0, 0)),
-    fixture('Fum', 'gen-fog-1', 1, 170, v(1.6, 0, -6.6)),
+    fixture(tr('Fum'), 'gen-fog-1', 1, 170, v(1.6, 0, -6.6)),
   );
   p.camera = { position: [0, 3.4, 11.5], target: [0, 2.4, -5] };
   return p;
@@ -76,25 +77,25 @@ export function demoProject() {
 /** Wedding venue: DJ booth with truss, retro lights, uplights on every wall,
  *  dance floor with cold sparks, mirror ball with pinspots and low fog. */
 export function weddingProject() {
-  const p = emptyProject('Rig nuntă – sală de evenimente');
+  const p = emptyProject(tr('Rig nuntă – sală de evenimente'));
   p.room = { ...p.room, style: 'banquet', width: 26, depth: 20, height: 5.5, floorColor: '#2b2725', wallColor: '#d8cdbd' };
   const trussZ = -9;
   const trussY = 3.35;
   p.props.push(
-    prop('column', 'Stâlp stânga', v(-3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
-    prop('column', 'Stâlp dreapta', v(3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
-    prop('truss', 'Truss DJ', v(0, trussY, trussZ), v(0, 0, 0), { length: 7.5 }),
-    prop('booth', 'Cabină DJ', v(0, 0, -8.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
-    prop('speaker', 'Boxă stânga', v(-4.6, 0, -8.6)),
-    prop('speaker', 'Boxă dreapta', v(4.6, 0, -8.6)),
-    prop('dancefloor', 'Ring de dans', v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
-    prop('crowd', 'Invitați pe ring', v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 40 }),
-    prop('headtable', 'Masa mirilor', v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),
-    prop('mirrorball', 'Glob disco', v(0, 4.4, -3.5), v(0, 0, 0), { diameter: 0.5, drop: 0.6, rpm: 2 }),
+    prop('column', tr('Stâlp stânga'), v(-3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
+    prop('column', tr('Stâlp dreapta'), v(3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
+    prop('truss', tr('Truss DJ'), v(0, trussY, trussZ), v(0, 0, 0), { length: 7.5 }),
+    prop('booth', tr('Cabină DJ'), v(0, 0, -8.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
+    prop('speaker', tr('Boxă stânga'), v(-4.6, 0, -8.6)),
+    prop('speaker', tr('Boxă dreapta'), v(4.6, 0, -8.6)),
+    prop('dancefloor', tr('Ring de dans'), v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
+    prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 40 }),
+    prop('headtable', tr('Masa mirilor'), v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),
+    prop('mirrorball', tr('Glob disco'), v(0, 4.4, -3.5), v(0, 0, 0), { diameter: 0.5, drop: 0.6, rpm: 2 }),
   );
   let t = 1;
-  for (const x of [-8, -4, 0, 4, 8]) for (const z of [3.5, 7.5]) p.props.push(prop('table', `Masa ${t++}`, v(x, 0, z), v(0, 0, 0), { diameter: 1.8 }));
-  for (const z of [-6.5, -2]) p.props.push(prop('table', `Masa ${t++}`, v(9.5, 0, z), v(0, 0, 0), { diameter: 1.8 }));
+  for (const x of [-8, -4, 0, 4, 8]) for (const z of [3.5, 7.5]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(x, 0, z), v(0, 0, 0), { diameter: 1.8 }));
+  for (const z of [-6.5, -2]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(9.5, 0, z), v(0, 0, 0), { diameter: 1.8 }));
 
   const hang = v(180, 0, 0);
   const face = v(90, 0, 0);
@@ -111,11 +112,11 @@ export function weddingProject() {
     [12.6, -6, v(0, 0, -14)], [12.6, -1, v(0, 0, -14)], [12.6, 4, v(0, 0, -14)], [12.6, 8, v(0, 0, -14)],
   ];
   ups.forEach(([x, z, r], i) => p.fixtures.push(fixture(`Uplight ${i + 1}`, 'gen-par-rgbwauv-6', 1, 101 + i * 6, v(x, 0, z), r)));
-  [[-4.2, -7], [4.2, -7], [-4.2, 0], [4.2, 0]].forEach(([x, z], i) => p.fixtures.push(fixture(`Scântei ${i + 1}`, 'gen-spark-2', 1, 181 + i * 2, v(x, 0, z))));
+  [[-4.2, -7], [4.2, -7], [-4.2, 0], [4.2, 0]].forEach(([x, z], i) => p.fixtures.push(fixture(tr('Scântei {n}', { n: i + 1 }), 'gen-spark-2', 1, 181 + i * 2, v(x, 0, z))));
   p.fixtures.push(
     fixture('Pinspot 1', 'gen-pinspot-1', 1, 191, v(-2.5, 5.2, -3.5), v(0, 0, -107.8)),
     fixture('Pinspot 2', 'gen-pinspot-1', 1, 192, v(2.5, 5.2, -3.5), v(0, 0, 107.8)),
-    fixture('Fum greu', 'gen-lowfog-1', 1, 195, v(0, 0, -7.3)),
+    fixture(tr('Fum greu'), 'gen-lowfog-1', 1, 195, v(0, 0, -7.3)),
     fixture('Laser', 'gen-laser-6', 1, 201, v(0, trussY + 0.25, trussZ), v(80, 0, 0)),
   );
   p.camera = { position: [8.5, 4.4, 10.5], target: [0, 1.8, -4.5] };
@@ -158,7 +159,7 @@ export function loadAutosave() {
 
 export async function listServerProjects() {
   const res = await fetch('/api/projects');
-  if (!res.ok) throw new Error('Nu pot lista proiectele');
+  if (!res.ok) throw new Error(tr('Nu pot lista proiectele'));
   return res.json();
 }
 
@@ -167,13 +168,13 @@ export async function saveServerProject(project) {
     method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(project, null, 1),
   });
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Eroare la salvare');
+  if (!res.ok) throw new Error(body.error || tr('Eroare la salvare'));
   return body;
 }
 
 export async function loadServerProject(name) {
   const res = await fetch(`/api/projects/${encodeURIComponent(name)}`);
-  if (!res.ok) throw new Error('Proiectul nu a putut fi încărcat');
+  if (!res.ok) throw new Error(tr('Proiectul nu a putut fi încărcat'));
   return normalizeProject(await res.json());
 }
 

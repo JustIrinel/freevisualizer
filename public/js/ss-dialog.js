@@ -4,6 +4,7 @@ import { parseSoundSwitchVenues, ssPlacement } from './ss-import.js';
 import { readZip } from './zip-lite.js';
 import { weddingProject } from './project.js';
 import { uid } from './profiles.js';
+import { tr, tp } from './i18n.js';
 
 const VENUES_FILE = 'soundswitchvenues.bin';
 
@@ -46,7 +47,7 @@ function pickAnyFile() {
 /** Files of a picked folder → the SoundSwitchVenues.bin to use (asks when there are several projects). */
 async function venuesFromFolder(files) {
   const found = files.filter((f) => isVenuesFile(f.webkitRelativePath || f.name));
-  if (!found.length) throw new Error('În folderul ales nu există un proiect SoundSwitch (lipsește SoundSwitchVenues.bin). Alege folderul care se termină în .ssproj.');
+  if (!found.length) throw new Error(tr('În folderul ales nu există un proiect SoundSwitch (lipsește SoundSwitchVenues.bin). Alege folderul care se termină în .ssproj.'));
   let file = found[0];
   if (found.length > 1) {
     let chosen = 0;
@@ -55,7 +56,7 @@ async function venuesFromFolder(files) {
       radio.addEventListener('change', () => { chosen = i; });
       return h('label', {}, radio, h('span', { class: 'grow' }, projectName(f.webkitRelativePath)));
     }));
-    const res = await openModal('Ce proiect SoundSwitch?', h('div', { class: 'form' }, list), [{ label: 'Anulează', value: null }, { label: 'Continuă', primary: true, value: 'ok' }]);
+    const res = await openModal(tr('Ce proiect SoundSwitch?'), h('div', { class: 'form' }, list), [{ label: tr('Anulează'), value: null }, { label: tr('Continuă'), primary: true, value: 'ok' }]);
     if (!res) return null;
     file = found[chosen];
   }
@@ -67,7 +68,7 @@ export async function venuesFromFile(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   if (/\.zip$/i.test(file.name)) {
     const v = await venuesFromZip(buf);
-    if (!v) throw new Error('Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)');
+    if (!v) throw new Error(tr('Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)'));
     return v;
   }
   return { name: projectName(file.webkitRelativePath || file.name), bytes: buf };
@@ -100,16 +101,16 @@ export async function venuesFromEntry(entry, depth = 0) {
 /** Start: pick the project (desktop: native dialog in Music/SoundSwitch). */
 export async function soundSwitchImportDialog(app) {
   const desktop = window.freevisDesktop && window.freevisDesktop.pickSoundSwitch;
-  const res = await openModal('Importă din SoundSwitch', h('div', { class: 'form' },
-    h('p', {}, 'FreeVisualizer citește proiectul tău SoundSwitch și pune în scenă ', h('b', {}, 'aceleași fixturi, cu același mod și aceeași adresă DMX'), ' ca în DMX Map. Nu mai faci patch de mână.'),
+  const res = await openModal(tr('Importă din SoundSwitch'), h('div', { class: 'form' },
+    h('p', {}, tr('FreeVisualizer citește proiectul tău SoundSwitch și pune în scenă '), h('b', {}, tr('aceleași fixturi, cu același mod și aceeași adresă DMX')), tr(' ca în DMX Map. Nu mai faci patch de mână.')),
     h('ol', { class: 'small' },
-      h('li', {}, 'Proiectele SoundSwitch sunt foldere care se termină în ', h('b', {}, '.ssproj'), ', de obicei în ', h('b', {}, 'Muzică → SoundSwitch'), '.'),
-      h('li', {}, 'Poți folosi și o arhivă ', h('b', {}, '.zip'), ' a proiectului (de ex. din File → Export Project).'),
-      h('li', {}, 'Dacă ai schimbat ceva în SoundSwitch, salvează proiectul acolo (File → Save Project) înainte de import.'))),
+      h('li', {}, tr('Proiectele SoundSwitch sunt foldere care se termină în '), h('b', {}, '.ssproj'), tr(', de obicei în '), h('b', {}, tr('Muzică → SoundSwitch')), '.'),
+      h('li', {}, tr('Poți folosi și o arhivă '), h('b', {}, '.zip'), tr(' a proiectului (de ex. din File → Export Project).')),
+      h('li', {}, tr('Dacă ai schimbat ceva în SoundSwitch, salvează proiectul acolo (File → Save Project) înainte de import.')))),
   [
-    { label: 'Anulează', value: null },
-    { label: 'Arhivă .zip…', value: 'file' },
-    { label: desktop ? 'Alege proiectul…' : 'Alege folderul .ssproj…', primary: true, value: 'folder' },
+    { label: tr('Anulează'), value: null },
+    { label: tr('Arhivă .zip…'), value: 'file' },
+    { label: desktop ? tr('Alege proiectul…') : tr('Alege folderul .ssproj…'), primary: true, value: 'folder' },
   ]);
   if (!res) return;
   try {
@@ -120,7 +121,7 @@ export async function soundSwitchImportDialog(app) {
         if (!r) return;
         if (r.error) throw new Error(r.error);
         source = r.zip ? await venuesFromZip(new Uint8Array(r.data)) : { name: r.name, bytes: new Uint8Array(r.data) };
-        if (!source) throw new Error('Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)');
+        if (!source) throw new Error(tr('Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)'));
       } else {
         const files = await pickDirectory();
         if (!files.length) return;
@@ -152,24 +153,24 @@ function stageOf(project) {
 /** Parsed project → confirmation → new project (or update of the current one). */
 export async function importSoundSwitch(app, { name, bytes }) {
   const parsed = parseSoundSwitchVenues(bytes);
-  if (!parsed.fixtures.length) throw new Error('Proiectul SoundSwitch nu are fixturi în DMX Map');
+  if (!parsed.fixtures.length) throw new Error(tr('Proiectul SoundSwitch nu are fixturi în DMX Map'));
   const linked = app.project.fixtures.filter((f) => f.ssName);
   const table = h('table', { class: 'ss-table' },
-    h('thead', {}, h('tr', {}, h('th', {}, 'Fixtură'), h('th', {}, 'Model'), h('th', {}, 'Mod'), h('th', {}, 'Adresă'))),
+    h('thead', {}, h('tr', {}, h('th', {}, tr('Fixtură')), h('th', {}, tr('Model')), h('th', {}, tr('Mod')), h('th', {}, tr('Adresă')))),
     h('tbody', {}, parsed.fixtures.map((f) => h('tr', {},
       h('td', {}, f.name),
       h('td', {}, `${f.definition.manufacturer} ${f.definition.name}`.trim()),
       h('td', {}, f.definition.modes[f.modeIndex]?.name || ''),
       h('td', {}, `U${f.universe} · ${f.address}`)))));
-  const buttons = [{ label: 'Anulează', value: null }];
-  if (linked.length) buttons.push({ label: 'Actualizează proiectul curent', value: 'update' });
-  buttons.push({ label: 'Importă ca proiect nou', primary: true, value: 'new' });
+  const buttons = [{ label: tr('Anulează'), value: null }];
+  if (linked.length) buttons.push({ label: tr('Actualizează proiectul curent'), value: 'update' });
+  buttons.push({ label: tr('Importă ca proiect nou'), primary: true, value: 'new' });
   const res = await openModal(`SoundSwitch: ${name}`, h('div', { class: 'form' },
-    h('p', {}, `Am găsit ${parsed.fixtures.length} fixturi în venue-ul „${parsed.venue}”:`),
+    h('p', {}, tp(parsed.fixtures.length, 'Am găsit o fixtură în venue-ul „{venue}”:', 'Am găsit {n} fixturi în venue-ul „{venue}”:', { venue: parsed.venue })),
     h('div', { class: 'ss-table-wrap' }, table),
     parsed.warnings.length ? h('div', { class: 'warn-box' }, parsed.warnings.join(' ')) : null,
-    linked.length ? h('p', { class: 'small muted' }, '„Actualizează” păstrează pozițiile din scenă și schimbă doar patch-ul și profilele, după ce ai modificat ceva în SoundSwitch.') : null,
-    h('p', { class: 'small muted' }, 'Fixturile sunt așezate automat (moving heads pe truss, par-uri pe podea, retro-uri în față). Le muți apoi unde sunt în sala ta.')),
+    linked.length ? h('p', { class: 'small muted' }, tr('„Actualizează” păstrează pozițiile din scenă și schimbă doar patch-ul și profilele, după ce ai modificat ceva în SoundSwitch.')) : null,
+    h('p', { class: 'small muted' }, tr('Fixturile sunt așezate automat (moving heads pe truss, par-uri pe podea, retro-uri în față). Le muți apoi unde sunt în sala ta.'))),
   buttons, { width: '760px' });
   if (!res) return;
 
@@ -188,7 +189,7 @@ export async function importSoundSwitch(app, { name, bytes }) {
   }));
   app.checkpoint();
   app.loadProject(project);
-  toast(`Am importat ${placed.length} fixturi din SoundSwitch. Mută-le unde sunt în sala ta.`, 'info', 6000);
+  toast(tp(placed.length, 'Am importat o fixtură din SoundSwitch. Mut-o unde e în sala ta.', 'Am importat {n} fixturi din SoundSwitch. Mută-le unde sunt în sala ta.'), 'info', 6000);
 }
 
 /** Same project, new patch: keep positions of fixtures that still exist. */
@@ -217,6 +218,6 @@ function updateFromSoundSwitch(app, parsed) {
   project.camera = app.vis.getCamera();
   app.checkpoint();
   app.loadProject(project);
-  toast(`Patch actualizat din SoundSwitch: ${kept} păstrate, ${next.length - kept} noi${removed ? `, ${removed} scoase` : ''}.`, 'info', 6000);
+  toast(tr('Patch actualizat din SoundSwitch: {kept} păstrate, {added} noi{removed}.', { kept, added: next.length - kept, removed: removed ? tr(', {n} scoase', { n: removed }) : '' }), 'info', 6000);
 }
 

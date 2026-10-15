@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { tr } = require('./i18n');
 
 const RAW = 'https://raw.githubusercontent.com/OpenLightingProject/open-fixture-library/master';
 const TREE = 'https://api.github.com/repos/OpenLightingProject/open-fixture-library/git/trees/master?recursive=1';
@@ -114,8 +115,8 @@ class OflService {
       });
   }
 
-  async fixture(key) {
-    if (!KEY_RE.test(key)) throw new Error('Cheie de fixtură invalidă');
+  async fixture(key, lang) {
+    if (!KEY_RE.test(key)) throw new Error(tr(lang, 'Cheie de fixtură invalidă'));
     const file = path.join(this.cacheDir, 'fixtures', key.replace('/', '__') + '.json');
     const cached = this._readCache(file, 0);
     if (cached) return cached;

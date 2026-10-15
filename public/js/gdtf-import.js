@@ -2,6 +2,7 @@
 // A .gdtf file is a ZIP with description.xml; see https://gdtf.eu for the spec.
 import { parseXml, child, children, descendants } from './xml-lite.js';
 import { readZip, readZipText } from './zip-lite.js';
+import { tr } from './i18n.js';
 
 const COLOR_ADD = {
   ColorAdd_R: 'red', ColorAdd_G: 'green', ColorAdd_B: 'blue', ColorAdd_W: 'white',
@@ -90,13 +91,13 @@ export async function gdtfAssets(buffer, ft) {
 export function parseGdtfXml(xml) {
   const root = parseXml(xml);
   const ft = root.name === 'FixtureType' ? root : child(root, 'FixtureType');
-  if (!ft) throw new Error('description.xml nu conține FixtureType');
+  if (!ft) throw new Error(tr('description.xml nu conține FixtureType'));
   return ft;
 }
 
 export function listGdtfModes(ft) {
   return children(child(ft, 'DMXModes'), 'DMXMode').map((m, index) => ({
-    index, name: m.attrs.Name || `Mod ${index + 1}`, channels: modeChannelCount(ft, m),
+    index, name: m.attrs.Name || tr('Mod {n}', { n: index + 1 }), channels: modeChannelCount(ft, m),
   }));
 }
 
@@ -257,7 +258,7 @@ function physicalRange(ft, attrName) {
 
 export function gdtfToProfile(ft, modeIndex = 0) {
   const mode = children(child(ft, 'DMXModes'), 'DMXMode')[modeIndex];
-  if (!mode) throw new Error('Modul selectat nu există');
+  if (!mode) throw new Error(tr('Modul selectat nu există'));
   const entries = expandChannels(ft, mode);
   const channels = [];
   for (const e of entries) {
@@ -269,7 +270,7 @@ export function gdtfToProfile(ft, modeIndex = 0) {
 
   const pixelCount = channels.reduce((m, c) => (c.pixel != null ? Math.max(m, c.pixel + 1) : m), 0);
   const hasPanTilt = channels.some((c) => c.type === 'pan' || c.type === 'tilt');
-  const name = ft.attrs.LongName || ft.attrs.Name || 'Fixtură GDTF';
+  const name = ft.attrs.LongName || ft.attrs.Name || tr('Fixtură GDTF');
   const manufacturer = ft.attrs.Manufacturer || '';
   let kind = 'par';
   if (hasPanTilt) kind = 'moving';
