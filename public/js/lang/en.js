@@ -6,5 +6,6 @@ import data from './en-data.js';
 import gobo from './en-gobo.js';
 import props from './en-props.js';
 import groups from './en-groups.js';
+import license from './en-license.js';
 
-export default { ...data, ...app, ...dialogs, ...ui, ...gobo, ...props, ...groups };
+export default { ...data, ...app, ...dialogs, ...ui, ...gobo, ...props, ...groups, ...license };

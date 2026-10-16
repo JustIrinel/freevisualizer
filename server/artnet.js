@@ -151,7 +151,7 @@ class ArtNetReceiver extends EventEmitter {
         ip: iface.address,
         mac: iface.mac,
         shortName: 'FreeVisualizer',
-        longName: 'FreeVisualizer - vizualizator 3D gratuit (Art-Net/sACN)',
+        longName: 'FreeVisualizer - vizualizator 3D (Art-Net/sACN)',
         firstUniverse: i * 4,
         bindIndex: i + 1,
         packets: this.packets,

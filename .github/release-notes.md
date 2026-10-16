@@ -1,7 +1,15 @@
-Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
+Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 *English below.*
 
-## Ce e nou în 1.6
+## Ce e nou în 1.7
+
+- **Licență**: primele **24 de ore sunt gratuite**, cu toate funcțiile. Apoi deblocarea completă costă **10$**, o singură plată, pentru până la **2 calculatoare**.
+  - Activarea: **Ajutor → Licență** (sau click pe bannerul din bara de sus) → plătești cu PayPal sau Revolut → trimiți **codul calculatorului** → lipești **cheia** primită.
+  - Fără licență, aplicația merge în **mod limitat**: proiectele, editarea și Demo-ul funcționează, dar DMX-ul live, clipurile video și fereastra de prezentare cer activarea.
+  - Cheia e legată de calculator și rămâne activă și după reinstalare.
+- Mulțumesc tuturor celor care susțin dezvoltarea FreeVisualizer!
+
+## Ce era nou în 1.6
 
 - **Gobo-uri și prisme reale**, proiectate pe podea, pereți, cabina DJ și invitați, vizibile și în fasciculul din haze:
   - 16 modele de gobo (stele, puncte, flori, breakup, inele…) și imaginile reale ale gobo-urilor din fișierele **GDTF**;
@@ -58,14 +66,14 @@ Vizualizator 3D **gratuit** pentru **SoundSwitch** (Art-Net / sACN): adaugi fixt
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.6.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.7.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.6.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.7.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 
@@ -77,9 +85,16 @@ Descarcă **`FreeVisualizer-1.6.0-windows-setup.exe`** și rulează-l. Dacă apa
 
 ## English
 
-A **free** 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your rig and watch the show live.
+A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your rig and watch the show live.
 
-### What's new in 1.6
+### What's new in 1.7
+
+- **License**: the first **24 hours are free** with every feature. After that, a full unlock is **$10**, one-time, for up to **2 computers**.
+  - To activate: **Help → License** (or click the banner in the top bar) → pay with PayPal or Revolut → send your **computer code** → paste the **key** you get back.
+  - Without a license the app runs in **limited mode**: projects, editing and the Demo work; live DMX, video clips and the presentation window need activation.
+  - The key is tied to the computer and stays active after reinstalling.
+
+### What was new in 1.6
 
 - **Real gobos and prisms**, projected onto the floor, walls, DJ booth and guests, and visible in the beam through the haze:
   - 16 gobo designs (stars, dots, flowers, breakups, rings…) plus the real gobo images from **GDTF** files;
@@ -132,10 +147,10 @@ A **free** 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures 
 
 ### Install
 
-- **Mac:** download **`FreeVisualizer-1.6.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
+- **Mac:** download **`FreeVisualizer-1.7.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
   - First launch: **right-click → Open → Open**. On macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**.
   - Allow **Local Network** access when asked.
-- **Windows:** run **`FreeVisualizer-1.6.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
+- **Windows:** run **`FreeVisualizer-1.7.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
 
 ### Connect SoundSwitch
 

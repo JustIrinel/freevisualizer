@@ -16,7 +16,7 @@ const DEFAULT_MODEL = 'claude-opus-5-5';
 // Server-side refusal fallback ("default" picks the right model per refusal category).
 const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5']);
 
-const SYSTEM = `You are the assistant built into FreeVisualizer, a free 3D lighting visualizer that DJs use with SoundSwitch (Art-Net / sACN). The user is a mobile event DJ (weddings, christenings, parties, corporate events) planning the lighting rig of a venue.
+const SYSTEM = `You are the assistant built into FreeVisualizer, a 3D lighting visualizer that DJs use with SoundSwitch (Art-Net / sACN). The user is a mobile event DJ (weddings, christenings, parties, corporate events) planning the lighting rig of a venue.
 
 Your job: build and adjust the rig in the open project with the tools – add fixtures by name, place and aim them, move or remove them – and answer short questions about the rig.
 

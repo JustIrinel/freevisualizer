@@ -120,8 +120,13 @@ function createApp(opts = {}) {
   const clients = new Set();
   const stats = { artnet: { packets: 0, polls: 0, error: null }, sacn: { packets: 0, error: null } };
   const timers = [];
+  // Desktop app: licence state (trial / active / limited). Without it (npm start) everything is allowed.
+  const license = opts.license || null;
 
   function onDmx({ protocol, universe, data, source }) {
+    stats[protocol].packets++;
+    // Limited mode (trial over, no key): live DMX is not passed on to the page.
+    if (license && !license.allows('dmx')) { stats.blocked = (stats.blocked || 0) + 1; return; }
     const key = `${protocol}:${universe}`;
     const entry = latest.get(key) || { protocol, universe };
     entry.data = data;
@@ -129,7 +134,6 @@ function createApp(opts = {}) {
     entry.at = Date.now();
     entry.dirty = true;
     latest.set(key, entry);
-    stats[protocol].packets++;
   }
 
   function broadcast(event, payload) {
@@ -148,6 +152,7 @@ function createApp(opts = {}) {
 
   timers.push(setInterval(() => {
     const now = Date.now();
+    if (license && !license.allows('dmx') && latest.size) latest.clear();
     const universes = [...latest.values()]
       .filter((e) => now - e.at < 3000)
       .map((e) => ({ protocol: e.protocol, universe: e.universe, source: e.source }));
@@ -184,6 +189,17 @@ function createApp(opts = {}) {
       for (const e of latest.values()) res.write(`event: dmx\ndata: ${e.protocol}|${e.universe}|${e.data.toString('base64')}\n\n`);
       req.on('close', () => clients.delete(res));
       return;
+    }
+
+    if (p === '/api/license') {
+      if (!license) return sendJson(res, 200, { status: 'active', dev: true });
+      if (req.method === 'POST') {
+        const body = JSON.parse(await readBody(req, 64 * 1024));
+        const r = license.activate(String(body.key || ''));
+        if (r.ok) latest.clear();
+        return sendJson(res, r.ok ? 200 : 400, r.ok ? r.status : { error: r.error });
+      }
+      return sendJson(res, 200, license.status());
     }
 
     if (p === '/api/info') {

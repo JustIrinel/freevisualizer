@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('freevisDesktop', {
   openFixtureId: () => ipcRenderer.send('open-fixture-id'),
   pickSoundSwitch: () => ipcRenderer.invoke('pick-soundswitch'),
   onFixtureFile: (callback) => ipcRenderer.on('fixture-file', (_e, file) => callback(file)),
+  openLicenseAdmin: () => ipcRenderer.send('open-license-admin'),
   setLanguage: (lang) => ipcRenderer.send('set-language', lang),
 });

@@ -1,10 +1,12 @@
 # FreeVisualizer
 
-Vizualizator 3D **gratuit** pentru **SoundSwitch**, în stilul Capture, dar mai simplu. Adaugi fixturile din rigul tău (moving heads, par-uri, retro-uri, bare LED, strobe, scântei reci, fum greu, glob disco, laser), le așezi pe truss sau pe podea și vezi show-ul în timp real, cu fascicule în haze, glow și lumină pe pereți. Poți înregistra apoi clipuri video cu logo-ul tău, pentru Instagram, TikTok sau oferte.
+Vizualizator 3D pentru **SoundSwitch**, în stilul Capture, dar mai simplu. Adaugi fixturile din rigul tău (moving heads, par-uri, retro-uri, bare LED, strobe, scântei reci, fum greu, glob disco, laser), le așezi pe truss sau pe podea și vezi show-ul în timp real, cu fascicule în haze, glow și lumină pe pereți. Poți înregistra apoi clipuri video cu logo-ul tău, pentru Instagram, TikTok sau oferte.
 
-Rulează ca **aplicație pe Mac** (Apple Silicon și Intel) sau pe Windows, ori direct în browser cu Node.js. Interfața e în **română sau engleză**, la alegere (**[English below](#english)**).
+Rulează ca **aplicație pe Mac** (Apple Silicon și Intel) și pe Windows. Interfața e în **română sau engleză**, la alegere (**[English below](#english)**).
 
 Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: SoundSwitch, rekordbox lighting, QLC+, Lightjams, grandMA onPC etc.
+
+**Licență:** primele **24 de ore sunt gratuite**, cu toate funcțiile. Apoi deblocarea completă costă **10$**, o singură plată, pentru până la **2 calculatoare**. Fără licență, aplicația rămâne în mod limitat: proiectele și editarea merg, dar DMX-ul live, clipurile video și fereastra de prezentare cer activarea (**Ajutor → Licență**).
 
 ## Ce știe să facă
 
@@ -64,7 +66,7 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
 
 ## Instalare pe Mac (recomandat)
 
-1. Descarcă `FreeVisualizer-…-mac.dmg` de la **Releases** pe GitHub. Fiecare versiune nouă se construiește automat și în **Actions → ultimul build → Artifacts**.
+1. Descarcă `FreeVisualizer-…-mac.dmg` de pe pagina de download: <https://github.com/JustIrinel/freevisualizer-download/releases/latest>.
 2. Deschide `.dmg`-ul și trage **FreeVisualizer** în **Applications**.
 3. **Prima pornire**. Aplicația nu e semnată cu un cont Apple Developer, așa că macOS o blochează o dată:
    - click dreapta pe FreeVisualizer → **Deschide** → **Deschide**;
@@ -79,22 +81,16 @@ Din meniul **Vizualizare → Fereastră de prezentare** (Cmd+P) deschizi show-ul
 
 ## Instalare pe Windows
 
-Descarcă `FreeVisualizer-…-windows-setup.exe` de la Releases și rulează-l.
+Descarcă `FreeVisualizer-…-windows-setup.exe` de pe aceeași pagină și rulează-l. Dacă apare SmartScreen: **Mai multe informații → Rulează oricum**.
 
-## Varianta fără instalare (browser + Node.js)
+## Licență și activare
 
-1. Instalează **Node.js LTS** (gratuit) de pe <https://nodejs.org>.
-2. Descarcă proiectul: butonul verde **Code → Download ZIP** pe GitHub, apoi dezarhivează-l.
+1. La prima pornire ai **24 de ore** cu toate funcțiile. Bannerul galben din bara de sus arată câte ore mai ai.
+2. Ca să activezi: **Ajutor → Licență** (sau click pe banner). Plătești **10$** cu PayPal sau Revolut, apoi trimiți **codul calculatorului** (FV-XXXX-XXXX-XXXX) cu butonul WhatsApp / email.
+3. Primești o **cheie de licență** (un text care începe cu `FVL1.`). O lipești în același ecran și apeși **Activează**.
+4. O licență merge pe **2 calculatoare**: pentru al doilea trimiți și codul lui și primești încă o cheie. Ți-ai schimbat laptopul? Scrie-ne și mutăm licența.
 
-Pentru rulare nu trebuie instalat nimic altceva.
-
-Pornire:
-
-- **Windows:** dublu-click pe `start-windows.bat`
-- **macOS:** dublu-click pe `start-mac.command`. Prima dată: click dreapta → Open, ca să treacă de Gatekeeper.
-- **Din terminal:** `npm start` (sau `node server/index.js`)
-
-Se deschide automat <http://localhost:8080>. Fereastra neagră a serverului trebuie să rămână deschisă cât timp folosești vizualizatorul.
+Cheia e legată de calculator, așa că nu merge pe altul. Reinstalarea aplicației nu șterge activarea.
 
 ## Conectare cu SoundSwitch
 
@@ -205,8 +201,10 @@ Ai două surse pentru show:
 ```
 server/            Node.js: Art-Net, sACN, SSE către browser, proxy OFL, proiecte, modele 3D,
                    asistentul Claude (assistant.js, singura dependență: @anthropic-ai/sdk)
-desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereastră de prezentare
-.github/workflows/ build automat .dmg (universal) + .exe; Release la fiecare tag v*
+desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereastră de prezentare,
+                   ecranul generatorului de licențe (license-admin.html, Ctrl/Cmd+Shift+Alt+L)
+server/license.js  trial 24 h, codul calculatorului, verificarea cheilor (Ed25519); license-admin.js = generatorul
+.github/workflows/ build .dmg (universal) + .exe la cerere; Release în freevisualizer-download
 public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendor)
   fixture-state.js DMX → culoare/intensitate/pan/tilt (pur, testat)
   ofl-import.js    Open Fixture Library → profil FreeVisualizer (pur, testat)
@@ -228,15 +226,16 @@ test/              teste (npm test)
 - `npm test` rulează testele (parsere Art-Net/sACN, ArtPoll, import OFL, logica DMX).
 - `npm run test-signal` trimite un curcubeu Art-Net către vizualizator, fără SoundSwitch.
 - `npm install && npm run app` pornește aplicația desktop din cod.
+- `npm start` pornește doar serverul + pagina în browser (fără licență, pentru dezvoltare).
 - `npm run dist:mac` construiește `.dmg`-ul; merge doar pe un Mac, altfel îl face GitHub Actions.
 
 ---
 
 ## English
 
-FreeVisualizer is a **free** 3D visualizer for **SoundSwitch**, in the spirit of Capture but simpler. Add the fixtures from your rig (moving heads, pars, retro lights, LED bars, strobes, cold sparks, low fog, mirror ball, laser), put them on the truss or the floor and watch the show live, with volumetric beams in haze, glow and light on the walls. Then record video clips with your logo for Instagram, TikTok or client offers.
+FreeVisualizer is a 3D visualizer for **SoundSwitch**, in the spirit of Capture but simpler. Add the fixtures from your rig (moving heads, pars, retro lights, LED bars, strobes, cold sparks, low fog, mirror ball, laser), put them on the truss or the floor and watch the show live, with volumetric beams in haze, glow and light on the walls. Then record video clips with your logo for Instagram, TikTok or client offers.
 
-It runs as a **Mac app** (Apple Silicon and Intel), on Windows, or in the browser with Node.js, and works with anything that sends **Art-Net** or **sACN (E1.31)**. The interface is in **English or Romanian**: switch in **⚙ Settings → Language** or with the **RO / EN** button in the top bar.
+It runs as a **Mac app** (Apple Silicon and Intel) and on Windows, and works with anything that sends **Art-Net** or **sACN (E1.31)**. The interface is in **English or Romanian**: switch in **⚙ Settings → Language** or with the **RO / EN** button in the top bar.
 
 ### Features
 
@@ -260,7 +259,13 @@ It runs as a **Mac app** (Apple Silicon and Intel), on Windows, or in the browse
 
 - **Mac:** download `FreeVisualizer-…-mac.dmg` from **Releases**, drag the app to **Applications**. First launch: **right-click → Open → Open** (the app is not signed with an Apple Developer account); on macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**. Allow **Local Network** access when asked.
 - **Windows:** download and run `FreeVisualizer-…-windows-setup.exe`.
-- **Browser + Node.js:** install Node.js LTS, download the project (**Code → Download ZIP**), then double-click `start-windows.bat` / `start-mac.command` or run `npm start`. It opens <http://localhost:8080>.
+- Downloads: <https://github.com/JustIrinel/freevisualizer-download/releases/latest>
+
+### License
+
+The first **24 hours are free** with every feature. After that, a full unlock is **$10**, one-time, for up to **2 computers**. Without a license the app stays in limited mode: projects and editing work, live DMX, video clips and the presentation window need activation.
+
+To activate: **Help → License** (or click the banner) → pay with PayPal or Revolut → send your **computer code** (FV-XXXX-XXXX-XXXX) → paste the **license key** you get back (it starts with `FVL1.`) → **Activate**.
 
 ### Connect SoundSwitch
 
@@ -307,4 +312,4 @@ Everything one message does is undone with a single **Ctrl+Z**. The key stays on
 - **Wrong colors or movement**: the DMX mode (channel count) differs between the profile and SoundSwitch. Check each channel with the “Channel test” faders.
 - **Moving head moves the wrong way**: tick “Invert pan” or “Invert tilt” in the inspector.
 
-Licență / License: MIT. Three.js este distribuit sub licența MIT (vezi `public/vendor/three/LICENSE`). Datele Open Fixture Library sunt sub licența MIT.
+© 2026 DJ Matei – toate drepturile rezervate / all rights reserved (vezi `LICENSE`). Three.js, Open Fixture Library, Electron și @anthropic-ai/sdk sunt distribuite sub licența MIT.

@@ -1,21 +1,17 @@
-MIT License
+FreeVisualizer
+Copyright (c) 2026 DJ Matei (djmatei.ro). All rights reserved.
 
-Copyright (c) 2026 FreeVisualizer contributors
+This software and its source code are proprietary. You may install and use
+the FreeVisualizer application as described in its licence terms: a free
+24-hour trial, then a paid licence key for up to 2 computers per licence.
+Copying, modifying, redistributing, reverse engineering or removing the
+licence check is not permitted without written permission from DJ Matei.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Versions up to and including 1.6.0 were published under the MIT License;
+copies of those versions obtained before this change keep that licence.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Third-party components keep their own licences:
+- three.js – MIT License, see public/vendor/three/LICENSE
+- Open Fixture Library data – MIT License (https://open-fixture-library.org)
+- @anthropic-ai/sdk – MIT License
+- Electron – MIT License

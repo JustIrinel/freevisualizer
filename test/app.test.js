@@ -87,3 +87,57 @@ test('assistant: tool schemas are strict-compatible', () => {
   const cleaned = cleanContent([{ type: 'thinking' }, { type: 'tool_use' }, { type: 'fallback' }, { type: 'text', text: 'ok' }, { type: 'tool_use' }]);
   assert.deepStrictEqual(cleaned.map((b) => b.type), ['fallback', 'text', 'tool_use']);
 });
+
+test('limited licence: live DMX is not forwarded until a key is activated', async () => {
+  const dgram = require('dgram');
+  const { createLicense, deviceCode, signLicense, TRIAL_MS } = require('../server/license');
+  const { createKeyPair } = require('../server/license-admin');
+  const kp = createKeyPair();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'freevis-'));
+  const device = deviceCode('test-machine');
+  let t = Date.now();
+  const license = createLicense({ dir: dataDir, device, publicKey: kp.publicKey, now: () => t });
+  license.status();
+  t += TRIAL_MS + 1000; // trial over
+  const artnetPort = rnd();
+  const app = createApp({ dataDir, port: rnd(), artnetPort, sacnPort: rnd(), host: '127.0.0.1', license });
+  const { port } = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  assert.strictEqual((await (await fetch(`${base}/api/license`)).json()).status, 'limited');
+
+  // Art-Net DMX packet, universe 0, channel 1 = 255
+  const pkt = Buffer.alloc(18 + 512);
+  pkt.write('Art-Net\0', 0, 'latin1');
+  pkt.writeUInt16LE(0x5000, 8);
+  pkt.writeUInt16BE(14, 10);
+  pkt.writeUInt16BE(512, 16);
+  pkt[18] = 255;
+  const sock = dgram.createSocket('udp4');
+  const send = () => new Promise((r) => sock.send(pkt, artnetPort, '127.0.0.1', r));
+  const events = async () => {
+    const ctl = new AbortController();
+    const res = await fetch(`${base}/api/events`, { signal: ctl.signal });
+    const reader = res.body.getReader();
+    let text = '';
+    const until = Date.now() + 400;
+    while (Date.now() < until) {
+      const r = await Promise.race([reader.read(), new Promise((ok) => setTimeout(() => ok({ timeout: true }), 100))]);
+      if (r.value) text += Buffer.from(r.value).toString();
+      if (r.done) break;
+    }
+    ctl.abort();
+    return text;
+  };
+  await send(); await new Promise((r) => setTimeout(r, 100));
+  assert.doesNotMatch(await events(), /event: dmx/, 'no DMX in limited mode');
+
+  const bad = await fetch(`${base}/api/license`, { method: 'POST', body: JSON.stringify({ key: 'FVL1.x.y' }) });
+  assert.strictEqual(bad.status, 400);
+  const key = signLicense(kp.privateKey, { license: 'L0001', device, name: 'Test' });
+  const ok = await (await fetch(`${base}/api/license`, { method: 'POST', body: JSON.stringify({ key }) })).json();
+  assert.strictEqual(ok.status, 'active');
+  await send(); await new Promise((r) => setTimeout(r, 100));
+  assert.match(await events(), /event: dmx/, 'DMX flows once activated');
+  sock.close();
+  await app.stop();
+});
