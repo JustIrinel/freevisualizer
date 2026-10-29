@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { parseSoundSwitchVenues, ssProfile, ssPlacement } from '../public/js/ss-import.js';
+import { parseSoundSwitchVenues, ssProfile, ssPlacement, knownLook } from '../public/js/ss-import.js';
 import { computeState, createRuntime } from '../public/js/fixture-state.js';
 import { normalizeProfile } from '../public/js/profiles.js';
 
@@ -46,7 +46,7 @@ test('SoundSwitch profiles: channel types, wheel colours, strobe ranges, pixels'
   assert.deepStrictEqual(s.color, [1, 0, 0]);
 
   const spot = ssProfile(def('Intimidator'), 1);
-  assert.strictEqual(spot.style, 'spot');
+  assert.strictEqual(spot.style, 'intimidator'); // a spot drawn like the real Chauvet
   const wheel = spot.channels.find((c) => c.type === 'colorWheel');
   assert.strictEqual(wheel.ranges.find((r) => r.from === 28).color, '#ff0000');
   const shutter = spot.channels.find((c) => c.type === 'strobe');
@@ -61,6 +61,25 @@ test('SoundSwitch profiles: channel types, wheel colours, strobe ranges, pixels'
 
   assert.strictEqual(ssProfile(def('Entour'), 2).kind, 'fog');
   assert.strictEqual(ssProfile(def('ZQ01104'), 0).kind, 'par');
+});
+
+test('SoundSwitch import: DJ Matei\'s 5 fixtures get the look of the real devices', () => {
+  const p = parseSoundSwitchVenues(bin);
+  const def = (name) => p.definitions.find((d) => d.name.startsWith(name));
+  const panther = ssProfile(def('Panther'), 0);
+  assert.strictEqual(panther.style, 'beam');
+  assert.deepStrictEqual(panther.model, { type: 'builtin', file: 'panther-60.glb', height: 0.29 });
+  assert.strictEqual(ssProfile(def('Intimidator'), 1).style, 'intimidator');
+  assert.strictEqual(normalizeProfile(ssProfile(def('Intimidator'), 1)).style, 'intimidator', 'style survives normalizeProfile');
+  assert.strictEqual(ssProfile(def('ZQ01104'), 0).parStyle, 'flat36');
+  assert.strictEqual(ssProfile(def('7 Vintage'), 1).size, 0.475);
+  assert.strictEqual(ssProfile(def('Entour'), 2).style, 'entour');
+  // Same fixtures from other libraries (OFL / QLC+ / GDTF names).
+  assert.strictEqual(knownLook('beamZ', 'Panther 60 LED Beam RGBW').model.file, 'panther-60.glb');
+  assert.strictEqual(knownLook('Chauvet DJ', 'Intimidator Spot LED 250').style, 'intimidator');
+  assert.strictEqual(knownLook('ADJ', 'Entour Faze').style, 'entour');
+  assert.strictEqual(knownLook('Generic', 'Moving Head Spot'), null);
+  assert.strictEqual(knownLook('BeamZ', 'Panther 7R'), null);
 });
 
 test('SoundSwitch placement: movers on the truss, left (stânga) to right (dreapta)', () => {

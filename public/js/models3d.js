@@ -4,13 +4,45 @@
 // profile.model = {
 //   type: 'glb', file, rotX?, height?          (one model; parts named Base / Yoke / Head move)
 //   type: 'gdtf', files: { modelName: file }, geometry: { models, tree }, rotX?
+//   type: 'builtin', file, height?             (a model shipped in public/models, see BUILTIN_MODELS)
 // }
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { TDSLoader } from 'three/addons/loaders/TDSLoader.js';
 import { tr } from './i18n.js';
 
 const loaded = new Map();
+
+/**
+ * Models shipped with the app (public/models, credits in public/models/CREDITS.md).
+ * pan / tilt: node names that move; height: real height in metres (beam pointing up);
+ * lensR: radius of the front lens at that height (glow disc).
+ */
+export const BUILTIN_MODELS = {
+  'panther-60.glb': {
+    name: 'BeamZ Panther 60',
+    credit: 'Moving Head Beam (high Poly) – Lord Henry, CC BY 4.0',
+    pan: 'Support', tilt: 'Head', height: 0.29, lensR: 0.036, tint: 0.2,
+  },
+};
+const tinted = new Map();
+/** Shared darker copy of a model material (the Panther is black, the source model grey). */
+function tintMaterial(mat, k) {
+  const key = `${mat.uuid}:${k}`;
+  if (!tinted.has(key)) {
+    const m = mat.clone();
+    m.color.multiplyScalar(k);
+    m.userData.cached = true;
+    tinted.set(key, m);
+  }
+  return tinted.get(key);
+}
+
+/** GLTFLoader that also reads meshopt-compressed / quantized files (EXT_meshopt_compression). */
+export function gltfLoader() {
+  return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+}
 
 export async function uploadAsset(bytes, ext) {
   const res = await fetch(`/api/models?ext=${ext}`, { method: 'POST', body: bytes });
@@ -23,11 +55,11 @@ export async function uploadAsset(bytes, ext) {
 export async function loadAsset(file) {
   if (!loaded.has(file)) {
     loaded.set(file, (async () => {
-      const res = await fetch(`/api/models/${file}`);
+      const res = await fetch(BUILTIN_MODELS[file] ? `/models/${file}` : `/api/models/${file}`);
       if (!res.ok) throw new Error(tr('modelul {file} lipsește', { file }));
       const buf = await res.arrayBuffer();
       if (file.endsWith('.3ds')) return new TDSLoader().parse(buf, '');
-      const gltf = await new GLTFLoader().parseAsync(buf, '');
+      const gltf = await gltfLoader().parseAsync(buf, '');
       return gltf.scene;
     })());
   }
@@ -72,6 +104,8 @@ export async function assembleModel(spec, kind) {
   root.add(holder);
   const parts = { base: [], yoke: [], head: [] };
   let panNode = null; let tiltNode = null; let beamNode = null;
+  const preset = spec.type === 'builtin' ? BUILTIN_MODELS[spec.file] : null;
+  if (spec.type === 'builtin' && !preset) throw new Error(tr('modelul {file} lipsește', { file: spec.file }));
 
   if (spec.type === 'gdtf') {
     holder.matrixAutoUpdate = false;
@@ -99,8 +133,15 @@ export async function assembleModel(spec, kind) {
   } else {
     const scene = await loadAsset(spec.file);
     holder.add(scene);
-    // Named parts (GDTF convention) make a moving head move.
+    // Built-in models name their moving parts; other files follow the GDTF convention.
+    const panName = spec.pan || preset?.pan; const tiltName = spec.tilt || preset?.tilt;
+    if (preset?.tint) scene.traverse((o) => { if (o.isMesh && o.material?.color) o.material = tintMaterial(o.material, preset.tint); });
     scene.traverse((o) => {
+      if (panName || tiltName) {
+        if (!panNode && o.name === panName) panNode = o;
+        else if (!tiltNode && o.name === tiltName) tiltNode = o;
+        return;
+      }
       if (!panNode && /yoke|arm/i.test(o.name)) panNode = o;
       else if (!tiltNode && /^head|[_ ]head/i.test(o.name)) tiltNode = o;
       else if (!beamNode && /beam|lens/i.test(o.name)) beamNode = o;
@@ -121,7 +162,7 @@ export async function assembleModel(spec, kind) {
   const box = new THREE.Box3().setFromObject(holder);
   const size = box.getSize(new THREE.Vector3());
   if (spec.type !== 'gdtf' && size.y > 0) {
-    const target = spec.height || ({ moving: 0.42, retro: 0.6, bar: 0.12, strobe: 0.2, fog: 0.25, lowfog: 0.4, spark: 0.3, laser: 0.2 }[kind] || 0.3);
+    const target = spec.height || preset?.height || ({ moving: 0.42, retro: 0.6, bar: 0.12, strobe: 0.2, fog: 0.25, lowfog: 0.4, spark: 0.3, laser: 0.2 }[kind] || 0.3);
     const k = target / Math.max(size.y, 1e-6);
     root.scale.setScalar(k);
     root.updateMatrixWorld(true);
@@ -136,7 +177,9 @@ export async function assembleModel(spec, kind) {
 
   const worldPos = (o) => (o ? o.getWorldPosition(new THREE.Vector3()) : null);
   let panPivot = worldPos(panNode); let tiltPivot = worldPos(tiltNode);
-  if (spec.type !== 'gdtf') {
+  if (preset) {
+    // Built-in models: the node origins are the real pan / tilt axes.
+  } else if (spec.type !== 'gdtf') {
     // Pivots of named glb parts: bottom-centre of the yoke, centre of the head.
     if (panNode) { const bb = new THREE.Box3().setFromObject(panNode); panPivot = new THREE.Vector3((bb.min.x + bb.max.x) / 2, bb.min.y, (bb.min.z + bb.max.z) / 2); }
     if (tiltNode) tiltPivot = new THREE.Box3().setFromObject(tiltNode).getCenter(new THREE.Vector3());
@@ -147,7 +190,8 @@ export async function assembleModel(spec, kind) {
     const bb = new THREE.Box3().setFromObject(src);
     beam = new THREE.Vector3((bb.min.x + bb.max.x) / 2, bb.max.y, (bb.min.z + bb.max.z) / 2);
   }
-  return { root: offset, parts, panPivot, tiltPivot, beam, size: b.getSize(new THREE.Vector3()) };
+  const lensR = preset?.lensR ? preset.lensR * (spec.height || preset.height) / preset.height : null;
+  return { root: offset, parts, panPivot, tiltPivot, beam, lensR, size: b.getSize(new THREE.Vector3()) };
 }
 
 function isAncestor(a, b) {
@@ -190,7 +234,7 @@ export async function applyModel(model, profile) {
   }
   // A glowing disc at the beam origin so the lens still lights up.
   if (model.lensMat) {
-    const r = Math.max(0.03, Math.min(asm.size.x, asm.size.z) * 0.18);
+    const r = asm.lensR || Math.max(0.03, Math.min(asm.size.x, asm.size.z) * 0.18);
     const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 32), model.lensMat);
     disc.rotation.x = -Math.PI / 2;
     const parent = model.beamOrigin || root;

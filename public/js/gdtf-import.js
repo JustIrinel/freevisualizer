@@ -2,6 +2,7 @@
 // A .gdtf file is a ZIP with description.xml; see https://gdtf.eu for the spec.
 import { parseXml, child, children, descendants } from './xml-lite.js';
 import { readZip, readZipText } from './zip-lite.js';
+import { knownLook } from './ss-import.js';
 import { tr } from './i18n.js';
 
 const COLOR_ADD = {
@@ -410,5 +411,6 @@ export function gdtfToProfile(ft, modeIndex = 0, opts = {}) {
     tiltRange: physicalRange(ft, 'Tilt') || 270,
     ...(gobos ? { gobos } : {}),
     channels,
+    ...knownLook(manufacturer, name),
   };
 }

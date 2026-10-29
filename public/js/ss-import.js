@@ -84,19 +84,44 @@ function intimidator250Gobos() {
 // SoundSwitch definitions keep no ranges for gobo / prism, and some leave channels out.
 // Fixtures of this rig whose real layout is known (manual + the values of the user's
 // SoundSwitch presets, e.g. gobos at 10, 17, 24, 34, 41, 52, 62, prism at 72 / 141 / 183).
+// look: how the fixture is drawn (fixtures3d.js styles, built-in 3D models in public/models).
 const KNOWN = [
   {
     match: /^chauvet\|intimidator spot led 250$/i,
+    look: { style: 'intimidator' },
     ranges: { gobo: intimidator250Gobos, prism: () => [{ from: 0, to: 15, prism: 0 }, { from: 16, to: 255, prism: 3 }] },
   },
   {
     // UKing 7-ch pars: ch 5 is strobe (0–10 off). SoundSwitch's definition leaves it out,
     // so SoundSwitch sends 0 there (no strobe); other controllers may use it.
     match: /^uking\|zq01104$/i,
+    look: { parStyle: 'flat36' },
     missing: { 7: { 4: () => ({ type: 'strobe', label: 'Strobe', ranges: [{ from: 0, to: 10, mode: 'open' }, { from: 11, to: 255, mode: 'strobe', hzFrom: 1, hzTo: 20 }] }) } },
+  },
+  {
+    match: /^beamz\|panther 60\b/i,
+    look: { style: 'beam', model: { type: 'builtin', file: 'panther-60.glb', height: 0.29 } },
+  },
+  {
+    match: /\|7 vintage lights\b/i,
+    look: { size: 0.475 },
+  },
+  {
+    match: /^(american dj|adj)\|entour faze\b/i,
+    look: { style: 'entour' },
   },
 ];
 const knownOf = (def) => KNOWN.find((k) => k.match.test(`${def.manufacturer}|${def.name}`.trim())) || {};
+
+/**
+ * Look of DJ Matei's real fixtures by manufacturer + model name (also used for
+ * OFL / GDTF imports): { style?, parStyle?, model?, size? } or null.
+ */
+export function knownLook(manufacturer, name) {
+  const man = String(manufacturer || '').trim().replace(/^(adj|american[ -]dj)$/i, 'American DJ').replace(/^chauvet[ -]dj$/i, 'Chauvet');
+  const look = knownOf({ manufacturer: man, name: String(name || '').trim() }).look;
+  return look ? JSON.parse(JSON.stringify(look)) : null;
+}
 const COLOR_TYPES = new Set(['red', 'green', 'blue', 'white', 'amber', 'uv', 'lime', 'cyan', 'magenta', 'yellow', 'warmWhite', 'coldWhite']);
 
 function typeByName(name) {
@@ -519,6 +544,7 @@ export function ssProfile(def, modeIndex) {
     panRange: 540,
     tiltRange: 270,
     channels,
+    ...knownLook(def.manufacturer, def.name),
   };
 }
 

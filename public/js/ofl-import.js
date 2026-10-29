@@ -1,6 +1,7 @@
 // Converts an Open Fixture Library (https://open-fixture-library.org) fixture
 // definition into a FreeVisualizer profile. Pure module: runs in browser and Node.
 
+import { knownLook } from './ss-import.js';
 import { tr } from './i18n.js';
 
 const COLOR_MAP = {
@@ -410,5 +411,6 @@ export function oflToProfile(fixture, modeIndex = 0, key = fixture.__key || '') 
     tiltRange: range('Tilt', 270),
     ...(dims ? { dimensions: dims.map((d) => d / 1000) } : {}),
     channels,
+    ...knownLook(fixture.__manufacturer || (key ? key.split('/')[0] : ''), fixture.name),
   };
 }

@@ -14,6 +14,7 @@
 // to a cell (pixel).
 import { parseXml, child, children, descendants } from './xml-lite.js';
 import { DEFAULT_STROBE_RANGES, rotationRanges } from './profiles.js';
+import { knownLook } from './ss-import.js';
 import { tr } from './i18n.js';
 
 const COLOR_NAMES = [
@@ -274,5 +275,6 @@ export function d4ToProfile(root, modeIndex = 0) {
     panRange: phys.panRange || 540,
     tiltRange: phys.tiltRange || 270,
     channels,
+    ...knownLook(manufacturer, name),
   };
 }

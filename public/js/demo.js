@@ -131,7 +131,7 @@ export function renderDemo(fixtures, store, time, bpm = DEFAULT_BPM) {
         tiltT = 0.66 + 0.04 * Math.cos(time * 0.4 + moverIdx);
         gobo = 1;
         goboSpin = 1; goboSpeed = 0.08;
-        frost = profile.style === 'spot' ? 0.35 : 0;
+        frost = profile.style === 'spot' || profile.style === 'intimidator' ? 0.35 : 0;
         if ((bar % 8) >= 6) { prism2 = 4; prismSpin = 1; prismSpeed = 0.1; }
         break;
       default: { // drop: white strobes + fast chase

@@ -17,7 +17,7 @@ export const KINDS = {
   fog: tr('Mașină de fum'),
 };
 
-export const MOVING_STYLES = { spot: 'Spot', beam: 'Beam', wash: 'Wash' };
+export const MOVING_STYLES = { spot: 'Spot', beam: 'Beam', wash: 'Wash', intimidator: 'Spot – Chauvet Intimidator' };
 
 // type -> [label, group]
 export const CHANNEL_TYPES = {

@@ -6,6 +6,7 @@ import { LASER_PATTERNS } from './fixture-state.js';
 import {
   housing, trim, steel, alu, rubber, grille, glass, lens, setGlow, rbox, cyl, controlPanel, handle, feet,
   movingBase, yokeArms, roundHead, spotHead, parBracket, hexBody, reflector, isShared,
+  intimidator250, flat36Body, slimBracket, entourFaze,
 } from './fixture-parts.js';
 import { applyModel } from './models3d.js';
 import { ProjectionTexture, projectionLayout } from './gobos.js';
@@ -22,6 +23,12 @@ export const roomUniforms = {
   uRoomMin: { value: new THREE.Vector3(-1000, 0, -1000) },
   uRoomMax: { value: new THREE.Vector3(1000, 1000, 1000) },
 };
+
+// Haze ray-march samples, shared by every beam (set by the quality preset).
+export const beamQuality = {
+  uSteps: { value: 16 },
+};
+const MAX_BEAM_STEPS = 32;
 
 const beamVertex = /* glsl */ `
   varying vec3 vLocal;
@@ -42,7 +49,10 @@ const beamVertex = /* glsl */ `
 
 // With a gobo / prism the cone is ray-marched through the fixture's projection
 // texture, so the pattern shows in the haze as real "fingers" of light.
+// When the fixture's light casts a shadow, the march also reads that light's
+// shadow map: the haze stops where a guest, the truss or the booth blocks it.
 const beamFragment = /* glsl */ `
+  #include <packing>
   uniform vec3 uColor;
   uniform float uIntensity;
   uniform float uUseMap;
@@ -51,6 +61,12 @@ const beamFragment = /* glsl */ `
   uniform float uFieldTan;
   uniform vec3 uRoomMin;
   uniform vec3 uRoomMax;
+  uniform int uSteps;
+  uniform float uUseShadow;
+  uniform sampler2D uShadowMap;
+  uniform mat4 uShadowMatrix;
+  uniform vec4 uShadowTile;
+  uniform float uShadowTexel;
   varying vec3 vLocal;
   varying vec3 vNormalV;
   varying vec3 vViewPos;
@@ -60,6 +76,15 @@ const beamFragment = /* glsl */ `
     vec3 l = (uToLight * vec4(p, 1.0)).xyz;
     vec2 uv = 0.5 + 0.5 * vec2(l.x, l.z) / (max(l.y, 1e-4) * uFieldTan);
     return texture2D(uMap, uv).r;
+  }
+  // 1 = the light reaches this point of the cone, 0 = something is in the way.
+  float sampleShadow(vec3 p) {
+    vec4 c = uShadowMatrix * vec4(p, 1.0);
+    if (c.w <= 1e-5) return 1.0;
+    vec3 s = c.xyz / c.w;
+    if (s.x <= 0.0 || s.x >= 1.0 || s.y <= 0.0 || s.y >= 1.0 || s.z >= 1.0) return 1.0;
+    vec2 uv = uShadowTile.xy + clamp(s.xy, vec2(uShadowTexel), vec2(1.0 - uShadowTexel)) * uShadowTile.zw;
+    return step(s.z - 0.0015, unpackRGBAToDepth(texture2D(uShadowMap, uv)));
   }
   void main() {
     vec3 lo = smoothstep(uRoomMin, uRoomMin + vec3(0.35, 0.02, 0.35), vWorld);
@@ -72,7 +97,7 @@ const beamFragment = /* glsl */ `
     float edge = abs(dot(normalize(vNormalV), normalize(vViewPos)));
     edge = pow(edge, 1.6);
     float g = 1.0;
-    if (uUseMap > 0.5) {
+    if (uUseMap > 0.5 || uUseShadow > 0.5) {
       // Chord of the view ray through the unit cone x² + z² = y², 0 < y < 1.
       vec3 ro = vCamLocal;
       vec3 rd = vLocal - vCamLocal; // the fragment is at t = 1
@@ -97,12 +122,17 @@ const beamFragment = /* glsl */ `
       }
       float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       float sum = 0.0;
-      for (int i = 0; i < 8; i++) {
-        float t = mix(t0, t1, (float(i) + n) / 8.0);
-        sum += sampleProj(ro + rd * t);
+      float steps = float(max(uSteps, 1));
+      for (int i = 0; i < ${MAX_BEAM_STEPS}; i++) {
+        if (i >= uSteps) break;
+        float t = mix(t0, t1, (float(i) + n) / steps);
+        vec3 p = ro + rd * t;
+        float v = uUseMap > 0.5 ? sampleProj(p) : 1.0;
+        if (uUseShadow > 0.5 && v > 0.0) v *= sampleShadow(p);
+        sum += v;
       }
       // One face instead of two: twice the old per-face brightness.
-      g = 2.0 * sum / 8.0;
+      g = 2.0 * sum / steps;
     }
     vec3 col = uColor * uIntensity * fall * start * edge * g * clip;
     gl_FragColor = vec4(col, 1.0);
@@ -132,7 +162,13 @@ export class Beam {
         uMap: { value: null },
         uToLight: { value: new THREE.Matrix4() },
         uFieldTan: { value: 1 },
+        uUseShadow: { value: 0 },
+        uShadowMap: { value: null },
+        uShadowMatrix: { value: new THREE.Matrix4() },
+        uShadowTile: { value: new THREE.Vector4(0, 0, 1, 1) },
+        uShadowTexel: { value: 0.002 },
         ...roomUniforms,
+        ...beamQuality,
       },
       vertexShader: beamVertex,
       fragmentShader: beamFragment,
@@ -147,6 +183,24 @@ export class Beam {
     this.mesh.frustumCulled = false;
     // The cone's own matrix maps it into the frame of the light that owns the projection.
     this.material.uniforms.uToLight.value = this.mesh.matrix;
+    this.shadowLight = null;
+    // Right before drawing (matrices and the light's shadow are up to date): cone → shadow map.
+    this.mesh.onBeforeRender = () => {
+      const light = this.shadowLight;
+      const u = this.material.uniforms;
+      const on = !!(light && light.castShadow && light.shadow.map && light.userData.shadowTile);
+      u.uUseShadow.value = on ? 1 : 0;
+      if (!on) return;
+      u.uShadowMap.value = light.shadow.map.texture;
+      u.uShadowMatrix.value.multiplyMatrices(light.shadow.matrix, this.mesh.matrixWorld);
+      u.uShadowTile.value.copy(light.userData.shadowTile);
+      u.uShadowTexel.value = 1.5 / Math.max(1, light.userData.shadowTileSize || 1024);
+    };
+  }
+
+  /** The light whose shadow map cuts this beam where something blocks it (null = never cut). */
+  setShadowLight(light) {
+    this.shadowLight = light || null;
   }
 
   set(color, intensity, angleDeg, length = BEAM_LENGTH) {
@@ -277,12 +331,24 @@ function parStyle(profile) {
   return 'slim';
 }
 
+/** Emission colour of red / green / blue LED dies. */
+const LED_RGB = [[1, 0.06, 0.03], [0.1, 1, 0.18], [0.08, 0.2, 1]];
+
 class ParModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
     const style = parStyle(profile);
     let faceY;
-    if (style === 'slim') {
+    if (style === 'flat36') {
+      // UKing ZQ01104: battery flat par, 6×6 R/G/B LEDs, slim black U bracket.
+      const pivot = 0.12;
+      const fb = flat36Body(fixture.address);
+      this.root.add(slimBracket(fb.size, pivot));
+      fb.group.position.y = pivot;
+      this.root.add(fb.group);
+      this.ledMats = fb.ledMats;
+      faceY = pivot + fb.faceY;
+    } else if (style === 'slim') {
       // Flat LED par: square housing, LED matrix behind clear glass, U bracket.
       const size = 0.25; const thick = 0.075; const pivot = 0.16;
       this.root.add(parBracket(size, pivot));
@@ -338,7 +404,14 @@ class ParModel extends BaseModel {
 
   update(s, g) {
     this.lastState = s;
-    setLens(this.lensMat, s.color, s.intensity);
+    if (this.ledMats) {
+      // Each LED glows in its own colour, driven only by its channel.
+      const k = s.intensity * 7;
+      LED_RGB.forEach((tint, i) => {
+        const v = s.color[i] * k;
+        this.ledMats[i].emissive.setRGB(tint[0] * v, tint[1] * v, tint[2] * v);
+      });
+    } else setLens(this.lensMat, s.color, s.intensity);
     this.beam.set(s.color, s.intensity * beamGain(s.beamAngle, g.haze) * 0.8, s.beamAngle);
     this.updateLight(s.color, s.intensity, s.beamAngle, 22);
   }
@@ -356,28 +429,38 @@ class MovingHeadModel extends BaseModel {
       wash: { base: [0.29, 0.09, 0.23], arm: 0.22, span: 0.27 },
     }[style] || { base: [0.27, 0.09, 0.21], arm: 0.24, span: 0.19 };
     const [bw, bh, bd] = dims.base;
-    this.root.add(movingBase(bw, bh, bd, fixture.address));
-
     this.yoke = new THREE.Group();
-    this.yoke.position.y = 0.01 + bh + 0.018;
-    this.yoke.add(yokeArms(dims.span, dims.arm, Math.min(0.12, bd * 0.62)));
-    this.root.add(this.yoke);
-
     this.head = new THREE.Group();
-    const pivotY = dims.arm - Math.min(0.12, bd * 0.62) * 0.42;
-    this.head.position.y = pivotY;
-    this.yoke.add(this.head);
     let built;
-    if (style === 'wash') built = roundHead(0.125, 0.17, 0.105, [7, 7]);
-    else if (style === 'beam') built = roundHead(0.078, 0.2, 0.058, 'fresnel');
-    else built = spotHead(0.16, 0.27, 0.15, 0.052);
-    this.head.add(built.group);
-    // Tilt hubs where the head meets the arms.
-    for (const sgn of [-1, 1]) {
-      const hub = cyl(0.028, 0.028, 0.02, trim(), 20);
-      hub.rotation.z = Math.PI / 2;
-      hub.position.x = sgn * (dims.span / 2 - 0.006);
-      this.head.add(hub);
+    if (style === 'intimidator') {
+      // Chauvet Intimidator Spot LED 250, real size (fixture-parts.intimidator250).
+      const it = intimidator250(fixture.address);
+      this.root.add(it.base);
+      this.yoke.position.y = it.yokeY;
+      this.yoke.add(it.yoke);
+      this.head.position.y = it.pivotY;
+      built = { group: it.head, lensMat: it.lensMat, frontY: it.frontY };
+      this.root.add(this.yoke);
+      this.yoke.add(this.head);
+      this.head.add(built.group);
+    } else {
+      this.root.add(movingBase(bw, bh, bd, fixture.address));
+      this.yoke.position.y = 0.01 + bh + 0.018;
+      this.yoke.add(yokeArms(dims.span, dims.arm, Math.min(0.12, bd * 0.62)));
+      this.root.add(this.yoke);
+      this.head.position.y = dims.arm - Math.min(0.12, bd * 0.62) * 0.42;
+      this.yoke.add(this.head);
+      if (style === 'wash') built = roundHead(0.125, 0.17, 0.105, [7, 7]);
+      else if (style === 'beam') built = roundHead(0.078, 0.2, 0.058, 'fresnel');
+      else built = spotHead(0.16, 0.27, 0.15, 0.052);
+      this.head.add(built.group);
+      // Tilt hubs where the head meets the arms.
+      for (const sgn of [-1, 1]) {
+        const hub = cyl(0.028, 0.028, 0.02, trim(), 20);
+        hub.rotation.z = Math.PI / 2;
+        hub.position.x = sgn * (dims.span / 2 - 0.006);
+        this.head.add(hub);
+      }
     }
     this.lensMat = built.lensMat;
     const lensY = built.frontY;
