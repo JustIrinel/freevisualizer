@@ -1,7 +1,25 @@
 Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 *English below.*
 
-## Ce e nou în 1.9
+## Ce e nou în 1.9.1
+
+- **Elemente de scenă noi** (Scenă → Adaugă):
+  - **Stativ boxă**: stativ pe stâlp, cu boxa activă pe el (10", 12" sau 15"); înălțimea se reglează;
+  - **Totem lumini**: stâlp truss cu placă jos și placă sus, cu husă lycra albă, neagră sau fără. Fixturile se pun singure pe placa de sus, cu mouse-ul sau din asistent.
+- **DJ la pupitru**: în spatele cabinei stă un DJ animat, cu mâinile pe controller. Dă din cap pe ritm, ridică din când în când o mână și ține casca. Din cabină alegi „DJ în spate” și look-ul (bărbat / femeie).
+- **Asistentul recreează un setup dintr-o poză**: trimiți o poză dintr-o sală (📷, lipire cu Ctrl+V sau tras fișierul în panou). Claude așază sala, ringul, cabina, boxele, mesele, truss-urile și totemurile, apoi pune aparatele tale pe pozițiile din poză. Înainte să șteargă ce ai deja în scenă, te întreabă. Un singur Ctrl+Z anulează tot ce a făcut.
+- **Mutare cu mouse-ul, fără să „fugă” în spate**:
+  - tragi direct de obiectul selectat și alunecă pe podea, exact sub mouse (dreapta pe ecran = dreapta);
+  - **Shift** = doar pe direcția în care ai pornit; **Alt** = doar sus / jos;
+  - o fixtură trasă peste truss, stativ, case sau totem se așază pe el;
+  - săgețile colorate se aliniază după cum privești scena, iar pătrățelele care mutau pe două axe deodată au dispărut.
+- **Rotire cu mouse-ul**: **Alt + rotița** (Option pe Mac) rotește obiectul selectat cu 15° (cu Shift 5°). Rotița simplă face zoom, ca până acum.
+- **Taste noi**:
+  - **W A S D** mută ca săgețile, **Q / E** rotesc;
+  - **M** = mod Mută, **R** = mod Rotește, **P** = Demo (înainte erau W, E și D).
+- Șablonul de nuntă are acum sub-uri pe podea și boxe pe stative.
+
+## Ce era nou în 1.9
 
 - **Aparatele tale arată ca cele reale**, la dimensiunile lor:
   - **BeamZ Panther 60**: model 3D realist (bază, braț, cap cu lentilă mare), pan/tilt pe piesele lui;
@@ -92,14 +110,14 @@ Pe un laptop mai slab, dacă imaginea merge greu, pune **Setări → Imagine →
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.9.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.9.1-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.9.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.9.1-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 
@@ -190,10 +208,10 @@ A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your
 
 ### Install
 
-- **Mac:** download **`FreeVisualizer-1.9.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
+- **Mac:** download **`FreeVisualizer-1.9.1-mac.dmg`**, drag FreeVisualizer to **Applications**.
   - First launch: **right-click → Open → Open**. On macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**.
   - Allow **Local Network** access when asked.
-- **Windows:** run **`FreeVisualizer-1.9.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
+- **Windows:** run **`FreeVisualizer-1.9.1-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
 
 ### Connect SoundSwitch
 

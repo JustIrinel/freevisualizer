@@ -95,8 +95,11 @@ export function weddingProject() {
     prop('column', tr('Stâlp dreapta'), v(3.6, 0, trussZ), v(0, 0, 0), { length: 3.2 }),
     prop('truss', tr('Truss DJ'), v(0, trussY, trussZ), v(0, 0, 0), { length: 7.5 }),
     prop('booth', tr('Cabină DJ'), v(0, 0, -8.2), v(0, 0, 0), { width: 2.2, height: 1.1, depth: 0.75 }),
-    prop('speaker', tr('Boxă stânga'), v(-4.6, 0, -8.6)),
-    prop('speaker', tr('Boxă dreapta'), v(4.6, 0, -8.6)),
+    // Mobile-DJ PA: a sub on the floor and a top on a pole stand on each side.
+    prop('sub', tr('Sub stânga'), v(-4.6, 0, -8.6)),
+    prop('sub', tr('Sub dreapta'), v(4.6, 0, -8.6)),
+    prop('speakerstand', tr('Boxă stânga'), v(-3.75, 0, -8.4), v(0, 12, 0), { height: 1.8, speaker: 1, size: 12 }),
+    prop('speakerstand', tr('Boxă dreapta'), v(3.75, 0, -8.4), v(0, -12, 0), { height: 1.8, speaker: 1, size: 12 }),
     prop('dancefloor', tr('Ring de dans'), v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
     prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 24, couple: 1 }),
     prop('headtable', tr('Masa mirilor'), v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),

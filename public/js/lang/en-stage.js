@@ -1,6 +1,8 @@
 // English for the v1.9.1 stage strings (Romanian key → English).
 export default {
   'Stativ boxă': 'Speaker stand',
+  'Sub stânga': 'Left sub',
+  'Sub dreapta': 'Right sub',
   'Totem lumini': 'Light totem',
   'Fără boxă': 'No speaker',
   'Cu boxă': 'With speaker',
