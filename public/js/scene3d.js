@@ -309,7 +309,8 @@ export class Visualizer {
   /** Apply the quality preset: resolution, shadows, reflections, AO, beams, particles, bloom. */
   applyQuality() {
     const name = this.qualityName();
-    const q = qualityPreset(name);
+    // qualityTweaks: overrides for measurements (window.freevis.vis.qualityTweaks = { ao: false }).
+    const q = { ...qualityPreset(name), ...(this.qualityTweaks || {}) };
     const prev = this.quality;
     this.quality = q;
     this.qualityKey = name;
@@ -335,7 +336,7 @@ export class Visualizer {
     const tone = q.toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
     this.renderer.toneMapping = tone;
     this.renderer.toneMappingExposure = q.toneMapping === 'agx' ? 1.05 : 0.9;
-    if (!prev || !this.composer || prev.msaa !== q.msaa || prev.ao !== q.ao) this._buildComposer(q);
+    if (!prev || !this.composer || prev.msaa !== q.msaa || prev.ao !== q.ao || prev.aoScale !== q.aoScale) this._buildComposer(q);
     this._applyPixelRatio();
     this.resize();
     this._fps.frames = 0; this._fps.time = 0;
@@ -353,7 +354,11 @@ export class Visualizer {
     this.composer = new EffectComposer(this.renderer, rt);
     if (q.ao) {
       this.composer.addPass(new LayerPass(this.scene, this.camera, 1 << 0, true));
-      this.gtao = new FxSafeGTAOPass(this.scene, this.camera, Math.max(1, size.x), Math.max(1, size.y));
+      // AO at half resolution on Înaltă (soft anyway), full on Clip.
+      const aoScale = q.aoScale || 0.5;
+      this.gtao = new FxSafeGTAOPass(this.scene, this.camera, Math.max(1, Math.round(size.x * aoScale)), Math.max(1, Math.round(size.y * aoScale)));
+      const aoSize = this.gtao.setSize.bind(this.gtao);
+      this.gtao.setSize = (w, h) => aoSize(Math.max(1, Math.round(w * aoScale)), Math.max(1, Math.round(h * aoScale)));
       this.gtao.output = GTAOPass.OUTPUT.Off;
       this.gtao.needsSwap = false;
       this.gtao.blendIntensity = 0.85;
@@ -504,8 +509,10 @@ export class Visualizer {
     const s = this.settings;
     const h = this.houseLevel();
     // With the house lights up, only real light sources should glow, not white tablecloths.
-    this.bloom.strength = s.bloom * (1 - h * 0.4);
-    this.bloom.threshold = 0.75 + h * 0.45;
+    // Glow only around real highlights (lenses, hot spots), not a veil over the whole picture.
+    this.bloom.strength = s.bloom * 0.6 * (1 - h * 0.4);
+    this.bloom.radius = 0.3;
+    this.bloom.threshold = 1.0 + h * 0.5;
     this.bloom.enabled = s.bloom > 0.01;
     this.hemi.intensity = 0.03 + h * 0.8 + (s.workLights ? 0.45 : 0);
     this.workLight.intensity = s.workLights ? 1.5 : h * 0.25;

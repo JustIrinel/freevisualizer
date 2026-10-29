@@ -23,6 +23,9 @@ const [ual1Path, ual2Path, femPath, outPath = 'public/models/guests.bin'] = proc
 if (!femPath) { console.error('usage: bake-guests.mjs UAL1_Standard.glb UAL2_Standard.glb Mannequin_F.glb [out.bin]'); process.exit(1); }
 const FPS = 30;
 const TARGET_TRIS = { male: 7000, female: 7000 };
+// Low-detail bodies (seated guests, Medie quality): fewer triangles, coarser garments.
+const TARGET_TRIS_LO = 2400;
+let LOW = false;
 
 const load = (f) => new Promise((res, rej) => {
   const b = fs.readFileSync(f);
@@ -228,7 +231,7 @@ function bodyRing(geo, dom, y, band = 0.03) {
 function skirt(body, skel, dom, hemY, hemR, regionId, opts = {}) {
   const waistY = worldPos(skel, 'thigh_l').y + (opts.top ?? 0.15);
   const ease = opts.ease ?? 0.02;
-  const rings = opts.rings || 10; const seg = 28;
+  const rings = LOW ? Math.max(3, Math.round((opts.rings || 10) * 0.6)) : (opts.rings || 10); const seg = LOW ? 16 : 28;
   const pel = boneIndex(skel, 'pelvis'); const tl = boneIndex(skel, 'thigh_l'); const trr = boneIndex(skel, 'thigh_r');
   const cl = boneIndex(skel, 'calf_l'); const cr = boneIndex(skel, 'calf_r');
   const pos = []; const si = []; const sw = []; const idx = []; const reg = [];
@@ -240,8 +243,10 @@ function skirt(body, skel, dom, hemY, hemR, regionId, opts = {}) {
     const fit = bodyRing(body, dom, y, 0.035);
     // A-line: never narrower than the body (+ ease), never narrower than the ring above.
     const flare = hemR * Math.min(1, 0.25 + 0.75 * Math.pow(t, 0.9));
-    let rx = Math.max(fit.rx + ease, t > 0.12 ? flare : 0);
-    let rz = Math.max(fit.rz + ease, t > 0.12 ? flare * 0.95 : 0);
+    // Extra room over the hips so the thighs do not poke through when the knees bend.
+    const room = ease + (opts.hipRoom ?? 0.05) * THREE.MathUtils.smoothstep(t, 0, 0.3);
+    let rx = Math.max(fit.rx + room, t > 0.12 ? flare : 0);
+    let rz = Math.max(fit.rz + room, t > 0.12 ? flare * 0.95 : 0);
     if (prev) { rx = Math.max(rx, prev.rx); rz = Math.max(rz, prev.rz); }
     const cz = THREE.MathUtils.lerp(fit.cz, 0, Math.min(1, t * 0.8));
     prev = { rx, rz };
@@ -285,7 +290,7 @@ function skirt(body, skel, dom, hemY, hemR, regionId, opts = {}) {
 
 /** Ellipsoid shell around a point, skinned to one or two bones (hair, bun). */
 function blob(center, radii, regionId, bones, wsplit = null, opts = {}) {
-  const geo = new THREE.SphereGeometry(1, opts.w || 16, opts.h || 12, 0, Math.PI * 2, opts.t0 || 0, opts.t1 || Math.PI);
+  const geo = new THREE.SphereGeometry(1, LOW ? 10 : (opts.w || 16), LOW ? 7 : (opts.h || 12), 0, Math.PI * 2, opts.t0 || 0, opts.t1 || Math.PI);
   const P = geo.attributes.position;
   const pos = []; const si = []; const sw = []; const reg = [];
   const tilt = opts.tilt || 0; const ct = Math.cos(tilt); const st = Math.sin(tilt);
@@ -326,10 +331,10 @@ function append(base, extra) {
   return out;
 }
 
-function buildBody(gltf, female) {
+function buildBody(gltf, female, target) {
   const { geometry, skeleton, root } = mergedBody(gltf);
   root.updateMatrixWorld(true);
-  let geo = simplify(geometry, female ? TARGET_TRIS.female : TARGET_TRIS.male);
+  let geo = simplify(geometry, target);
   geo.computeVertexNormals();
   const { head, dom } = paintRegions(geo, skeleton, female);
   clothe(geo, female);
@@ -345,7 +350,7 @@ function buildBody(gltf, female) {
       (y) => THREE.MathUtils.clamp((y - (hc.y - hs.y * 0.5)) / (hs.y * 0.5), 0, 1)));
   } else {
     // Jacket skirt over the hips: a suit, not a body suit.
-    geo = append(geo, skirt(geo, skeleton, dom, worldPos(skeleton, 'thigh_l').y - 0.13, 0, R.top, { top: 0.1, ease: 0.014, pull: 0.9, rings: 4 }));
+    geo = append(geo, skirt(geo, skeleton, dom, worldPos(skeleton, 'thigh_l').y - 0.13, 0, R.top, { top: 0.1, ease: 0.014, pull: 0.9, rings: 4, hipRoom: 0.012 }));
     geo = append(geo, blob(new THREE.Vector3(hc.x, hc.y + hs.y * 0.06, hc.z - hs.z * 0.05), new THREE.Vector3(hs.x * 0.54, hs.y * 0.48, hs.z * 0.56), R.hair, [headB], null, { t1: Math.PI * 0.42, tilt: 0.5 }));
   }
   void chestB;
@@ -369,21 +374,19 @@ function pointBone(bone, child, dirWorld) {
   bone.updateWorldMatrix(false, true);
 }
 
-/** Arm pose in the chest frame: elevation (deg, 0 = horizontal, 90 = up), forward (deg), elbow bend (deg, upwards). */
-function poseArm(get, side, elev, fwd, bend, chestNow, chestBind) {
+/**
+ * Arm pose in the chest frame. Each segment is [elevation, sweep] in degrees: elevation 0 =
+ * horizontal, 90 = up, −90 = down; sweep 0 = out to the side, 90 = forward, 180 = across the body.
+ */
+function poseArm(get, side, upperDeg, foreDeg, chestNow, chestBind) {
   const sgn = side === 'l' ? 1 : -1;
-  const e = THREE.MathUtils.degToRad(elev); const f = THREE.MathUtils.degToRad(fwd);
   const rot = chestNow.clone().multiply(chestBind.clone().invert());
-  const upper = new THREE.Vector3(sgn * Math.cos(e) * Math.cos(f), Math.sin(e), Math.cos(e) * Math.sin(f)).applyQuaternion(rot);
-  pointBone(get(`upperarm_${side}`), get(`lowerarm_${side}`), upper);
-  // Forearm: bend the elbow towards the chest's up direction (past it when the arm is raised).
-  const b = THREE.MathUtils.degToRad(bend);
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rot);
-  const axis = new THREE.Vector3().crossVectors(upper, up);
-  if (axis.lengthSq() < 1e-6) axis.set(0, 0, 1).applyQuaternion(rot);
-  axis.normalize();
-  const fore = upper.clone().applyAxisAngle(axis, b);
-  pointBone(get(`lowerarm_${side}`), get(`hand_${side}`), fore);
+  const dir = ([elev, sweep]) => {
+    const e = THREE.MathUtils.degToRad(elev); const f = THREE.MathUtils.degToRad(sweep);
+    return new THREE.Vector3(sgn * Math.cos(e) * Math.cos(f), Math.sin(e), Math.cos(e) * Math.sin(f)).applyQuaternion(rot);
+  };
+  pointBone(get(`upperarm_${side}`), get(`lowerarm_${side}`), dir(upperDeg));
+  pointBone(get(`lowerarm_${side}`), get(`hand_${side}`), dir(foreDeg));
 }
 
 /**
@@ -458,12 +461,12 @@ function applyLayer(layer, u, beats, get, chestBind) {
   if (layer === 'armsUp') {
     // Both hands up, waving left / right with the music.
     const sway = Math.sin(u * Math.PI * 2);
-    poseArm(get, 'l', 62 + 10 * sway, 18, 28 + 10 * s, chest, chestBind);
-    poseArm(get, 'r', 62 - 10 * sway, 18, 28 - 10 * s, chest, chestBind);
+    poseArm(get, 'l', [58 + 10 * sway, 25], [80 + 6 * s, 120], chest, chestBind);
+    poseArm(get, 'r', [58 - 10 * sway, 25], [80 - 6 * s, 120], chest, chestBind);
   } else if (layer === 'pump') {
     // Right fist pumping on every beat.
     const k = Math.pow(1 - ph, 3);
-    poseArm(get, 'r', 40 + 38 * k, 35, 70 - 30 * k, chest, chestBind);
+    poseArm(get, 'r', [35 + 35 * k, 45], [75 + 10 * k, 100], chest, chestBind);
   } else if (layer === 'sway') {
     // Slow dance: hips rock once per two beats, knees give on the beat, hands in front.
     const rock = Math.sin(u * Math.PI * 2 * (beats / 2));
@@ -476,8 +479,8 @@ function applyLayer(layer, u, beats, get, chestBind) {
     get('thigh_l').rotateZ(-0.05 * rock); get('thigh_r').rotateZ(-0.05 * rock);
     get('pelvis').updateWorldMatrix(true, true);
     const ch = get('spine_03').getWorldQuaternion(new THREE.Quaternion());
-    poseArm(get, 'l', -48 + 6 * rock, 40, 72, ch, chestBind);
-    poseArm(get, 'r', -48 - 6 * rock, 40, 72, ch, chestBind);
+    poseArm(get, 'l', [-62 + 5 * rock, 40], [-8, 115], ch, chestBind);
+    poseArm(get, 'r', [-62 - 5 * rock, 40], [-8, 115], ch, chestBind);
   }
 }
 
@@ -488,11 +491,15 @@ function toHalf(f32) {
   return out;
 }
 
-const male = buildBody(ual1, false);
-const female = buildBody(fem, true);
-// Bones any vertex uses (both bodies share bone names and order).
+const male = buildBody(ual1, false, TARGET_TRIS.male);
+const female = buildBody(fem, true, TARGET_TRIS.female);
+LOW = true;
+const maleLo = buildBody(ual1, false, TARGET_TRIS_LO);
+const femaleLo = buildBody(fem, true, TARGET_TRIS_LO);
+LOW = false;
+// Bones any vertex uses (all bodies share bone names and order).
 const used = new Set();
-for (const b of [male, female]) {
+for (const b of [male, female, maleLo, femaleLo]) {
   const I = b.geometry.attributes.skinIndex; const W = b.geometry.attributes.skinWeight;
   for (let i = 0; i < I.count; i++) for (let c = 0; c < 4; c++) if (W.getComponent(i, c) > 0) used.add(I.getComponent(i, c));
 }
@@ -503,7 +510,7 @@ const chunks = [];
 let offset = 0;
 const push = (typed) => { const pad = (4 - (offset % 4)) % 4; if (pad) { chunks.push(new Uint8Array(pad)); offset += pad; } const o = offset; chunks.push(new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength)); offset += typed.byteLength; return [o, typed.length]; };
 const header = { version: 1, fps: FPS, bones: usedBones.length, boneNames: usedBones.map((i) => male.skeleton.bones[i].name), bodies: {}, regions: R };
-for (const [name, body] of [['male', male], ['female', female]]) {
+for (const [name, body, bonesFrom] of [['male', male], ['female', female], ['maleLo', maleLo, 'male'], ['femaleLo', femaleLo, 'female']]) {
   const g = body.geometry;
   const n = g.attributes.position.count;
   const si = new Uint8Array(n * 4); const sw = new Uint8Array(n * 4);
@@ -521,9 +528,14 @@ for (const [name, body] of [['male', male], ['female', female]]) {
   const nor = new Int8Array(n * 3);
   for (let i = 0; i < n * 3; i++) nor[i] = Math.round(g.attributes.normal.array[i] * 127);
   const box = new THREE.Box3().setFromBufferAttribute(g.attributes.position);
-  const anim = bakeClips(body, name === 'female', usedBones);
-  const flat = new Float32Array(anim.rows.length * usedBones.length * 12);
-  anim.rows.forEach((r, k) => flat.set(r, k * r.length));
+  // Same skeleton and clips as the detailed body: the low-detail one reuses its bone texture.
+  const anim = bonesFrom ? null : bakeClips(body, name === 'female', usedBones);
+  let bones = null;
+  if (anim) {
+    const flat = new Float32Array(anim.rows.length * usedBones.length * 12);
+    anim.rows.forEach((r, k) => flat.set(r, k * r.length));
+    bones = push(toHalf(flat));
+  }
   header.bodies[name] = {
     vertices: n,
     triangles: g.index.count / 3,
@@ -534,11 +546,9 @@ for (const [name, body] of [['male', male], ['female', female]]) {
     skinWeight: push(sw),
     region: push(new Uint8Array(g.attributes.region.array)),
     index: push(new Uint16Array(g.index.array)),
-    clips: anim.meta,
-    rows: anim.rows.length,
-    bones: push(toHalf(flat)),
+    ...(anim ? { clips: anim.meta, rows: anim.rows.length, bones } : { bonesFrom }),
   };
-  console.log(name, 'verts', n, 'tris', g.index.count / 3, 'rows', anim.rows.length, 'height', box.max.y.toFixed(3));
+  console.log(name, 'verts', n, 'tris', g.index.count / 3, 'rows', anim ? anim.rows.length : bonesFrom, 'height', box.max.y.toFixed(3));
 }
 const json = new TextEncoder().encode(JSON.stringify(header));
 const pad = (4 - ((8 + json.length) % 4)) % 4;

@@ -98,13 +98,13 @@ export function weddingProject() {
     prop('speaker', tr('Boxă stânga'), v(-4.6, 0, -8.6)),
     prop('speaker', tr('Boxă dreapta'), v(4.6, 0, -8.6)),
     prop('dancefloor', tr('Ring de dans'), v(0, 0, -3.5), v(0, 0, 0), { width: 8, depth: 7 }),
-    prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 24 }),
+    prop('crowd', tr('Invitați pe ring'), v(0, 0, -3.5), v(0, 0, 0), { width: 6.5, depth: 5.5, count: 24, couple: 1 }),
     prop('headtable', tr('Masa mirilor'), v(-10.6, 0, -3.5), v(0, 90, 0), { width: 4, depth: 0.9 }),
     prop('mirrorball', tr('Glob disco'), v(0, 4.4, -3.5), v(0, 0, 0), { diameter: 0.5, drop: 0.6, rpm: 2 }),
   );
   let t = 1;
-  for (const x of [-8, -4, 0, 4, 8]) for (const z of [3.5, 7.5]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(x, 0, z), v(0, 0, 0), { diameter: 1.8 }));
-  for (const z of [-6.5, -2]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(9.5, 0, z), v(0, 0, 0), { diameter: 1.8 }));
+  for (const x of [-8, -4, 0, 4, 8]) for (const z of [3.5, 7.5]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(x, 0, z), v(0, 0, 0), { diameter: 1.8, guests: 6 }));
+  for (const z of [-6.5, -2]) p.props.push(prop('table', tr('Masa {n}', { n: t++ }), v(9.5, 0, z), v(0, 0, 0), { diameter: 1.8, guests: 6 }));
 
   const hang = v(180, 0, 0);
   const face = v(90, 0, 0);

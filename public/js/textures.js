@@ -259,3 +259,159 @@ export function fresnelTexture() {
     }
   }, { repeat: false });
 }
+
+// ------------------------------------------------------------------ PBR sets (CC0 photos)
+// Albedo / normal / roughness from public/textures/ (see CREDITS.md there). Each set shows
+// a procedural stand-in right away and swaps in the photo texture when it has loaded; in
+// Node (tests) or when a file is missing the stand-in stays. Roughness maps are scaled to
+// 0.4–1, so the material's roughness stays the "average" value the room code sets.
+const TEX_URL = new URL('../textures/', import.meta.url);
+/** Metres covered by one texture tile (callers divide the surface size by this). */
+export const PBR_TILE = { parquet: 2, plaster: 2.5, velvet: 1.2, metal: 0.5, carpet: 1, linen: 0.6, dancefloor: 1.2, wainscot: 1.2 };
+const PBR_FILES = ['parquet', 'plaster', 'velvet', 'metal', 'carpet', 'linen'];
+const pbrBase = new Map();
+
+/** Flat stand-ins: neutral normal (128,128,255), roughness 1 (white), mid-grey albedo. */
+function flat(key, rgb) {
+  return texture(`flat-${key}`, 4, 4, (g, w, h) => { g.fillStyle = rgb; g.fillRect(0, 0, w, h); }, { srgb: false });
+}
+
+/** Normal map (OpenGL convention) from a height canvas drawn by `draw`. */
+function normalFromHeight(key, size, strength, draw) {
+  return texture(`n-${key}`, size, size, (g, w, h) => {
+    draw(g, w, h);
+    if (typeof window === 'undefined') return;
+    const src = g.getImageData(0, 0, w, h);
+    const out = g.createImageData(w, h);
+    const H = (x, y) => src.data[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (H(x + 1, y) - H(x - 1, y)) * strength;
+        const dy = (H(x, y + 1) - H(x, y - 1)) * strength;
+        const l = Math.hypot(dx, dy, 1);
+        const i = (y * w + x) * 4;
+        out.data[i] = (-dx / l * 0.5 + 0.5) * 255;
+        out.data[i + 1] = (dy / l * 0.5 + 0.5) * 255; // +Y up in the image = OpenGL normal maps
+        out.data[i + 2] = (1 / l * 0.5 + 0.5) * 255;
+        out.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(out, 0, 0);
+  }, { srgb: false });
+}
+
+/** Black dance-floor panels (2 × 2 per tile): high gloss, dark grooves, faint scuffs. */
+function danceFloorSet() {
+  const n = 2;
+  const groove = (g, w, h, colour, bg) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.fillStyle = colour;
+    for (let i = 0; i <= n; i++) { const p = (i / n) * w; g.fillRect(p - 2, 0, 4, h); g.fillRect(0, p - 2, w, 4); }
+  };
+  return {
+    map: texture('dance-albedo', 512, 512, (g, w, h) => {
+      const rnd = seeded(31);
+      groove(g, w, h, '#020203', '#0d0d10');
+      for (let i = 0; i < n * n; i++) { // panels differ a touch
+        const v = 12 + Math.floor(rnd() * 5);
+        g.fillStyle = `rgba(${v},${v},${v + 2},0.5)`;
+        g.fillRect((i % n) * (w / n) + 3, Math.floor(i / n) * (h / n) + 3, w / n - 6, h / n - 6);
+      }
+      noise(g, w, h, 0.03, rnd, 1);
+    }),
+    normalMap: normalFromHeight('dance', 512, 6, (g, w, h) => {
+      groove(g, w, h, '#000', '#fff');
+      g.filter = 'blur(1.5px)';
+      g.drawImage(g.canvas, 0, 0);
+      g.filter = 'none';
+    }),
+    roughnessMap: texture('dance-rough', 512, 512, (g, w, h) => {
+      const rnd = seeded(41);
+      groove(g, w, h, '#ffffff', '#7a7a7a');
+      // Scuffs and dance marks: rougher swirls.
+      for (let i = 0; i < 160; i++) {
+        g.strokeStyle = `rgba(255,255,255,${0.04 + rnd() * 0.08})`;
+        g.lineWidth = 1 + rnd() * 3;
+        g.beginPath();
+        const x = rnd() * w; const y = rnd() * h; const r = 10 + rnd() * 60;
+        g.arc(x, y, r, rnd() * 6, rnd() * 6 + 1.5);
+        g.stroke();
+      }
+    }, { srgb: false }),
+  };
+}
+
+/** Raised-panel wainscoting: the panel texture plus a normal map of its mouldings. */
+function wainscotSet() {
+  return {
+    map: wainscotTexture(),
+    normalMap: normalFromHeight('wainscot', 256, 5, (g, w, h) => {
+      const m = 26;
+      g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#c0c0c0'; g.fillRect(m, m, w - 2 * m, h - 2 * m); // raised field
+      g.strokeStyle = '#404040'; g.lineWidth = 6; g.strokeRect(m - 3, m - 3, w - 2 * m + 6, h - 2 * m + 6); // groove
+      g.fillStyle = '#505050'; g.fillRect(0, 0, 3, h); // panel joint
+      g.filter = 'blur(2px)';
+      g.drawImage(g.canvas, 0, 0);
+      g.filter = 'none';
+    }),
+  };
+}
+
+const STAND_INS = {
+  parquet: () => ({ map: parquetTexture() }),
+  plaster: () => ({ map: plasterTexture() }),
+  velvet: () => ({ map: curtainTexture() }),
+  dancefloor: danceFloorSet,
+  wainscot: wainscotSet,
+};
+
+function loadInto(tex, file, base) {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !document.createElementNS) return;
+  base.pending++;
+  const done = () => { if (--base.pending === 0) base.clones = []; };
+  new THREE.ImageLoader().load(new URL(file, TEX_URL).href, (img) => {
+    tex.image = img; // the clones share the source, so they get the photo too
+    tex.needsUpdate = true;
+    for (const c of base.clones) c.needsUpdate = true;
+    done();
+  }, undefined, () => done()); // missing file: keep the stand-in
+}
+
+function pbrBaseSet(name) {
+  if (pbrBase.has(name)) return pbrBase.get(name);
+  const stand = (STAND_INS[name] || (() => ({})))();
+  const base = { clones: [], textures: {}, pending: 0 };
+  // Own source: loading the photo must not replace the procedural texture used elsewhere.
+  const own = (t, srgb) => { const c = t.clone(); c.source = new THREE.Source(t.image); c.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.anisotropy = 8; c.needsUpdate = true; return c; };
+  if (PBR_FILES.includes(name)) {
+    base.textures.map = own(stand.map || flat('albedo', '#bdbdbd'), true);
+    base.textures.normalMap = own(stand.normalMap || flat('normal', 'rgb(128,128,255)'), false);
+    base.textures.roughnessMap = own(stand.roughnessMap || flat('rough', '#ffffff'), false);
+    loadInto(base.textures.map, `${name}_albedo.jpg`, base);
+    loadInto(base.textures.normalMap, `${name}_normal.jpg`, base);
+    loadInto(base.textures.roughnessMap, `${name}_rough.jpg`, base);
+  } else {
+    for (const [k, t] of Object.entries(stand)) base.textures[k] = own(t, k === 'map');
+  }
+  pbrBase.set(name, base);
+  return base;
+}
+
+/**
+ * PBR texture set for a material: { map, normalMap, roughnessMap } (only the maps the set has),
+ * each with its own repeat. Spread it into a MeshStandardMaterial: `{ color, ...pbrSet('parquet', 8, 6) }`.
+ * Names: parquet, plaster, velvet, metal, carpet, linen (photo textures) and dancefloor, wainscot (procedural).
+ */
+export function pbrSet(name, repeatX = 1, repeatY = 1) {
+  const base = pbrBaseSet(name);
+  const out = {};
+  for (const [k, t] of Object.entries(base.textures)) {
+    const c = t.clone();
+    c.repeat.set(repeatX, repeatY);
+    c.needsUpdate = true;
+    if (base.pending) base.clones.push(c); // still loading: refresh when the photo arrives
+    out[k] = c;
+  }
+  return out;
+}

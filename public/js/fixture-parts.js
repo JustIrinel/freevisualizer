@@ -293,6 +293,25 @@ export function ledDisplayPanel(w, text, { buttons = 4, buttonColor = rubber() }
   return g;
 }
 
+/** Yoke arm: wide at the bridge, narrowing to a round top (side profile in YZ), thickness along X. */
+export function taperedArm(t, h, wBottom, wTop) {
+  const key = `arm|${t}|${h}|${wBottom}|${wTop}`;
+  if (!cache[key]) {
+    const r = wTop / 2;
+    const shape = new THREE.Shape();
+    shape.moveTo(-wBottom / 2, 0);
+    shape.lineTo(wBottom / 2, 0);
+    shape.lineTo(r, h - r);
+    shape.absarc(0, h - r, r, 0, Math.PI, false);
+    shape.lineTo(-wBottom / 2, 0);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 2, curveSegments: 20 });
+    geo.translate(0, 0, -t / 2);
+    geo.rotateY(Math.PI / 2);
+    cache[key] = geo;
+  }
+  return cache[key];
+}
+
 /**
  * Chauvet Intimidator Spot LED 250 (236 L × 205 W × 287 H mm): rounded base with LED
  * display and buttons, plastic yoke arms with the logo recess, rounded spot head with
@@ -331,10 +350,11 @@ export function intimidator250(address) {
   yoke.add(bridge);
   const armH = 0.168;
   const pivotY = 0.112; // from the bridge bottom
+  const armGeo = taperedArm(armT - 0.008, armH, 0.12, 0.082);
   for (const s of [-1, 1]) {
     const x = s * (headW / 2 + gap + armT / 2);
-    const arm = rbox(armT, armH, 0.11, 0.016);
-    arm.position.set(x, armH / 2, 0);
+    const arm = new THREE.Mesh(armGeo, housing());
+    arm.position.set(x, 0, 0);
     const recess = rbox(0.004, armH * 0.62, 0.07, 0.002, trim());
     recess.position.set(x + s * (armT / 2), armH * 0.46, 0);
     const name = label('INTIMIDATOR', 0.09, 0.016, { w: 384, h: 64, fg: '#b9bcc2', bg: '#232427', font: 'bold 40px Arial, sans-serif', spacing: 3 });

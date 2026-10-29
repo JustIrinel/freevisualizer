@@ -678,6 +678,7 @@ function PARAM_LABELS() {
   return {
     length: tr('Lungime (m)'), width: tr('Lățime (m)'), height: tr('Înălțime (m)'), depth: tr('Adâncime (m)'), count: tr('Număr persoane'), diameter: tr('Diametru (m)'), drop: tr('Tijă (m)'), rpm: tr('Rotații / minut'),
     wheels: tr('Roți'), bar: tr('Bară T (m, 0 = fără)'), legs: tr('Deschidere picioare (m)'), density: tr('Densitate'), size: tr('Mărime oameni'),
+    activity: tr('Ce fac invitații'), couple: tr('Mirii'), guests: tr('Invitați la masă'),
   };
 }
 

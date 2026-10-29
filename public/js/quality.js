@@ -22,8 +22,8 @@ export function qualityLabels() {
 export const QUALITY = {
   low: { pixelRatio: 1, scale: 0.75, lights: 16, shadows: 0, shadowTile: 0, reflections: 'off', reflectionScale: 0, ao: false, beamSteps: 6, particles: 0.4, bloomScale: 0.5, msaa: 0, toneMapping: 'aces' },
   medium: { pixelRatio: 1.25, scale: 1, lights: 28, shadows: 4, shadowTile: 512, reflections: 'env', reflectionScale: 0, ao: false, beamSteps: 10, particles: 0.7, bloomScale: 0.75, msaa: 2, toneMapping: 'aces' },
-  high: { pixelRatio: 2, scale: 1, lights: 40, shadows: 12, shadowTile: 1024, reflections: 'planar', reflectionScale: 0.5, ao: true, beamSteps: 16, particles: 1, bloomScale: 1, msaa: 4, toneMapping: 'aces' },
-  clip: { pixelRatio: 2, scale: 1, lights: 40, shadows: 20, shadowTile: 1024, reflections: 'planar', reflectionScale: 0.75, ao: true, beamSteps: 24, particles: 1, bloomScale: 1, msaa: 4, toneMapping: 'agx' },
+  high: { pixelRatio: 2, scale: 1, lights: 40, shadows: 12, shadowTile: 1024, reflections: 'planar', reflectionScale: 0.5, ao: true, aoScale: 0.5, beamSteps: 16, particles: 1, bloomScale: 1, msaa: 4, toneMapping: 'aces' },
+  clip: { pixelRatio: 2, scale: 1, lights: 40, shadows: 20, shadowTile: 1024, reflections: 'planar', reflectionScale: 0.75, ao: true, aoScale: 1, beamSteps: 24, particles: 1, bloomScale: 1, msaa: 4, toneMapping: 'agx' },
 };
 
 export function qualityPreset(name) {

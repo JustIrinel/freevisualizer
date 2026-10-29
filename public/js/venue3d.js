@@ -2,7 +2,7 @@
 // house lights (chandeliers, cove light) that can be dimmed.
 import * as THREE from 'three';
 import {
-  parquetTexture, concreteTexture, plasterTexture, wainscotTexture, curtainTexture, windowTexture, cofferTexture, repeated,
+  concreteTexture, curtainTexture, windowTexture, cofferTexture, repeated, pbrSet, PBR_TILE,
 } from './textures.js';
 import { tr } from './i18n.js';
 
@@ -10,25 +10,28 @@ export const ROOM_STYLES = { banquet: tr('Sală de evenimente (nuntă)'), plain:
 
 const room = (mesh) => { mesh.userData.isRoom = true; return mesh; };
 
-/** Wavy plane for curtains (folds along X). */
-function curtain(width, height, color, folds = 10) {
+/** Wavy plane for curtains (folds along X); velvet (window drapes) or a light weave (chiffon drape). */
+function curtain(width, height, color, folds = 10, fabric = 'velvet') {
   const geo = new THREE.PlaneGeometry(width, height, folds * 6, 1);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin((pos.getX(i) / width) * Math.PI * 2 * folds) * 0.05);
   geo.computeVertexNormals();
   const tex = repeated(curtainTexture(), Math.max(1, width / 1.6), 1);
-  const mat = new THREE.MeshStandardMaterial({ color, map: tex, roughness: 0.85, side: THREE.DoubleSide });
+  const cloth = pbrSet(fabric, width / PBR_TILE[fabric], height / PBR_TILE[fabric]);
+  const mat = fabric === 'velvet'
+    ? new THREE.MeshPhysicalMaterial({ color, map: tex, normalMap: cloth.normalMap, roughnessMap: cloth.roughnessMap, roughness: 0.9, sheen: 1, sheenRoughness: 0.45, sheenColor: new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.35), side: THREE.DoubleSide })
+    : new THREE.MeshStandardMaterial({ color, map: tex, normalMap: cloth.normalMap, roughnessMap: cloth.roughnessMap, roughness: 0.85, side: THREE.DoubleSide });
   return room(new THREE.Mesh(geo, mat));
 }
 
 /** A wall with plaster, wainscoting, rails and optional windows; built in local XY (facing +Z). */
 function wall(len, hgt, color, windows) {
   const g = new THREE.Group();
-  const plaster = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, map: repeated(plasterTexture(), len / 3, hgt / 3), roughness: 0.92 })));
+  const plaster = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), roughness: 0.92 })));
   plaster.position.y = hgt / 2;
   g.add(plaster);
   const wh = 1.05;
-  const wains = room(new THREE.Mesh(new THREE.PlaneGeometry(len, wh), new THREE.MeshStandardMaterial({ color: 0xf2eee6, map: repeated(wainscotTexture(), Math.round(len / 1.2), 1), roughness: 0.6 })));
+  const wains = room(new THREE.Mesh(new THREE.PlaneGeometry(len, wh), new THREE.MeshStandardMaterial({ color: 0xf2eee6, ...pbrSet('wainscot', Math.round(len / PBR_TILE.wainscot), 1), roughness: 0.5 })));
   wains.position.set(0, wh / 2, 0.012);
   g.add(wains);
   const trim = new THREE.MeshStandardMaterial({ color: 0xf5f2ec, roughness: 0.5 });
@@ -101,9 +104,9 @@ function chandelier(scale = 1) {
 export function buildVenue(r, group, ctx) {
   const w = r.width || 24; const d = r.depth || 20; const hgt = r.height || 6;
   const style = r.style;
-  const floorTex = style === 'banquet' ? repeated(parquetTexture(), w / 2, d / 2) : repeated(concreteTexture(), w / 4, d / 4);
+  const floorMaps = style === 'banquet' ? pbrSet('parquet', w / PBR_TILE.parquet, d / PBR_TILE.parquet) : { map: repeated(concreteTexture(), w / 4, d / 4) };
   const floor = room(new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({
-    color: style === 'banquet' ? 0xffffff : (r.floorColor || '#9a9792'), map: floorTex, roughness: style === 'banquet' ? 0.4 : 0.7, metalness: 0,
+    color: style === 'banquet' ? 0xffffff : (r.floorColor || '#9a9792'), ...floorMaps, roughness: style === 'banquet' ? 0.4 : 0.7, metalness: 0,
   })));
   floor.rotation.x = -Math.PI / 2;
   floor.userData.floor = true; // glossy finish / reflection: Visualizer._applyFloors
@@ -141,7 +144,7 @@ export function buildVenue(r, group, ctx) {
 
     if (style === 'banquet') {
       // Chiffon drape behind the DJ.
-      const drape = curtain(Math.min(w * 0.55, 12), hgt - 0.3, 0xf3ece2, 16);
+      const drape = curtain(Math.min(w * 0.55, 12), hgt - 0.3, 0xf3ece2, 16, 'linen');
       drape.position.set(0, (hgt - 0.3) / 2, -d / 2 + 0.15);
       group.add(drape);
       // Warm cove light along the ceiling.
@@ -179,7 +182,7 @@ export function buildVenue(r, group, ctx) {
 
 function plainWall(len, hgt, color) {
   const g = new THREE.Group();
-  const m = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, map: repeated(plasterTexture(), len / 3, hgt / 3), roughness: 0.95 })));
+  const m = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), roughness: 0.95 })));
   m.position.y = hgt / 2;
   g.add(m);
   return g;

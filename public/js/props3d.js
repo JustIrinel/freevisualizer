@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Particles } from './particles.js';
 import { tr } from './i18n.js';
+import { pbrSet, PBR_TILE } from './textures.js';
 import { seeded, crowdLayout, PERSON_HEIGHT, tripodParams, TRIPOD_BAR_R } from './prop-layout.js';
+import { dressCrowd, showState, MAX_ANIMATED_GUESTS, seatLayout, dressSeated, chairCount, idSeed, CHAIR_OFFSET } from './guest-layout.js';
+import { loadGuests, guestsReady, createAnimatedCrowd } from './guests3d.js';
 
 export const PROP_TYPES = {
   truss: { label: tr('Truss (orizontal)'), params: { length: 6 } },
@@ -14,7 +17,7 @@ export const PROP_TYPES = {
   platform: { label: tr('Podium / scenă'), params: { width: 4, height: 0.4, depth: 2 } },
   screen: { label: tr('Ecran LED'), params: { width: 3, height: 1.7 } },
   wall: { label: tr('Perete / backdrop'), params: { width: 8, height: 4 } },
-  table: { label: tr('Masă rotundă'), params: { diameter: 1.6 } },
+  table: { label: tr('Masă rotundă'), params: { diameter: 1.6, guests: 0 }, limits: { guests: [0, 16] } },
   headtable: { label: tr('Masa mirilor'), params: { width: 4, depth: 0.9 } },
   dancefloor: { label: tr('Ring de dans'), params: { width: 7, depth: 7 } },
   mirrorball: { label: tr('Glob disco'), params: { diameter: 0.5, drop: 0.8, rpm: 2 } },
@@ -22,9 +25,13 @@ export const PROP_TYPES = {
   tripod: { label: tr('Stativ trepied'), params: { height: 2.5, bar: 1.2, legs: 1.2 }, limits: { height: [1, 4], bar: [0, 3], legs: [0.5, 2.5] } },
   crowd: {
     label: tr('Public (invitați)'),
-    params: { width: 8, depth: 6, count: 45, density: 2, size: 1 },
+    params: { width: 8, depth: 6, count: 45, density: 2, size: 1, activity: 1, couple: 0 },
     limits: { count: [1, 600], size: [0.8, 1.1] },
-    choices: { density: [[1, tr('Puțini (rar)')], [2, tr('Normal')], [3, tr('Mulți (înghesuiți)')]] },
+    choices: {
+      density: [[1, tr('Puțini (rar)')], [2, tr('Normal')], [3, tr('Mulți (înghesuiți)')]],
+      activity: [[1, tr('Dansează (ring)')], [2, tr('Amestecat')], [3, tr('Stau și vorbesc')]],
+      couple: [[0, tr('Fără')], [1, tr('Mirii în mijloc')]],
+    },
   },
 };
 
@@ -35,7 +42,8 @@ function trussSection(length) {
   const g = new THREE.Group();
   const size = 0.29;
   const h = size / 2;
-  const mat = metal();
+  // Brushed aluminium (CC0 photo texture) on the chords.
+  const mat = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, roughness: 0.42, metalness: 0.9, ...pbrSet('metal', 0.3, length / PBR_TILE.metal) });
   const chordGeo = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
   chordGeo.rotateZ(Math.PI / 2);
   for (const [y, z] of [[h, h], [h, -h], [-h, h], [-h, -h]]) {
@@ -153,11 +161,17 @@ const SHIRT_COLORS = [0xe9e7e2, 0xdfe6ee, 0x1a1b20, 0x262d3f, 0x8c96a6, 0x5a1d28
 const DRESS_COLORS = [0x6b1a2b, 0x1b2a4e, 0x121214, 0x1f4d3d, 0xd9c7a3, 0xc98f9a, 0x9e1b26, 0x2a4fa0, 0x6a5687, 0xb7b0a8];
 const SKIN_COLORS = [0xf0cfb4, 0xe8bf9f, 0xdcae8b, 0xc99574, 0xa8714f, 0xf3d6c1, 0xe2b896];
 
-function crowdModel(root, p, seed, animated) {
+/**
+ * Guests: animated mannequins (guests3d.js) at Medie / Înaltă / Clip, the simple
+ * silhouettes at Scăzută, while the animated ones load, and for very big crowds.
+ */
+function crowdModel(root, p, seed, animated, ctx) {
   const people = crowdLayout(p, seed);
   const rnd = seeded(seed * 31 + 5);
   const geos = personGeometries();
   const parts = {};
+  const simple = new THREE.Group();
+  root.add(simple);
   const groups = { trousers: [], dress: [], armsDown: [], armsUp: [], heads: [] };
   people.forEach((g, i) => {
     groups[g.dress ? 'dress' : 'trousers'].push(i);
@@ -186,12 +200,12 @@ function crowdModel(root, p, seed, animated) {
     mesh.computeBoundingBox();
     mesh.computeBoundingSphere();
     parts[name] = { mesh, idx };
-    root.add(mesh);
+    simple.add(mesh);
   }
   // Light bounce on the beat so the room feels alive (dancers with raised arms jump a bit more).
   const tmp = new THREE.Matrix4();
   const lift = people.map((g) => (g.armsUp ? 0.06 : 0.03));
-  animated.push((t) => {
+  const bounce = (t) => {
     for (const { mesh, idx } of Object.values(parts)) {
       for (let k = 0; k < idx.length; k++) {
         const pi = idx[k];
@@ -201,7 +215,47 @@ function crowdModel(root, p, seed, animated) {
       }
       mesh.instanceMatrix.needsUpdate = true;
     }
+  };
+  const dressed = dressCrowd(people, { seed, activity: p.activity, couple: Number(p.couple) > 0 });
+  let live = null;
+  let show = null;
+  if (people.length <= MAX_ANIMATED_GUESTS) loadGuests();
+  animated.push((t, env) => {
+    const quality = (ctx && ctx.settings && ctx.settings.quality) || 'high';
+    const asset = quality !== 'low' && people.length <= MAX_ANIMATED_GUESTS ? guestsReady() : null;
+    // Medie: the low-detail bodies; Înaltă / Clip: the detailed ones.
+    const lowDetail = quality === 'medium';
+    if (live && asset && live.lowDetail !== lowDetail) { root.remove(live.group); live.dispose(); live = null; }
+    if (asset && !live) { live = createAnimatedCrowd(people, dressed, asset, { lowDetail }); live.lowDetail = lowDetail; root.add(live.group); }
+    simple.visible = !asset;
+    if (live) live.group.visible = !!asset;
+    if (!asset) { bounce(t); return; }
+    // They dance while the show runs (lights on), else they stand and talk.
+    show = showState(show, env && env.globals ? env.globals.showLevel : 1, (env && env.dt) || 0.016);
+    const bpm = (ctx && ctx.bpm) || 124;
+    live.update(t, (t * bpm) / 60, show.on);
   });
+  return { update() {}, dispose: () => { if (live) live.dispose(); } };
+}
+
+/** Guests sitting on the chairs of a round table (animated quality levels only). */
+function seatedGuests(root, p, id, animated, ctx) {
+  const seed = idSeed(id || 'table');
+  const seats = seatLayout(p.diameter, p.guests, seed);
+  if (!seats.length) return null;
+  const dressed = dressSeated(seats, seed);
+  const people = seats.map((st) => ({ ...st, girth: 1 }));
+  let live = null;
+  loadGuests();
+  animated.push((t) => {
+    const quality = (ctx && ctx.settings && ctx.settings.quality) || 'high';
+    const asset = quality !== 'low' ? guestsReady() : null;
+    if (asset && !live) { live = createAnimatedCrowd(people, dressed, asset, { lowDetail: true }); root.add(live.group); }
+    if (!live) return;
+    live.group.visible = !!asset;
+    if (asset) live.update(t, (t * ((ctx && ctx.bpm) || 124)) / 60, false);
+  });
+  return { update() {}, dispose: () => { if (live) live.dispose(); } };
 }
 
 function mergeSimple(geos) {
@@ -420,7 +474,8 @@ export function createPropModel(prop, ctx) {
     case 'booth': {
       // Event-style DJ booth: glossy white facade, LED strip at the bottom, black desk,
       // controller with jog wheels and a laptop on a stand.
-      const facadeMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f4, roughness: 0.18, metalness: 0.05 });
+      // White stretch-lycra facade (it takes the colour of the uplights, like the real ones).
+      const facadeMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f4, roughness: 0.62, metalness: 0, ...pbrSet('linen', p.width / 0.5, p.height / 0.5), normalScale: new THREE.Vector2(0.4, 0.4) });
       const facade = new THREE.Mesh(new RoundedBoxGeometry(p.width, p.height, p.depth, 3, 0.03), facadeMat);
       facade.position.y = p.height / 2;
       const top = new THREE.Mesh(new RoundedBoxGeometry(p.width + 0.1, 0.04, p.depth + 0.1, 2, 0.015), new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35, metalness: 0.3 }));
@@ -452,7 +507,8 @@ export function createPropModel(prop, ctx) {
     }
     case 'speaker': case 'sub': root.add(speakerFront(p.width, p.height, p.depth)); break;
     case 'platform': {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(p.width, p.height, p.depth), new THREE.MeshStandardMaterial({ color: 0x1a1a1e, roughness: 0.6 }));
+      // Stage riser with black carpet.
+      const m = new THREE.Mesh(new THREE.BoxGeometry(p.width, p.height, p.depth), new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.95, ...pbrSet('carpet', p.width / PBR_TILE.carpet, p.depth / PBR_TILE.carpet) }));
       m.position.y = p.height / 2;
       root.add(m);
       break;
@@ -471,7 +527,10 @@ export function createPropModel(prop, ctx) {
       break;
     }
     case 'wall': {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.width, p.height), new THREE.MeshStandardMaterial({ color: prop.color || 0x2a2a30, roughness: 0.85, side: THREE.DoubleSide }));
+      // Backdrop: velvet drape (sheen at grazing angles).
+      const vel = pbrSet('velvet', p.width / PBR_TILE.velvet, p.height / PBR_TILE.velvet);
+      const col = new THREE.Color(prop.color || 0x2a2a30);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.width, p.height), new THREE.MeshPhysicalMaterial({ color: col, ...vel, roughness: 0.9, sheen: 1, sheenRoughness: 0.45, sheenColor: col.clone().lerp(new THREE.Color(0xffffff), 0.3), side: THREE.DoubleSide }));
       m.position.y = p.height / 2;
       root.add(m);
       break;
@@ -479,7 +538,7 @@ export function createPropModel(prop, ctx) {
     case 'table': {
       // Tablecloth down to the floor, a centerpiece and a candle glow.
       const r = p.diameter / 2;
-      const cloth = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, 0.76, 40, 1), new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.92 }));
+      const cloth = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.06, 0.76, 40, 1), new THREE.MeshStandardMaterial({ color: 0xefebe3, roughness: 0.92, ...pbrSet('linen', (Math.PI * p.diameter) / PBR_TILE.linen, 0.76 / PBR_TILE.linen) }));
       cloth.position.y = 0.38;
       const vase = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.35, 16), new THREE.MeshStandardMaterial({ color: 0xc9a050, metalness: 0.8, roughness: 0.3 }));
       vase.position.y = 0.76 + 0.175;
@@ -494,7 +553,7 @@ export function createPropModel(prop, ctx) {
       });
       root.add(cloth, vase, flowers, candle);
       // Chiavari-style chairs around the table.
-      const chairs = Math.max(4, Math.round((Math.PI * p.diameter) / 0.6));
+      const chairs = chairCount(p.diameter);
       const gold = new THREE.MeshStandardMaterial({ color: 0xc9a45c, metalness: 0.7, roughness: 0.35 });
       const cushion = new THREE.MeshStandardMaterial({ color: 0xefe9df, roughness: 0.9 });
       const seat = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.05, 0.42), cushion, chairs);
@@ -504,7 +563,7 @@ export function createPropModel(prop, ctx) {
       const legs = new THREE.Matrix4();
       for (let i = 0; i < chairs; i++) {
         const a = (i / chairs) * Math.PI * 2;
-        const rr = r + 0.38;
+        const rr = r + CHAIR_OFFSET;
         q4.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a + Math.PI / 2);
         const at = (dist, y) => new THREE.Vector3(Math.cos(a) * dist, y, Math.sin(a) * dist);
         seat.setMatrixAt(i, m4.compose(at(rr, 0.46), q4, one));
@@ -513,13 +572,14 @@ export function createPropModel(prop, ctx) {
         frame.setMatrixAt(i * 2 + 1, legs.compose(at(rr + 0.18, 0.22), q4, one));
       }
       root.add(seat, frame, back);
+      extra = seatedGuests(root, p, prop.id, animated, ctx);
       break;
     }
-    case 'crowd': crowdModel(root, p, prop.seed || 7, animated); break;
+    case 'crowd': extra = crowdModel(root, p, prop.seed || 7, animated, ctx); break;
     case 'case': root.add(roadCase(p)); break;
     case 'tripod': root.add(tripodStand(p)); break;
     case 'headtable': {
-      const cloth = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9 });
+      const cloth = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9, ...pbrSet('linen', p.width / PBR_TILE.linen, 0.76 / PBR_TILE.linen) });
       const top = new THREE.Mesh(new THREE.BoxGeometry(p.width, 0.76, p.depth), cloth);
       top.position.y = 0.38;
       const skirt = new THREE.Mesh(new THREE.BoxGeometry(p.width + 0.02, 0.6, 0.02), new THREE.MeshStandardMaterial({ color: 0xd8c7a8, roughness: 0.8 }));
@@ -528,7 +588,8 @@ export function createPropModel(prop, ctx) {
       break;
     }
     case 'dancefloor': {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(p.width, 0.03, p.depth), new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.12, metalness: 0.4 }));
+      // Black gloss panels with grooves (the floor reflection / finish comes on top).
+      const m = new THREE.Mesh(new THREE.BoxGeometry(p.width, 0.03, p.depth), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.4, ...pbrSet('dancefloor', p.width / PBR_TILE.dancefloor, p.depth / PBR_TILE.dancefloor) }));
       m.position.y = 0.015;
       root.add(m);
       break;
@@ -543,7 +604,7 @@ export function createPropModel(prop, ctx) {
     root,
     needsEmitters: !!(extra && extra.needsEmitters),
     update(t, env) {
-      for (const fn of animated) fn(t);
+      for (const fn of animated) fn(t, env);
       if (extra) extra.update(t, env);
     },
     dispose() {

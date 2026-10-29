@@ -691,6 +691,8 @@ class App {
     this._last = now;
     this.time += dt;
     const fixtures = this.project.fixtures;
+    // Guests dance on this tempo (the demo's BPM; live DMX has no tempo, so the same default).
+    this.vis.ctx.bpm = this.demoBpm;
     if (this.dmx.useDemo) {
       renderDemo(fixtures.map((fixture, index) => ({ fixture, profile: this.profile(fixture.profileId), index })), this.dmx, this.time, this.demoBpm);
     }

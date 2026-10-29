@@ -42,14 +42,19 @@ export function parseGuests(buf) {
     g.setIndex(new THREE.BufferAttribute(view(Uint16Array, b.index), 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();
-    const tex = new THREE.DataTexture(view(Uint16Array, b.bones), header.bones * 3, b.rows, THREE.RGBAFormat, THREE.HalfFloatType);
-    tex.minFilter = tex.magFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    tex.needsUpdate = true;
-    const clips = {};
-    for (const c of b.clips) clips[c.name] = c;
-    bodies[name] = { geometry: g, bones: tex, clips, height: b.height, triangles: b.triangles };
+    let tex = null; let clips = null;
+    if (b.bones) {
+      tex = new THREE.DataTexture(view(Uint16Array, b.bones), header.bones * 3, b.rows, THREE.RGBAFormat, THREE.HalfFloatType);
+      tex.minFilter = tex.magFilter = THREE.NearestFilter;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
+      clips = {};
+      for (const c of b.clips) clips[c.name] = c;
+    }
+    bodies[name] = { geometry: g, bones: tex, clips, height: b.height, triangles: b.triangles, bonesFrom: b.bonesFrom };
   }
+  // Low-detail bodies share the skeleton animation of their detailed body.
+  for (const b of Object.values(bodies)) if (b.bonesFrom) { b.bones = bodies[b.bonesFrom].bones; b.clips = bodies[b.bonesFrom].clips; }
   return { header, bodies };
 }
 
@@ -120,17 +125,22 @@ const _c = new THREE.Color();
 
 /**
  * Animated crowd. `people` from crowdLayout(), `dressed` from dressCrowd() (same order).
+ * lowDetail: the ~3k-triangle bodies (seated guests, Medie quality).
  * Returns { group, update(time, beat, dancing), dispose() }.
  */
-export function createAnimatedCrowd(people, dressed, guests) {
+export function createAnimatedCrowd(people, dressed, guests, { lowDetail = false } = {}) {
   const group = new THREE.Group();
   const parts = [];
   for (const body of ['male', 'female']) {
     const idx = [];
     dressed.forEach((d, i) => { if (d.body === body) idx.push(i); });
     if (!idx.length) continue;
-    const src = guests.bodies[body];
-    const geo = src.geometry.clone(); // shares the arrays, own instanced attribute
+    const src = (lowDetail && guests.bodies[`${body}Lo`]) || guests.bodies[body];
+    const geo = new THREE.BufferGeometry(); // shares the body's buffers, own instanced attribute
+    for (const [k, a] of Object.entries(src.geometry.attributes)) geo.setAttribute(k, a);
+    geo.setIndex(src.geometry.index);
+    geo.boundingBox = src.geometry.boundingBox;
+    geo.boundingSphere = src.geometry.boundingSphere;
     const anim = new THREE.InstancedBufferAttribute(new Float32Array(idx.length * 4), 4);
     anim.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('fvAnim', anim);
@@ -158,6 +168,15 @@ export function createAnimatedCrowd(people, dressed, guests) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.guests = true;
+    // Passes that draw the scene with one override material (the ambient-occlusion normal
+    // pass) cannot skin the guests: they would show up in the bind pose, so skip them there.
+    const own = new Set([mat, depth, dist]);
+    mesh.onBeforeRender = (r, s, c, g, material) => {
+      if (!own.has(material)) { mesh.userData.count = mesh.count; mesh.count = 0; }
+    };
+    mesh.onAfterRender = () => {
+      if (mesh.userData.count !== undefined) { mesh.count = mesh.userData.count; mesh.userData.count = undefined; }
+    };
     const base = idx.map((pi) => {
       const g = people[pi];
       const d = dressed[pi];
