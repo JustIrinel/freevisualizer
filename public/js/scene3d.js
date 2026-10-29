@@ -6,14 +6,25 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildVenue } from './venue3d.js';
-import { createFixtureModel, roomUniforms } from './fixtures3d.js';
+import { createFixtureModel, roomUniforms, beamQuality } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
 import { tripodParams, tripodMount, caseTop } from './prop-layout.js';
 import { tr } from './i18n.js';
 import { GoboLightManager } from './gobos.js';
+import { qualityPreset, qualityLabels, shadowBudget, floorFinish, DEFAULT_QUALITY } from './quality.js';
+import { patchShadowChunks, ShadowAtlas, chooseCasters } from './shadows.js';
+import { PlanarReflection } from './reflections.js';
+import { Particles } from './particles.js';
+
+// Shadow lookups read one atlas texture; patched before any material compiles.
+const SHADOWS_OK = patchShadowChunks();
+// Haze beams, particles, sprites and lines: drawn after the ambient occlusion so it doesn't darken them.
+const FX_LAYER = 1;
 
 const MAX_LIGHTS = 40;
 // Spot lights that can project a gobo / prism texture (each costs a texture unit
@@ -35,6 +46,77 @@ function puffTexture() {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+/** Renders only the objects on some layers (bit mask) into the read buffer, without swapping. */
+class LayerPass extends Pass {
+  constructor(scene, camera, mask, clear) {
+    super();
+    this.scene = scene;
+    this.camera = camera;
+    this.mask = mask;
+    this.clear = clear;
+    this.needsSwap = false;
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    const mask = this.camera.layers.mask;
+    const auto = renderer.autoClear;
+    const bg = this.scene.background;
+    this.camera.layers.mask = this.mask;
+    renderer.autoClear = false;
+    // A colour background would clear the target again: only the first pass may.
+    if (!this.clear) this.scene.background = null;
+    renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
+    if (this.clear) renderer.clear();
+    renderer.render(this.scene, this.camera);
+    this.scene.background = bg;
+    renderer.autoClear = auto;
+    this.camera.layers.mask = mask;
+  }
+}
+
+/** GTAO that sees only solid geometry (layer 0, no glass / transparent helpers). */
+class FxSafeGTAOPass extends GTAOPass {
+  render(renderer, writeBuffer, readBuffer, dt, mask) {
+    const m = this.camera.layers.mask;
+    this.camera.layers.mask = 1;
+    super.render(renderer, writeBuffer, readBuffer, dt, mask);
+    this.camera.layers.mask = m;
+  }
+
+  overrideVisibility() {
+    const cache = this._visibilityCache;
+    this.scene.traverse((o) => {
+      cache.set(o, o.visible);
+      if (o.isPoints || o.isLine || o.isSprite || (o.material && !Array.isArray(o.material) && o.material.transparent)) o.visible = false;
+    });
+  }
+}
+
+/** Multiplies the GTAO result into the read buffer (keeps its depth for the haze pass). */
+class AOBlendPass extends Pass {
+  constructor(gtao) {
+    super();
+    this.gtao = gtao;
+    this.needsSwap = false;
+    this.quad = new FullScreenQuad(gtao.blendMaterial);
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    const g = this.gtao;
+    g.blendMaterial.uniforms.intensity.value = g.blendIntensity;
+    g.blendMaterial.uniforms.tDiffuse.value = g.pdRenderTarget.texture;
+    const auto = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
+    this.quad.render(renderer);
+    renderer.autoClear = auto;
+  }
+
+  dispose() {
+    this.quad.dispose();
+  }
 }
 
 const _box = new THREE.Box3();
@@ -71,8 +153,10 @@ export class Visualizer {
     this.onGizmoInfo = () => {};   // (text | null) – live position / rotation readout
     this.hoverInfo = () => null;   // (id) → { ids, locked, label } for the hover highlight
     this.lockedIds = new Set();
-    this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true };
+    this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true, quality: DEFAULT_QUALITY, showFps: false };
     this.lightPool = new Set();
+    this.maxLights = MAX_LIGHTS;
+    this.qualityOverride = null; // 'clip' while a video is recorded
     this.fogLevel = 0;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -80,8 +164,14 @@ export class Visualizer {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.9;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Shadow maps are redrawn once per frame (ShadowAtlas.beginFrame), not for every extra render pass.
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
+    this.shadowAtlas = new ShadowAtlas(renderer);
+    this.reflection = new PlanarReflection();
+    this.floors = new Map(); // key ('room' or prop id) → [{ mesh, kind }]
 
     this.labels = new CSS2DRenderer();
     this.labels.domElement.className = 'label-layer';
@@ -93,6 +183,7 @@ export class Visualizer {
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 300);
     this.camera.position.set(0, 5, 15);
+    this.camera.layers.enable(FX_LAYER);
 
     // Our pointerdown runs in the capture phase so Shift+drag can switch the
     // orbit controls off before they start rotating the camera.
@@ -151,8 +242,8 @@ export class Visualizer {
       settings: this.settings,
       puffTexture: puffTexture(),
       // Every fixture gets its light; only the MAX_LIGHTS brightest are on at any time (_updateLightPool).
-      allocateLight: (light) => { if (light) this.lightPool.add(light); return true; },
-      releaseLight: (light) => { if (light) this.lightPool.delete(light); },
+      allocateLight: (light) => { if (light) { this.lightPool.add(light); light.layers.enable(FX_LAYER); } return true; },
+      releaseLight: (light) => { if (light) { this.lightPool.delete(light); this.shadowAtlas.forget(light); } },
       // Each projected gobo uses a texture slot; weak GPUs have only 16 per shader.
       goboLights: new GoboLightManager(Math.max(0, Math.min(MAX_GOBO_LIGHTS, renderer.capabilities.maxTextures - 8))),
       // World-space layer for effects that must not follow the fixture's rotation (sparks, low fog, reflections).
@@ -165,11 +256,17 @@ export class Visualizer {
     this.roomGroup = new THREE.Group();
     this.scene.add(this.roomGroup);
 
-    this.composer = new EffectComposer(renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.9, 0.5, 0.75);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    // Bloom at a lower resolution on weaker presets.
+    const bloomSize = this.bloom.setSize.bind(this.bloom);
+    this.bloom.setSize = (w, h) => bloomSize(Math.max(2, Math.round(w * (this._bloomScale || 1))), Math.max(2, Math.round(h * (this._bloomScale || 1))));
+    this.outputPass = new OutputPass();
+    this.fpsDiv = document.createElement('div');
+    this.fpsDiv.className = 'fps-counter';
+    Object.assign(this.fpsDiv.style, { position: 'absolute', right: '8px', bottom: '8px', padding: '2px 7px', borderRadius: '6px', background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.75)', font: '11px/1.5 ui-monospace, Menlo, Consolas, monospace', pointerEvents: 'none', zIndex: 5, display: 'none' });
+    container.appendChild(this.fpsDiv);
+    this._fps = { frames: 0, time: 0 };
+    this.applyQuality();
 
     // One outline box + one direction arrow per selected object.
     this.selHelpers = [];
@@ -186,10 +283,131 @@ export class Visualizer {
   /** Render at a fixed resolution (video recording); null returns to the window size. */
   setRenderSize(size) {
     this.fixedSize = size;
-    const ratio = size ? 1 : Math.min(window.devicePixelRatio, 2);
-    this.renderer.setPixelRatio(ratio);
-    this.composer.setPixelRatio(ratio);
+    this._applyPixelRatio();
     this.resize();
+  }
+
+  _applyPixelRatio() {
+    const q = this.quality || qualityPreset(DEFAULT_QUALITY);
+    const ratio = this.fixedSize ? 1 : Math.min(window.devicePixelRatio || 1, q.pixelRatio) * q.scale;
+    this.renderer.setPixelRatio(ratio);
+    if (this.composer) this.composer.setPixelRatio(ratio);
+  }
+
+  /** Quality preset in use ('clip' while recording, else the project's setting). */
+  qualityName() {
+    const n = this.qualityOverride || this.settings.quality;
+    return ['low', 'medium', 'high', 'clip'].includes(n) ? n : DEFAULT_QUALITY;
+  }
+
+  /** While a clip is recorded: 'clip'; null returns to the chosen preset. */
+  setQualityOverride(name) {
+    this.qualityOverride = name || null;
+    this.applyQuality();
+  }
+
+  /** Apply the quality preset: resolution, shadows, reflections, AO, beams, particles, bloom. */
+  applyQuality() {
+    const name = this.qualityName();
+    const q = qualityPreset(name);
+    const prev = this.quality;
+    this.quality = q;
+    this.qualityKey = name;
+    const caps = this.renderer.capabilities;
+    this.maxLights = q.lights;
+    this._poolTimer = 0;
+    if (this._poolCapped || this.lightPool.size > this.maxLights) this._poolCapped = true;
+    beamQuality.uSteps.value = q.beamSteps;
+    Particles.budget = q.particles;
+    this._bloomScale = q.bloomScale;
+    // Shadows: one atlas, as many lights as the GPU's varyings allow.
+    const budget = SHADOWS_OK ? shadowBudget(q.shadows, { maxVaryings: caps.maxVaryings || 15, maxTextureSize: caps.maxTextureSize || 4096, tile: q.shadowTile }) : { count: 0 };
+    this.shadowAtlas.configure(budget);
+    this.shadowInfo = { wanted: q.shadows, count: budget.count, tile: budget.tile || 0 };
+    this.renderer.shadowMap.enabled = budget.count > 0;
+    // The shadow atlas takes one texture unit from the gobo projections.
+    const gobo = this.ctx.goboLights;
+    const goboMax = Math.max(0, Math.min(MAX_GOBO_LIGHTS, caps.maxTextures - (budget.count ? 9 : 8)));
+    if (gobo.max !== goboMax) gobo.max = goboMax;
+    this.reflection.enabled = q.reflections === 'planar';
+    this.reflection.scale = q.reflectionScale || 0.5;
+    this._applyFloors();
+    const tone = q.toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = tone;
+    this.renderer.toneMappingExposure = q.toneMapping === 'agx' ? 1.05 : 0.9;
+    if (!prev || !this.composer || prev.msaa !== q.msaa || prev.ao !== q.ao) this._buildComposer(q);
+    this._applyPixelRatio();
+    this.resize();
+    this._fps.frames = 0; this._fps.time = 0;
+  }
+
+  /** Post-processing chain. With AO: scene without haze → AO → haze/particles on top → bloom → output. */
+  _buildComposer(q) {
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+    }
+    if (this.gtao) { this.gtao.dispose(); this.gtao = null; }
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, samples: q.msaa || 0 });
+    this.composer = new EffectComposer(this.renderer, rt);
+    if (q.ao) {
+      this.composer.addPass(new LayerPass(this.scene, this.camera, 1 << 0, true));
+      this.gtao = new FxSafeGTAOPass(this.scene, this.camera, Math.max(1, size.x), Math.max(1, size.y));
+      this.gtao.output = GTAOPass.OUTPUT.Off;
+      this.gtao.needsSwap = false;
+      this.gtao.blendIntensity = 0.85;
+      this.gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12, distanceFallOff: 1 });
+      this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      this.composer.addPass(this.gtao);
+      this.composer.addPass(new AOBlendPass(this.gtao));
+      this.composer.addPass(new LayerPass(this.scene, this.camera, 1 << FX_LAYER, false));
+    } else {
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+    }
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(this.outputPass);
+  }
+
+  /** Floors: planar reflection (Înaltă / Clip), stronger env-map gloss (Medie) or as built (Scăzută). */
+  _applyFloors() {
+    const mode = this.quality ? this.quality.reflections : 'off';
+    const finishName = this.room?.floorFinish || 'satin';
+    for (const list of this.floors.values()) {
+      for (const { mesh, kind } of list) {
+        const mat = mesh.material;
+        if (!mat || !mat.isMeshStandardMaterial) continue;
+        const ud = mat.userData;
+        if (ud.baseRoughness === undefined) { ud.baseRoughness = mat.roughness; ud.baseEnv = mat.envMapIntensity; }
+        const f = floorFinish(finishName, kind);
+        if (mode === 'off') {
+          mat.roughness = ud.baseRoughness;
+          mat.envMapIntensity = ud.baseEnv;
+        } else {
+          mat.roughness = f.roughness;
+          mat.envMapIntensity = mode === 'env' ? 2.5 * (1 - f.roughness) + 0.5 : 1;
+        }
+        if (mode === 'planar' && f.strength > 0) this.reflection.attach(mesh, f);
+        else if (ud.reflect) ud.reflect.uStrength.value = 0;
+      }
+    }
+  }
+
+  _registerFloor(key, mesh, kind) {
+    if (!mesh) return;
+    mesh.userData.floor = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    const list = this.floors.get(key) || [];
+    list.push({ mesh, kind });
+    this.floors.set(key, list);
+  }
+
+  _unregisterFloors(key) {
+    const list = this.floors.get(key);
+    if (!list) return;
+    for (const { mesh } of list) this.reflection.detach(mesh);
+    this.floors.delete(key);
   }
 
   resize() {
@@ -199,6 +417,8 @@ export class Visualizer {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, !this.fixedSize);
     this.composer.setSize(w, h);
+    const buf = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.reflection.setSize(buf.x, buf.y);
     this.labels.setSize(this.container.clientWidth || 1, this.container.clientHeight || 1);
   }
 
@@ -224,6 +444,12 @@ export class Visualizer {
     this.ctx.roomBox.min.set(-w / 2, 0, -d / 2);
     this.ctx.roomBox.max.set(w / 2, hgt, d / 2);
     this.ctx.walls = room.walls !== false;
+    this.room = room;
+    // Floor finish and shadows of the room.
+    this._unregisterFloors('room');
+    this.roomGroup.traverse((o) => { if (o.isMesh && o.userData.floor) this._registerFloor('room', o, 'room'); });
+    this._markShadows(this.roomGroup, 'room');
+    this._applyFloors();
     if (room.walls !== false) {
       roomUniforms.uRoomMin.value.set(-w / 2, 0, -d / 2);
       roomUniforms.uRoomMax.value.set(w / 2, hgt, d / 2 + 50);
@@ -242,6 +468,7 @@ export class Visualizer {
     );
     floor.rotation.x = -Math.PI / 2;
     floor.userData.isRoom = true;
+    floor.userData.floor = true;
     this.roomGroup.add(floor);
     const grid = new THREE.GridHelper(Math.max(w, d), Math.max(w, d), 0x2a2a33, 0x18181e);
     grid.position.y = 0.002;
@@ -291,6 +518,40 @@ export class Visualizer {
     this.scene.fog.color.copy(c);
     this.scene.fog.density = 0.012 * (1 - h * 0.7);
     this.labels.domElement.style.display = s.showLabels ? '' : 'none';
+    this.fpsDiv.style.display = s.showFps ? '' : 'none';
+    if (this.qualityKey !== this.qualityName()) this.applyQuality();
+  }
+
+  // ------------------------------------------------------------ shadows / layers of new objects
+  /**
+   * Who casts and receives shadows, and which objects are "haze / effects" (drawn after the AO).
+   * kind: 'fixture' (receives only: the light sits inside the fixture), 'prop', 'room'.
+   */
+  _markShadows(root, kind) {
+    root.traverse((o) => {
+      if (o.isLight) { o.layers.enable(FX_LAYER); return; }
+      if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
+      if (o.userData.shadowMarked === kind) return;
+      o.userData.shadowMarked = kind;
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      const fx = o.isPoints || o.isLine || o.isSprite || (m && (m.isShaderMaterial || m.blending === THREE.AdditiveBlending)) || (m && m.transparent && m.depthWrite === false);
+      if (fx) { o.layers.set(FX_LAYER); o.castShadow = false; o.receiveShadow = false; return; }
+      o.receiveShadow = true;
+      if (kind === 'fixture' || o.userData.floor || o.userData.reflective) { o.castShadow = false; return; }
+      const flat = o.geometry && o.geometry.type === 'PlaneGeometry';
+      const glow = m && (m.isMeshBasicMaterial || m.transparent);
+      // Room: walls, floor and ceiling don't need to cast (the lights are inside); decor does.
+      o.castShadow = !glow && !(kind === 'room' && flat);
+    });
+  }
+
+  /** Re-check every object now and then: 3D models and guests can arrive later (async load). */
+  _rescanShadows(dt) {
+    this._scanTimer = (this._scanTimer || 0) - dt;
+    if (this._scanTimer > 0) return;
+    this._scanTimer = 1;
+    for (const o of this.objects.values()) this._markShadows(o.model.root, o.type === 'fixture' ? 'fixture' : 'prop');
+    this._markShadows(this.ctx.world, 'prop');
   }
 
   // ------------------------------------------------------------ objects
@@ -300,6 +561,10 @@ export class Visualizer {
     this.scene.add(model.root);
     this.objects.set(fixture.id, { type: 'fixture', model, data: fixture, profile });
     this._applyTransform(model.root, fixture);
+    this._markShadows(model.root, 'fixture');
+    this._markShadows(this.ctx.world, 'prop');
+    // Beams are cut by the shadow of their own fixture's light.
+    if (model.light && model.beams) for (const b of model.beams) b.setShadowLight?.(model.light);
     if (this.selectedIds.includes(fixture.id)) this.setSelection(this.selectedIds);
     return model;
   }
@@ -310,6 +575,21 @@ export class Visualizer {
     this.scene.add(model.root);
     this.objects.set(prop.id, { type: 'prop', model, data: prop });
     this._applyTransform(model.root, prop);
+    if (prop.type === 'dancefloor') {
+      // The biggest flat part (or the one tagged userData.floor) is the glossy surface.
+      let best = null; let area = 0;
+      model.root.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        const b = o.geometry.boundingBox;
+        const a = (b.max.x - b.min.x) * (b.max.z - b.min.z) * o.scale.x * o.scale.z + (o.userData.floor ? 1e6 : 0);
+        if (a > area) { area = a; best = o; }
+      });
+      this._registerFloor(prop.id, best, 'dance');
+      this._applyFloors();
+    }
+    this._markShadows(model.root, 'prop');
+    this._markShadows(this.ctx.world, 'prop');
     if (this.selectedIds.includes(prop.id)) this.setSelection(this.selectedIds);
     return model;
   }
@@ -320,6 +600,7 @@ export class Visualizer {
     if (this.transform.object === o.model.root) this.transform.detach();
     this.selectedIds = this.selectedIds.filter((x) => x !== id);
     this.scene.remove(o.model.root);
+    this._unregisterFloors(id);
     o.model.dispose();
     this.objects.delete(id);
   }
@@ -823,22 +1104,40 @@ export class Visualizer {
    */
   _updateLightPool(dt) {
     this._poolTimer = (this._poolTimer || 0) - dt;
-    if (this.lightPool.size <= MAX_LIGHTS) {
+    const max = this.maxLights;
+    if (this.lightPool.size <= max) {
       if (this._poolCapped) { for (const l of this.lightPool) l.visible = true; this._poolCapped = false; }
       return;
     }
     if (this._poolTimer > 0) return;
     this._poolTimer = 0.15;
     this._poolCapped = true;
-    // A light that is on gets a small bonus so the choice doesn't flicker.
-    const list = [...this.lightPool].map((l) => ({ l, k: l.intensity * (l.visible ? 1.15 : 1) }));
-    list.sort((a, b) => b.k - a.k);
-    list.forEach((e, i) => { e.l.visible = i < MAX_LIGHTS; });
+    // Spot and point lights get fixed shares, so a strobe flash doesn't change the
+    // number of each kind (that would recompile every material).
+    const spots = []; const points = [];
+    for (const l of this.lightPool) (l.isSpotLight ? spots : points).push(l);
+    const pointQuota = points.length ? Math.min(points.length, Math.max(1, Math.round(max * points.length / this.lightPool.size))) : 0;
+    const quotas = [[spots, Math.min(spots.length, max - pointQuota)], [points, pointQuota]];
+    for (const [arr, quota] of quotas) {
+      // A light that is on gets a small bonus so the choice doesn't flicker.
+      const list = arr.map((l) => ({ l, k: l.intensity * (l.visible ? 1.15 : 1) }));
+      list.sort((a, b) => b.k - a.k);
+      list.forEach((e, i) => { e.l.visible = i < quota; });
+    }
+  }
+
+  /** Spot lights that cast shadows this frame (after the pool and the gobo slots are decided). */
+  _updateShadowCasters() {
+    const atlas = this.shadowAtlas;
+    if (!atlas.count) return;
+    const candidates = [];
+    for (const l of this.lightPool) if (l.isSpotLight && l.visible && l.parent) candidates.push(l);
+    atlas.assign(chooseCasters(candidates, atlas.count));
   }
 
   /** How many fixture lights exist and how many can be on (for the settings / audit). */
   lightBudget() {
-    return { lights: this.lightPool.size, max: MAX_LIGHTS };
+    return { lights: this.lightPool.size, max: this.maxLights, shadows: this.shadowAtlas.slots.filter(Boolean).length, quality: this.qualityName() };
   }
 
   _objectIdOf(obj) {
@@ -907,6 +1206,17 @@ export class Visualizer {
     return out;
   }
 
+  _countFps(dt) {
+    const f = this._fps;
+    f.frames++;
+    f.time += dt;
+    if (f.time < 0.5) return;
+    const fps = f.frames / f.time;
+    f.frames = 0; f.time = 0;
+    this.fps = fps;
+    if (this.settings.showFps) this.fpsDiv.textContent = `${Math.round(fps)} fps · ${qualityLabels()[this.qualityName()]}`;
+  }
+
   // ------------------------------------------------------------ frame
   /**
    * @param states Map(id -> fixture state) computed from DMX
@@ -967,7 +1277,24 @@ export class Visualizer {
     this._updateAxisHints();
     this._updateLightPool(dt);
     this.ctx.goboLights.update(this.renderer);
+    this._rescanShadows(dt);
+    this._updateShadowCasters();
+    // Shadows once per frame, before the first scene render (the floor reflection).
+    this.shadowAtlas.beginFrame();
+    this.renderer.shadowMap.needsUpdate = this.renderer.shadowMap.enabled;
+    // Matrices once per frame, not again in every render pass.
+    this.scene.updateMatrixWorld();
+    this.camera.updateMatrixWorld();
+    this.scene.matrixWorldAutoUpdate = false;
+    if (this.reflection.enabled) {
+      const hide = [this.transform.getHelper(), this._placing?.ghost, this._hover?.helper, ...this.selHelpers.flatMap((h) => [h.helper, h.arrow])];
+      this.reflection.render(this.renderer, this.scene, this.camera, hide);
+    } else {
+      this.reflection.uniforms.uReflectOn.value = 0;
+    }
     this.composer.render(dt);
+    this.scene.matrixWorldAutoUpdate = true;
+    this._countFps(dt);
     if (this.onAfterRender) this.onAfterRender(dt);
     if (this.settings.showLabels) this.labels.render(this.scene, this.camera);
   }

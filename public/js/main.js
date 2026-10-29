@@ -154,6 +154,7 @@ class App {
     const s = this.project.settings;
     Object.assign(this.vis.settings, {
       haze: s.haze, bloom: s.bloom, ambient: s.ambient, houseLight: s.houseLight, workLights: !!s.workLights, lightPower: s.lightPower, showLabels: s.showLabels,
+      quality: s.quality, showFps: !!s.showFps,
     });
     this.vis.applySettings();
     if (this.dmx.artnetOffset !== s.artnetOffset) this.dmx.setArtnetOffset(s.artnetOffset);

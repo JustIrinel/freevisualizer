@@ -106,6 +106,7 @@ export function buildVenue(r, group, ctx) {
     color: style === 'banquet' ? 0xffffff : (r.floorColor || '#9a9792'), map: floorTex, roughness: style === 'banquet' ? 0.4 : 0.7, metalness: 0,
   })));
   floor.rotation.x = -Math.PI / 2;
+  floor.userData.floor = true; // glossy finish / reflection: Visualizer._applyFloors
   group.add(floor);
   if (r.grid !== false && style !== 'banquet') {
     const grid = new THREE.GridHelper(Math.max(w, d), Math.max(w, d), 0x55555c, 0x45454b);

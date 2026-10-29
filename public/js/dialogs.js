@@ -6,7 +6,7 @@ import {
 } from './profiles.js';
 import { oflToProfile, listModes } from './ofl-import.js';
 import { readGdtf, listGdtfModes, gdtfToProfile, gdtfAssets } from './gdtf-import.js';
-import { uploadAsset } from './models3d.js';
+import { uploadAsset, BUILTIN_MODELS } from './models3d.js';
 import { parseQxf, listQxfModes, qxfToProfile } from './qxf-import.js';
 import { parseD4, listD4Modes, d4ToProfile, isD4Xml } from './d4-import.js';
 import { fixtureFilesInZip } from './zip-lite.js';
@@ -14,6 +14,7 @@ import { importSoundSwitch, venuesFromZip, soundSwitchImportDialog } from './ss-
 import { loadBrand, saveBrand } from './recorder.js';
 import { assistantPreference, setAssistantVisible } from './assistant.js';
 import { tr, tp, lang, LANGS, setLang } from './i18n.js';
+import { QUALITY_LEVELS, qualityLabels } from './quality.js';
 import { nextFreeAddress, listServerProjects, loadServerProject, deleteServerProject, downloadJson, nextName } from './project.js';
 
 // ------------------------------------------------------------------ online search
@@ -351,9 +352,19 @@ function defaultRanges(type) {
 /** "Model 3D" block of the profile editor: the real look of the fixture. */
 function modelSection(p, rerender) {
   const box = h('div', { class: 'model-box' });
+  const builtin = p.model?.type === 'builtin' ? BUILTIN_MODELS[p.model.file] : null;
   const info = p.model
-    ? (p.model.type === 'gdtf' ? tr('Model 3D din GDTF ({n} piese)', { n: Object.keys(p.model.files).length }) : tr('Model 3D încărcat (.glb)'))
+    ? (p.model.type === 'gdtf' ? tr('Model 3D din GDTF ({n} piese)', { n: Object.keys(p.model.files).length })
+      : builtin ? tr('Model 3D inclus: {name} ({credit})', { name: builtin.name, credit: builtin.credit }) : tr('Model 3D încărcat (.glb)'))
     : tr('Model desenat de FreeVisualizer după tipul fixturii.');
+  // Built-in models (public/models) for moving heads, e.g. the BeamZ Panther 60.
+  const presets = Object.entries(BUILTIN_MODELS);
+  const preset = h('select', {}, [h('option', { value: '' }, tr('— niciunul —')), ...presets.map(([file, m]) => h('option', { value: file, selected: p.model?.file === file }, m.name))]);
+  preset.addEventListener('change', () => {
+    if (preset.value) p.model = { type: 'builtin', file: preset.value, height: BUILTIN_MODELS[preset.value].height };
+    else if (p.model?.type === 'builtin') delete p.model;
+    rerender();
+  });
   const upload = h('button', {
     onclick: async () => {
       const f = await pickFile('.glb');
@@ -380,7 +391,8 @@ function modelSection(p, rerender) {
         h('div', { class: 'row' }, upload,
           p.model ? h('button', { onclick: () => { delete p.model; rerender(); } }, tr('Folosește modelul desenat')) : null,
           h('a', { href: `https://www.google.com/search?tbm=isch&q=${query}`, target: '_blank', rel: 'noopener', class: 'small' }, tr('🔍 Poze cu aparatul'))),
-        p.model ? field(tr('Orientare model'), orient, tr('Dacă modelul apare culcat sau cu capul în jos')) : null,
+        p.kind === 'moving' && presets.length ? field(tr('Model 3D inclus'), preset, tr('Modele gratuite incluse în aplicație, la mărimea reală')) : null,
+        p.model && !builtin ? field(tr('Orientare model'), orient, tr('Dacă modelul apare culcat sau cu capul în jos')) : null,
         h('div', { class: 'muted small' }, tr('Modelele .glb cu piese numite Base / Yoke / Head se mișcă pe pan/tilt. Modelele din fișierele GDTF se iau automat.')))),
   );
   return box;
@@ -422,6 +434,8 @@ export async function profileEditor(app, source) {
           : p.kind === 'retro' ? h('label', { class: 'inline', title: tr('Becurile se aprind/sting lin și se înroșesc când sunt dimate, ca filamentele adevărate') },
             h('input', { type: 'checkbox', checked: p.tungsten !== false, onchange: (e) => { p.tungsten = e.target.checked; } }), tr('Emulare bec cu filament'))
             : h('span')),
+      p.kind === 'retro' ? h('div', { class: 'grid3' },
+        field(tr('Lățime totală (mm)'), numberInput(Math.round((p.size || 0.475) * 1000), (v) => { p.size = v / 1000; }, { min: 200, max: 1500, step: 5 }), tr('Măsurată între colțurile hexagonului'))) : null,
       modelSection(p, render),
       h('h4', {}, tr('Canale ({n})', { n: p.channels.length })),
     );
@@ -717,6 +731,23 @@ export async function settingsDialog(app) {
     el.addEventListener('input', () => app.setSetting(key, parseFloat(el.value)));
     return el;
   };
+  const qualityHelp = {
+    low: tr('Pentru laptopuri slabe: fără umbre și reflexii, rezoluție redusă.'),
+    medium: tr('4 lumini cu umbre, podea lucioasă simplă.'),
+    high: tr('Umbre reale (12 lumini), reflexii în podea, ocluzie ambientală. Pentru plăci video bune (ex. RX 7800 XT).'),
+    clip: tr('Tot ce e mai bun (20 de umbre, AgX). Se folosește automat cât înregistrezi un clip.'),
+  };
+  const quality = h('select', {}, QUALITY_LEVELS.map((k) => h('option', { value: k, selected: (s.quality || 'high') === k }, qualityLabels()[k])));
+  const qualityNote = h('div', { class: 'muted small' });
+  const showNote = () => {
+    const info = app.vis.shadowInfo;
+    const limited = info && info.count < info.wanted ? ' ' + tr('Placa video permite {n} lumini cu umbre.', { n: info.count }) : '';
+    qualityNote.textContent = qualityHelp[quality.value] + limited;
+  };
+  quality.addEventListener('change', () => { app.setSetting('quality', quality.value); showNote(); });
+  showNote();
+  const fps = h('input', { type: 'checkbox', checked: !!s.showFps });
+  fps.addEventListener('change', () => app.setSetting('showFps', fps.checked));
   const language = h('select', { onchange: (e) => setLang(e.target.value) },
     Object.entries(LANGS).map(([k, label]) => h('option', { value: k, selected: k === lang }, label)));
   const content = h('div', { class: 'form' },
@@ -731,6 +762,9 @@ export async function settingsDialog(app) {
     h('h4', {}, tr('Asistent Claude')),
     await assistantSettings(),
     h('h4', {}, tr('Imagine')),
+    field(tr('Calitate'), quality),
+    qualityNote,
+    h('label', { class: 'inline' }, fps, tr('Arată FPS-ul în colțul imaginii')),
     field(tr('Lumina din sală (candelabre, ambient)'), range('houseLight', 0, 1, 0.01)),
     field(tr('Putere lumină pe suprafețe (podea/pereți)'), range('lightPower', 0, 3, 0.05)),
     field(tr('Haze / fum'), range('haze', 0, 1, 0.01)),
@@ -854,6 +888,8 @@ export async function helpDialog(app) {
     h('h4', {}, tr('Scurtături')),
     h('p', { class: 'small' }, tr('Ctrl/Cmd+click sau Shift+trage = selecție multiplă · Ctrl/Cmd+A toate · W mută · E rotește · săgeți/PageUp/PageDown mută · [ ] rotesc · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere')),
     h('p', { class: 'small' }, tr('Grupuri și blocare: Ctrl+G grupează · Ctrl+Shift+G desface · Alt+click sau dublu-click = un singur obiect din grup · K blochează / deblochează')),
+    h('h4', {}, tr('Despre și credite')),
+    h('p', { class: 'small' }, tr('Modelul 3D al lui BeamZ Panther 60: „Moving Head Beam (high Poly)” de Lord Henry (Sketchfab), licență CC BY 4.0, scalat la mărimea reală. Celelalte aparate sunt desenate de FreeVisualizer. Three.js, meshoptimizer și Open Fixture Library: licență MIT.')),
   );
   await openModal(tr('Conectare SoundSwitch'), content, [{ label: tr('Am înțeles'), primary: true, value: null }]);
 }

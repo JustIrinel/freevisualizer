@@ -98,4 +98,12 @@ export default {
   'Fișierul nu este o arhivă validă (ZIP/GDTF)': 'This file is not a valid archive (ZIP/GDTF)',
   'Compresie ZIP nesuportată ({method})': 'Unsupported ZIP compression ({method})',
   'Lipsește {file} din arhivă': '{file} is missing from the archive',
+  'Model 3D inclus: {name} ({credit})': 'Built-in 3D model: {name} ({credit})',
+  '— niciunul —': '— none —',
+  'Model 3D inclus': 'Built-in 3D model',
+  'Modele gratuite incluse în aplicație, la mărimea reală': 'Free models shipped with the app, at real size',
+  'Despre și credite': 'About and credits',
+  'Modelul 3D al lui BeamZ Panther 60: „Moving Head Beam (high Poly)” de Lord Henry (Sketchfab), licență CC BY 4.0, scalat la mărimea reală. Celelalte aparate sunt desenate de FreeVisualizer. Three.js, meshoptimizer și Open Fixture Library: licență MIT.': 'BeamZ Panther 60 3D model: "Moving Head Beam (high Poly)" by Lord Henry (Sketchfab), CC BY 4.0 licence, scaled to the real size. The other fixtures are drawn by FreeVisualizer. Three.js, meshoptimizer and Open Fixture Library: MIT licence.',
+  'Lățime totală (mm)': 'Overall width (mm)',
+  'Măsurată între colțurile hexagonului': 'Measured between the corners of the hexagon',
 };

@@ -66,6 +66,7 @@ export class Particles {
    */
   constructor(max, opts = {}) {
     this.max = max;
+    this.scalable = opts.scalable ?? max >= 500;
     this.count = 0;
     this.pos = new Float32Array(max * 3);
     this.vel = new Float32Array(max * 3);
@@ -104,6 +105,8 @@ export class Particles {
 
   spawn(x, y, z, vx, vy, vz, life, size, r, g, b) {
     if (this.count >= this.max) return;
+    // Quality preset: big emitters (sparks, low fog) spawn only a share of their particles.
+    if (this.scalable && Particles.budget < 1 && Math.random() > Particles.budget) return;
     const i = this.count++;
     this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
     this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
@@ -143,7 +146,8 @@ export class Particles {
       this.col[c] = this.base[c] * out.r;
       this.col[c + 1] = this.base[c + 1] * out.g;
       this.col[c + 2] = this.base[c + 2] * out.b;
-      this.col[c + 3] = out.alpha;
+      // Fewer particles (lower quality) each carry a little more, so the effect keeps its density.
+      this.col[c + 3] = this.scalable && Particles.budget < 1 ? Math.min(1, out.alpha / Math.sqrt(Math.max(0.1, Particles.budget))) : out.alpha;
       this.size[i] = this.base[c + 3] * out.size;
       i++;
     }
@@ -168,3 +172,6 @@ export class Particles {
     this.material.dispose();
   }
 }
+
+/** Share of particles big emitters spawn (1 = all), set by the quality preset. */
+Particles.budget = 1;

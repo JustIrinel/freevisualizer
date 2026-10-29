@@ -23,6 +23,7 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
   - **glob disco** cu pinspot-uri: reflexiile se rotesc pe pereți, tavan și invitați
   - **laser** cu 5 modele (evantai, liquid sky, con, tunel, rază)
 - **Modele 3D reale**: fișierele **GDTF** își aduc modelul 3D al producătorului (bază, braț și cap care se mișcă pe pan/tilt) și poza aparatului. Poți încărca și un model **.glb** în profilul fixturii (**🔍 Poze cu aparatul** caută imagini după model).
+- **Aparatele tale arată ca în realitate**, la dimensiunile reale, direct la importul din SoundSwitch: BeamZ Panther 60 (model 3D inclus), Chauvet Intimidator Spot LED 250, UKing ZQ01104 (fiecare LED roșu / verde / albastru se aprinde în culoarea lui), retro-ul „7 Vintage” (inel RGB + filament alb cald pe fiecare cap, mărimea se reglează din profil) și hazer-ul ADJ Entour Faze (haze-ul iese din duză).
 - **Sală realistă**: **sală de evenimente** (parchet, lambriu, ferestre cu draperii, tavan casetat, candelabre, draperie albă în spatele DJ-ului), **sală goală** sau **club (întunecat)**. Slider-ul **Sală** aprinde candelabrele și luminează ambientul; **💡** dă lumină de lucru.
 - **✨ Asistent Claude**: îi scrii ce vrei („Pune 4 BeamZ Panther 60 pe truss de la adresa 200”) și adaugă, așază, mută sau șterge fixturi, cu cheia ta API de la Anthropic.
 - **Clipuri video pentru clienți**: înregistrezi show-ul în format vertical 9:16 (Reels/TikTok), 16:9 sau 1:1, cu logo-ul și textul tău, cameră cinematică automată și, opțional, melodia ta
@@ -199,7 +200,7 @@ public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendo
   ss-import.js     proiect SoundSwitch (SoundSwitchVenues.bin) → fixturi + profile (pur, testat)
   d4-import.js     Avolites .d4 (Fixture.ID) → profil; gdtf-import.js / qxf-import.js la fel
   fixtures3d.js    modelele 3D și fasciculele (piesele în fixture-parts.js, texturile în textures.js)
-  models3d.js      modele .glb / GDTF încărcate pe fixturi
+  models3d.js      modele .glb / GDTF încărcate pe fixturi, modele incluse (public/models, BUILTIN_MODELS)
   venue3d.js       sala de evenimente / sala goală, candelabre
   assistant.js     panoul asistentului Claude și instrumentele lui
   i18n.js          română / engleză (dicționarele în public/js/lang/)
@@ -230,6 +231,7 @@ It runs as a **Mac app** (Apple Silicon and Intel) and on Windows, and works wit
 - **Live DMX** over Art-Net (UDP 6454) and sACN (UDP 5568). Answers ArtPoll, so SoundSwitch sees it as the Art-Net node “FreeVisualizer”.
 - **Realistic fixtures**: pars/uplights, moving head spot / beam / wash (16-bit pan/tilt, color wheel, gobo, prism, zoom), LED pixel bars, the **7-head hexagonal retro** light with warm filament bulbs, strobe/blinder, fog/haze, **cold spark machines**, **low fog**, **mirror ball** with pinspots and **laser**.
 - **Real 3D models**: **GDTF** files bring the manufacturer's 3D model (base, yoke and head moving with pan/tilt) and fixture photo; you can also load a **.glb** model into any profile.
+- **DJ Matei's fixtures look like the real devices**, at real size, straight from the SoundSwitch import: BeamZ Panther 60 (built-in 3D model), Chauvet Intimidator Spot LED 250, UKing ZQ01104 (each red / green / blue LED lights in its own colour), the "7 Vintage" retro (RGB ring + warm-white filament per head, size set in the profile) and the ADJ Entour Faze hazer (haze comes out of the nozzle).
 - **Venues**: a realistic **event venue** (parquet, wainscoting, curtains, coffered ceiling, chandeliers, a white drape behind the DJ), an **empty room** or a **dark club**. The **Room** slider sets the house lights; **💡** turns on work lights.
 - **Import from SoundSwitch**: reads your `.ssproj` project and builds the same fixtures, names, modes and addresses as the SoundSwitch DMX Map, with the SoundSwitch fixture definitions.
 - **Library**: built-in generic profiles, **one search** across your profiles and the [Open Fixture Library](https://open-fixture-library.org) (one-click import), a [Fixture.ID](https://www.fixture.id/) button, and import of **.d4**, **.gdtf**, **.zip** and **.json** files (just drop them on the window).
@@ -296,3 +298,5 @@ Everything one message does is undone with a single **Ctrl+Z**. The key stays on
 - **Moving head moves the wrong way**: tick “Invert pan” or “Invert tilt” in the inspector.
 
 © 2026 DJ Matei – uz personal, toate drepturile rezervate / personal use, all rights reserved (vezi `LICENSE`). Three.js, Open Fixture Library, Electron și @anthropic-ai/sdk sunt distribuite sub licența MIT.
+
+Modelul 3D al lui BeamZ Panther 60 (`public/models/panther-60.glb`) este „Moving Head Beam (high Poly)” de [Lord Henry](https://sketchfab.com/lordhenry) ([Sketchfab](https://sketchfab.com/3d-models/ce283a1277bb4e98bd29b157075e003f)), licență [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modificat (scalat, înnegrit) – vezi `public/models/CREDITS.md`. / The BeamZ Panther 60 3D model is "Moving Head Beam (high Poly)" by Lord Henry, CC BY 4.0, modified (scaled, darkened).

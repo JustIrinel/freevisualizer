@@ -346,6 +346,7 @@ class ParModel extends BaseModel {
       this.root.add(slimBracket(fb.size, pivot));
       fb.group.position.y = pivot;
       this.root.add(fb.group);
+      this.body = fb.group;
       this.ledMats = fb.ledMats;
       faceY = pivot + fb.faceY;
     } else if (style === 'slim') {
@@ -406,7 +407,7 @@ class ParModel extends BaseModel {
     this.lastState = s;
     if (this.ledMats) {
       // Each LED glows in its own colour, driven only by its channel.
-      const k = s.intensity * 7;
+      const k = s.intensity * 3.2;
       LED_RGB.forEach((tint, i) => {
         const v = s.color[i] * k;
         this.ledMats[i].emissive.setRGB(tint[0] * v, tint[1] * v, tint[2] * v);
@@ -605,9 +606,12 @@ class PixelModel extends BaseModel {
 }
 
 // ------------------------------------------------------------------ Retro hexagonal 7 heads
-/** Front face of the retro housing (local y); cups reach down to −0.055, bulbs sit at −0.03. */
-export const RETRO_HOUSING_FRONT = -0.058;
+/** Front face of the retro housing (local y, nominal size); cups reach down to −0.074, bulbs sit at −0.03. */
+export const RETRO_HOUSING_FRONT = -0.078;
 export const RETRO_BULB_Y = -0.03;
+/** Default overall width of a retro (m); profile.size overrides it (DJ Matei's "7 Vintage": ~475 mm). */
+export const RETRO_DEFAULT_SIZE = 0.475;
+const RETRO_NOMINAL_WIDTH = 0.6; // across the corners of the gold rim, before scaling
 
 /** Head positions: rows of 2-3-2 (numbered left→right, top→bottom), in the face plane. */
 export function hex7Layout(pitch = 0.17) {
@@ -619,54 +623,117 @@ export function hex7Layout(pitch = 0.17) {
   ];
 }
 
+/** Flat hexagon (corners on ±X) in the XZ plane facing +Y, optionally with round holes. */
+function hexPlate(radius, holes = [], holeR = 0) {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    if (i === 0) shape.moveTo(Math.cos(a) * radius, Math.sin(a) * radius);
+    else shape.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
+  }
+  shape.closePath();
+  for (const [x, z] of holes) {
+    const hole = new THREE.Path();
+    hole.absarc(x, -z, holeR, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+  }
+  const geo = new THREE.ShapeGeometry(shape, 24);
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+}
+
+/** Edison-style filament: a zigzag wire between two posts, along X. */
+let filamentGeo = null;
+function retroFilament() {
+  if (!filamentGeo) {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) pts.push(new THREE.Vector3(-0.013 + i * 0.00325, i % 2 ? 0.004 : -0.004, 0));
+    filamentGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.0013, 5, false);
+  }
+  return filamentGeo;
+}
+
 class RetroModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
     const pitch = 0.17;
-    // Black hexagonal housing with bevelled edges behind the reflector cups (its
-    // front face must stay behind the cup bottoms, or it hides the bulbs), a gold
-    // rim around the cups, U bracket behind.
-    const body = hexBody(0.285, 0.1);
-    body.rotation.y = Math.PI / 6;
+    const cupR = 0.074; const cupDepth = 0.074;
+    const size = Number(profile.size) > 0.1 ? Number(profile.size) : RETRO_DEFAULT_SIZE;
+    const k = size / RETRO_NOMINAL_WIDTH;
+    this.scale = k;
+    // Everything but the beams is built at nominal size inside a scaled shell.
+    const shell = new THREE.Group();
+    shell.scale.setScalar(k);
+    this.root.add(shell);
+    // Black hexagonal housing behind the cups (its front face must stay behind the cup
+    // bottoms, or it hides the bulbs), black front plate with a hole per cup, gold rim.
+    const body = hexBody(0.285, 0.09);
     body.position.y = RETRO_HOUSING_FRONT - 0.012;
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.075, 6, 1, true), retroGold());
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.012 - RETRO_HOUSING_FRONT, 6, 1, true), retroGold());
     rim.rotation.y = Math.PI / 6;
-    rim.position.y = -0.022;
-    this.root.add(body, rim);
+    rim.position.y = (0.012 + RETRO_HOUSING_FRONT) / 2;
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.006, 6, 6), retroGold());
+    lip.rotation.set(Math.PI / 2, 0, 0);
+    lip.position.y = 0.012;
+    const layout = hex7Layout(pitch);
+    const plate = new THREE.Mesh(hexPlate(0.296, layout, cupR + 0.003), retroFace());
+    plate.position.y = 0.004;
+    shell.add(body, rim, lip, plate);
     for (const sx of [-1, 1]) {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.2, 0.04), steel());
-      arm.position.set(sx * 0.27, -0.16, 0);
+      arm.position.set(sx * 0.27, -0.17, 0);
       const knob = cyl(0.022, 0.022, 0.014, rubber(), 16);
       knob.rotation.z = Math.PI / 2;
-      knob.position.set(sx * 0.278, -0.07, 0);
-      this.root.add(arm, knob);
+      knob.position.set(sx * 0.278, -0.09, 0);
+      shell.add(arm, knob);
     }
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.008, 0.04), steel());
-    bar.position.y = -0.26;
-    this.root.add(bar);
+    bar.position.y = -0.27;
+    shell.add(bar);
     this.cells = [];
     const n = Math.max(1, profile.pixels || 7);
-    hex7Layout(pitch).slice(0, n).forEach(([x, z]) => {
-      // Gold parabolic reflector that glows with the bulb, a glass bulb and a hot filament.
-      const cupMat = new THREE.MeshStandardMaterial({ color: 0xc8a050, roughness: 0.22, metalness: 0.9, side: THREE.DoubleSide, emissive: 0x000000 });
-      const cup = reflector(0.074, 0.055, cupMat);
+    // LED retros (RGB + warm white): an RGB SMD ring around each filament.
+    const led = profile.tungsten === false;
+    this.ring = null;
+    const ringN = 12;
+    if (led) {
+      this.ring = new THREE.InstancedMesh(new THREE.BoxGeometry(0.006, 0.002, 0.006), new THREE.MeshBasicMaterial({ color: 0xffffff }), n * ringN);
+      this.ringOff = new THREE.Color(0x5a5548);
+      shell.add(this.ring);
+    }
+    const mtx = new THREE.Matrix4();
+    layout.slice(0, n).forEach(([x, z], i) => {
+      // Deep gold parabolic reflector that glows with the bulb, a glass bulb and a hot filament.
+      const cupMat = new THREE.MeshStandardMaterial({ color: 0xc89a3c, roughness: 0.16, metalness: 1, side: THREE.DoubleSide, emissive: 0x000000 });
+      const cup = reflector(cupR, cupDepth, cupMat);
       cup.position.set(x, 0.0, z);
-      const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 14), glass());
+      const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.031, 20, 14), glass());
       bulbGlass.position.set(x, RETRO_BULB_Y, z);
+      const neck = cyl(0.012, 0.016, 0.022, retroGold(), 16);
+      neck.position.set(x, RETRO_BULB_Y - 0.035, z);
       const mat = lensMaterial();
-      const filament = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.028, 8), mat);
-      filament.rotation.z = Math.PI / 2;
+      const filament = new THREE.Mesh(retroFilament(), mat);
       filament.position.set(x, RETRO_BULB_Y, z);
-      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), mat);
+      filament.rotation.y = 0.5;
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.01, 10, 8), mat);
       glow.position.set(x, RETRO_BULB_Y, z);
       // Stay visible when a 3D model replaces the housing (models3d.applyModel).
       filament.userData.glow = true;
       glow.userData.glow = true;
+      if (this.ring) {
+        for (let j = 0; j < ringN; j++) {
+          const a = (j / ringN) * Math.PI * 2;
+          mtx.makeRotationY(-a).setPosition(x + Math.cos(a) * 0.033, -cupDepth * 0.62, z + Math.sin(a) * 0.033);
+          this.ring.setMatrixAt(i * ringN + j, mtx);
+          this.ring.setColorAt(i * ringN + j, this.ringOff);
+        }
+      }
       const beam = new Beam();
-      beam.mesh.position.set(x, 0, z);
-      this.root.add(cup, bulbGlass, filament, glow, beam.mesh);
+      beam.mesh.position.set(x * k, 0, z * k);
+      shell.add(cup, bulbGlass, neck, filament, glow);
+      this.root.add(beam.mesh);
       this.beams.push(beam);
-      this.cells.push({ mat, cupMat, beam, level: 0 });
+      this.cells.push({ mat, cupMat, beam, level: 0, ww: 0 });
     });
     const light = this.createLight(profile.beamAngle[1] + 15);
     if (light) this.root.add(light);
@@ -680,6 +747,8 @@ class RetroModel extends BaseModel {
     const gain = beamGain(s.beamAngle, g.haze) * 0.5;
     const avg = [0, 0, 0];
     let max = 0;
+    const ringN = 12;
+    const c3 = _ringColor;
     this.cells.forEach((c, i) => {
       const p = pixels[i] || pixels[pixels.length - 1];
       // Incandescent look: filaments heat up fast and cool down slowly,
@@ -692,15 +761,38 @@ class RetroModel extends BaseModel {
       }
       const lvl = c.level;
       const color = tungsten ? warmShift(p.color, lvl) : p.color;
-      setLens(c.mat, color, lvl, 9);
+      if (p.ww != null) {
+        // RGB + warm white head: warm filament and RGB ring light separately.
+        setLens(c.mat, warmShift([1, 0.72, 0.4], p.ww), p.ww, 9);
+      } else {
+        setLens(c.mat, color, lvl, 9);
+      }
+      if (this.ring) {
+        const rgb = p.rgb || [0, 0, 0];
+        const m = Math.max(rgb[0], rgb[1], rgb[2]);
+        if (m > 0.004) c3.setRGB(0.3 + rgb[0] * 6, 0.3 * (1 - m) + rgb[1] * 6, 0.3 * (1 - m) + rgb[2] * 6);
+        else c3.copy(this.ringOff);
+        for (let j = 0; j < ringN; j++) this.ring.setColorAt(i * ringN + j, c3);
+      }
       c.cupMat.emissive.setRGB(color[0] * lvl * 0.55, color[1] * lvl * 0.55, color[2] * lvl * 0.55);
       c.beam.set(color, lvl * gain, s.beamAngle);
       avg[0] += color[0] * lvl; avg[1] += color[1] * lvl; avg[2] += color[2] * lvl;
       max = Math.max(max, lvl);
     });
+    if (this.ring && this.ring.instanceColor) this.ring.instanceColor.needsUpdate = true;
     const m = Math.max(avg[0], avg[1], avg[2]) || 1;
     this.updateLight([avg[0] / m, avg[1] / m, avg[2] / m], max, s.beamAngle + 15, 45);
   }
+}
+const _ringColor = new THREE.Color();
+
+let faceMat = null;
+function retroFace() {
+  if (!faceMat) {
+    faceMat = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.45, metalness: 0.4 });
+    faceMat.userData.cached = true;
+  }
+  return faceMat;
 }
 
 let goldMat = null;
@@ -944,21 +1036,30 @@ class LaserModel extends BaseModel {
 class FogModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
-    // Hazer / fog machine (like ADJ Entour): rounded box, top handle, front fan + nozzle, LCD at the back.
-    const body = rbox(0.27, 0.22, 0.42, 0.025);
-    body.position.y = 0.12;
-    const top = handle(0.2);
-    top.rotation.y = Math.PI / 2;
-    top.position.y = 0.23;
-    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.075, 32), grille());
-    fan.position.set(0.035, 0.12, 0.211);
-    const nozzle = cyl(0.022, 0.03, 0.04, rubber(), 16);
-    nozzle.rotation.x = Math.PI / 2;
-    nozzle.position.set(-0.08, 0.12, 0.225);
-    const panel = controlPanel(0.27, fixture.address);
-    panel.rotation.y = Math.PI;
-    panel.position.set(0, 0.15, -0.211);
-    this.root.add(body, top, fan, nozzle, panel, feet(0.27, 0.42));
+    this.hazer = profile.style === 'entour';
+    if (this.hazer) {
+      // ADJ Entour Faze, real size: the haze leaves the front nozzle.
+      const ef = entourFaze(fixture.address);
+      this.root.add(ef.group);
+      this.nozzle = ef.nozzle;
+    } else {
+      // Generic fog machine: rounded box, top handle, front fan + nozzle, LCD at the back.
+      const body = rbox(0.27, 0.22, 0.42, 0.025);
+      body.position.y = 0.12;
+      const top = handle(0.2);
+      top.rotation.y = Math.PI / 2;
+      top.position.y = 0.23;
+      const fan = new THREE.Mesh(new THREE.CircleGeometry(0.075, 32), grille());
+      fan.position.set(0.035, 0.12, 0.211);
+      const nozzle = cyl(0.022, 0.03, 0.04, rubber(), 16);
+      nozzle.rotation.x = Math.PI / 2;
+      nozzle.position.set(-0.08, 0.12, 0.225);
+      const panel = controlPanel(0.27, fixture.address);
+      panel.rotation.y = Math.PI;
+      panel.position.set(0, 0.15, -0.211);
+      this.root.add(body, top, fan, nozzle, panel, feet(0.27, 0.42));
+      this.nozzle = new THREE.Vector3(-0.08, 0.12, 0.245);
+    }
     // Puffs: soft sprites that grow and fade while the machine is firing.
     this.puffs = [];
     const tex = ctx.puffTexture;
@@ -980,10 +1081,19 @@ class FogModel extends BaseModel {
       p.userData.t += dt * 0.35;
       if (p.userData.t > 1) p.userData.t -= 1;
       const t = p.userData.t;
-      p.position.set(Math.sin(t * 9 + p.id) * 0.15 * t, 0.15 + t * 0.6, 0.2 + t * 2.4);
-      const size = 0.2 + t * 2.2;
-      p.scale.set(size, size, 1);
-      p.material.opacity = this.output * 0.35 * Math.sin(Math.PI * t);
+      const n = this.nozzle;
+      if (this.hazer) {
+        // Haze: a thin jet from the nozzle that widens into a soft, faint cloud.
+        p.position.set(n.x + Math.sin(t * 7 + p.id) * 0.25 * t, n.y + t * t * 0.9, n.z + t * 2.8);
+        const size = 0.06 + t * 2.0;
+        p.scale.set(size, size * 0.8, 1);
+        p.material.opacity = this.output * 0.22 * Math.sin(Math.PI * Math.min(1, t * 1.3)) * (1 - t * 0.4);
+      } else {
+        p.position.set(n.x + 0.08 + Math.sin(t * 9 + p.id) * 0.15 * t, n.y + 0.03 + t * 0.6, n.z - 0.045 + t * 2.4);
+        const size = 0.2 + t * 2.2;
+        p.scale.set(size, size, 1);
+        p.material.opacity = this.output * 0.35 * Math.sin(Math.PI * t);
+      }
     }
   }
 }

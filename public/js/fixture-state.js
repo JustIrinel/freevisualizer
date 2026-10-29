@@ -218,10 +218,19 @@ export function computeState(profile, dmx, address, rt, dt, time, opts = {}) {
       const pDim = p.dimmer != null ? read(p.dimmer) / 255 : 1;
       let level = mix.additive ? pn.level : 1;
       if (!mix.additive && p.dimmer == null && m.dimmer == null) level = 0; // nothing drives it
-      return {
+      const out = {
         color: pn.level > 0 ? pn.color : mix.additive ? [0, 0, 0] : c.defaultColor,
         intensity: Math.max(0, Math.min(1, level * pDim * masterDim * shutter)),
       };
+      // RGB + warm white heads (LED retros): the 3D model lights the RGB ring and the
+      // warm "filament" separately.
+      if (p.colors.warmWhite != null && (p.colors.red != null || p.colors.green != null || p.colors.blue != null)) {
+        const f = pDim * masterDim * shutter;
+        const lv = (t) => (p.colors[t] != null ? (read(p.colors[t]) / 255) * f : 0);
+        out.ww = lv('warmWhite');
+        out.rgb = [lv('red'), lv('green'), lv('blue')];
+      }
+      return out;
     });
     const max = state.pixels.reduce((a, p) => Math.max(a, p.intensity), 0);
     state.intensity = max;

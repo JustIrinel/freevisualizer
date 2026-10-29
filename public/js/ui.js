@@ -6,6 +6,7 @@ import { fixtureEnd } from './project.js';
 import * as dialogs from './dialogs.js';
 import * as ssDialog from './ss-dialog.js';
 import { ROOM_STYLES } from './venue3d.js';
+import { FLOOR_FINISHES, floorFinishLabels } from './quality.js';
 import { recordDialog } from './recorder.js';
 import { tr, tp, lang, setLang } from './i18n.js';
 import { exactGroup, groupMembers } from './groups.js';
@@ -317,9 +318,18 @@ function renderRoomForm(app) {
     h('div', { class: 'grid2' },
       field(tr('Podea'), colorInput(r.floorColor, (v) => app.updateRoom({ floorColor: v }))),
       field(tr('Pereți'), colorInput(r.wallColor, (v) => app.updateRoom({ wallColor: v })))),
+    field(tr('Finisaj podea'), floorFinishSelect(r.floorFinish || 'satin', (v) => app.updateRoom({ floorFinish: v }))),
     h('label', { class: 'inline' }, checkbox(r.walls !== false, (v) => app.updateRoom({ walls: v })), tr('Pereți')),
     h('label', { class: 'inline' }, checkbox(r.grid !== false, (v) => app.updateRoom({ grid: v })), tr('Grilă pe podea')),
   );
+}
+
+/** Podea: lucioasă / satinată / mată (reflections at quality Înaltă / Clip). */
+function floorFinishSelect(value, onChange) {
+  const labels = floorFinishLabels();
+  const el = h('select', { title: tr('Cât de mult reflectă podeaua luminile (reflexii reale la calitate Înaltă și Clip)') }, FLOOR_FINISHES.map((k) => h('option', { value: k, selected: k === value }, labels[k])));
+  el.addEventListener('change', () => onChange(el.value));
+  return el;
 }
 
 function colorInput(value, onChange) {

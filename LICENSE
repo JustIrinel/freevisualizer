@@ -13,3 +13,6 @@ Third-party components keep their own licences:
 - Open Fixture Library data – MIT License (https://open-fixture-library.org)
 - @anthropic-ai/sdk – MIT License
 - Electron – MIT License
+- meshoptimizer decoder (public/vendor/three/addons/libs) – MIT License
+- "Moving Head Beam (high Poly)" 3D model by Lord Henry (public/models/panther-60.glb) –
+  CC BY 4.0, see public/models/CREDITS.md

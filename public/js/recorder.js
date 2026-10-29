@@ -162,6 +162,8 @@ export class ClipRecorder {
     vis.settings.showLabels = false;
     vis.applySettings();
     vis.setRenderSize([W, H]);
+    // Best picture while recording (shadows, reflections, AgX), back to the chosen quality after.
+    vis.setQualityOverride?.('clip');
     document.body.classList.add('recording');
     if (opts.demo) { app.demoBpm = opts.bpm; app.toggleDemo(true); }
     const camPath = opts.camera === 'cinematic' ? cinematicPath(vis, opts.duration) : null;
@@ -199,6 +201,7 @@ export class ClipRecorder {
     await done;
     // Restore everything.
     vis.camera.fov = prev.fov;
+    vis.setQualityOverride?.(null);
     vis.setRenderSize(null);
     document.body.classList.remove('recording');
     vis.settings.showLabels = prev.labels;

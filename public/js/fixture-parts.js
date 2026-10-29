@@ -337,7 +337,7 @@ export function intimidator250(address) {
     arm.position.set(x, armH / 2, 0);
     const recess = rbox(0.004, armH * 0.62, 0.07, 0.002, trim());
     recess.position.set(x + s * (armT / 2), armH * 0.46, 0);
-    const name = label('INTIMIDATOR', 0.09, 0.016, { fg: '#b9bcc2', bg: '#232427', font: 'bold 30px Arial, sans-serif', spacing: 2 });
+    const name = label('INTIMIDATOR', 0.09, 0.016, { w: 384, h: 64, fg: '#b9bcc2', bg: '#232427', font: 'bold 40px Arial, sans-serif', spacing: 3 });
     name.rotation.set(0, s * Math.PI / 2, s * Math.PI / 2);
     name.position.set(x + s * (armT / 2 + 0.0025), armH * 0.46, 0);
     const knob = cyl(0.022, 0.022, 0.008, trim(), 24);
@@ -368,7 +368,7 @@ export function intimidator250(address) {
   const lensMat = lens('fresnel');
   const lensMesh = new THREE.Mesh(new THREE.CircleGeometry(lensR, 40), lensMat);
   lensMesh.rotation.x = -Math.PI / 2;
-  lensMesh.position.y = front - 0.002;
+  lensMesh.position.y = front + 0.0008; // just in front of the nose cap
   head.add(lensMesh);
   // Vent slots on both sides and the back cover.
   for (const s of [-1, 1]) {
@@ -409,7 +409,7 @@ export function flat36Body(address) {
   pcb.position.y = thick / 2 + 0.0035;
   g.add(pcb);
   const ledMats = [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.12, metalness: 0.05, emissive: 0x000000 }));
-  const tint = [[0.35, 0.12, 0.1], [0.12, 0.3, 0.16], [0.1, 0.14, 0.35]];
+  const tint = [[0.3, 0.2, 0.18], [0.19, 0.27, 0.2], [0.18, 0.2, 0.3]]; // clear lenses, faint die colour when off
   ledMats.forEach((m, i) => m.color.setRGB(...tint[i]));
   const ledGeo = new THREE.SphereGeometry(0.0085, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
   const cupGeo = new THREE.CylinderGeometry(0.011, 0.009, 0.004, 16, 1, true);
@@ -526,7 +526,7 @@ export function entourFaze(address) {
   const tip = cyl(0.006, 0.006, 0.004, rubber(), 12);
   tip.rotation.x = Math.PI / 2;
   tip.position.set(0, fanY, front + 0.027);
-  const logo = label('ADJ  ENTOUR FAZE', 0.12, 0.016, { fg: '#c9ccd2', bg: '#1b1c1f', font: 'bold 28px Arial, sans-serif', spacing: 2 });
+  const logo = label('ADJ  ENTOUR FAZE', 0.13, 0.016, { w: 512, h: 64, fg: '#c9ccd2', bg: '#1b1c1f', font: 'bold 40px Arial, sans-serif', spacing: 3 });
   logo.position.set(0, lift + boxH * 0.86, front);
   g.add(fanRing, fan, nozzle, tip, logo);
   // Back: display + buttons, faze switch, power and DMX sockets, fluid level window on the side.
