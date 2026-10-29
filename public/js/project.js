@@ -27,6 +27,10 @@ export function emptyProject(name = tr('Proiect nou')) {
 }
 
 const v = (x, y, z) => ({ x, y, z });
+const num = (n, d = 0) => (Number.isFinite(Number(n)) ? Number(n) : d);
+/** A full {x, y, z} with numbers, whatever was saved (missing axis, string, null). */
+const vec = (o) => v(num(o && o.x), num(o && o.y), num(o && o.z));
+const clampInt = (n, lo, hi, d) => { const x = Math.round(num(n, d)); return Math.min(hi, Math.max(lo, x)); };
 
 function fixture(name, profileId, universe, address, position, rotation = v(0, 0, 0), extra = {}) {
   return { id: uid('fx'), name, profileId, universe, address, position, rotation, invertPan: false, invertTilt: false, ...extra };
@@ -149,10 +153,21 @@ export function normalizeProject(raw) {
   }
   p.settings = { ...base.settings, ...(raw && raw.settings) };
   p.profiles = Array.isArray(p.profiles) ? p.profiles : [];
-  p.fixtures = (Array.isArray(p.fixtures) ? p.fixtures : []).map((f) => ({
-    invertPan: false, invertTilt: false, position: v(0, 0, 0), rotation: v(0, 0, 0), universe: 1, address: 1, ...f, id: f.id || uid('fx'),
+  p.fixtures = (Array.isArray(p.fixtures) ? p.fixtures : []).filter((f) => f && typeof f === 'object').map((f) => ({
+    invertPan: false, invertTilt: false, ...f,
+    id: f.id || uid('fx'),
+    position: vec(f.position),
+    rotation: vec(f.rotation),
+    universe: clampInt(f.universe, 1, 32768, 1),
+    address: clampInt(f.address, 1, 512, 1),
   }));
-  p.props = (Array.isArray(p.props) ? p.props : []).map((x) => ({ position: v(0, 0, 0), rotation: v(0, 0, 0), params: {}, ...x, id: x.id || uid('pr') }));
+  p.props = (Array.isArray(p.props) ? p.props : []).filter((x) => x && typeof x === 'object' && x.type).map((x) => ({
+    ...x,
+    id: x.id || uid('pr'),
+    position: vec(x.position),
+    rotation: vec(x.rotation),
+    params: x.params && typeof x.params === 'object' ? x.params : {},
+  }));
   p.groups = (Array.isArray(p.groups) ? p.groups : []).filter((g) => g && g.id).map((g) => ({ id: g.id, name: g.name || g.id }));
   pruneGroups(p);
   p.version = PROJECT_VERSION;

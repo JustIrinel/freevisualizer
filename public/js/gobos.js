@@ -385,7 +385,7 @@ export class GoboLightManager {
   }
 
   update(renderer) {
-    const list = [...this.models].filter((m) => m.light && !m.disposed);
+    const list = [...this.models].filter((m) => m.light && !m.disposed && m.light.visible);
     for (const m of list) {
       const s = m.lastState;
       const level = s ? s.intensity : 0;

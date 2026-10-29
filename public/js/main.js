@@ -5,7 +5,7 @@ import { computeState, createRuntime } from './fixture-state.js';
 import { renderDemo } from './demo.js';
 import { BUILTIN_PROFILES, normalizeProfile, uid, cloneProfile } from './profiles.js';
 import {
-  demoProject, weddingProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName,
+  demoProject, weddingProject, emptyProject, normalizeProject, autosave, AUTOSAVE_KEY, loadAutosave, saveServerProject, downloadJson, findConflicts, nextName, nextFreeAddress,
 } from './project.js';
 import { PROP_TYPES } from './props3d.js';
 import { caseTop } from './prop-layout.js';
@@ -604,7 +604,7 @@ class App {
     const copies = [];
     const fixtureNames = this.project.fixtures.map((f) => f.name);
     const propNames = this.project.props.map((p) => p.name);
-    let nextAddr = null;
+    const nextAddr = new Map();
     const newGroups = new Map();
     for (const item of items) {
       const copy = JSON.parse(JSON.stringify(item));
@@ -626,15 +626,18 @@ class App {
       if (this.isFixture(item.id)) {
         copy.id = uid('fx');
         const ch = this.profile(item.profileId).channels.length;
-        if (!nextAddr) {
-          const last = this.project.fixtures.filter((f) => f.universe === item.universe)
-            .reduce((m, f) => Math.max(m, f.address + this.profile(f.profileId).channels.length), 1);
-          nextAddr = { universe: item.universe, address: last };
+        // Each copy stays in its own universe, after the last used address there
+        // (or in the first free gap, or the next universe when it is full).
+        let u = item.universe;
+        let addr = nextAddr.get(u) ?? this.project.fixtures.filter((f) => f.universe === u)
+          .reduce((m, f) => Math.max(m, f.address + this.profile(f.profileId).channels.length), 1);
+        if (addr + ch - 1 > 512) {
+          addr = nextFreeAddress(this.project, this.profilesById, u, ch);
+          while (addr == null) { u += 1; addr = nextFreeAddress(this.project, this.profilesById, u, ch); }
         }
-        if (nextAddr.address + ch - 1 > 512) { nextAddr = { universe: nextAddr.universe + 1, address: 1 }; }
-        copy.universe = nextAddr.universe;
-        copy.address = nextAddr.address;
-        nextAddr.address += ch;
+        copy.universe = u;
+        copy.address = addr;
+        nextAddr.set(u, addr + ch);
         copy.name = nextName(item.name, fixtureNames);
         fixtureNames.push(copy.name);
         this.project.fixtures.push(copy);

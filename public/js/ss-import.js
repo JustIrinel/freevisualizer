@@ -71,6 +71,32 @@ const NO_VISUAL = new Set([17, 20, 82, 83, 84, 88]);
 // SoundSwitch does not store the rotation ranges: common layout (0–7 stop, CW, CCW).
 const SS_ROTATION = [{ from: 0, to: 7, stop: true }, { from: 8, to: 127, rotate: 1 }, { from: 128, to: 247, rotate: -1 }, { from: 248, to: 255, stop: true }];
 const FINE = { dimmer: 'dimmerFine', pan: 'panFine', tilt: 'tiltFine' };
+
+/** Intimidator Spot LED 250 gobo wheel: open + 7 gobos (8 values each), shake 7 → 1, open, scroll CW / CCW. */
+function intimidator250Gobos() {
+  const out = [];
+  for (let g = 0; g < 8; g++) out.push({ from: g * 8, to: g * 8 + 7, gobo: g });
+  for (let g = 7; g >= 1; g--) out.push({ from: 64 + (7 - g) * 8, to: 71 + (7 - g) * 8, gobo: g, shake: true });
+  out.push({ from: 120, to: 127, gobo: 0 }, { from: 128, to: 191, gobo: 1, rotate: true }, { from: 192, to: 255, gobo: 1, rotate: true });
+  return out;
+}
+
+// SoundSwitch definitions keep no ranges for gobo / prism, and some leave channels out.
+// Fixtures of this rig whose real layout is known (manual + the values of the user's
+// SoundSwitch presets, e.g. gobos at 10, 17, 24, 34, 41, 52, 62, prism at 72 / 141 / 183).
+const KNOWN = [
+  {
+    match: /^chauvet\|intimidator spot led 250$/i,
+    ranges: { gobo: intimidator250Gobos, prism: () => [{ from: 0, to: 15, prism: 0 }, { from: 16, to: 255, prism: 3 }] },
+  },
+  {
+    // UKing 7-ch pars: ch 5 is strobe (0–10 off). SoundSwitch's definition leaves it out,
+    // so SoundSwitch sends 0 there (no strobe); other controllers may use it.
+    match: /^uking\|zq01104$/i,
+    missing: { 7: { 4: () => ({ type: 'strobe', label: 'Strobe', ranges: [{ from: 0, to: 10, mode: 'open' }, { from: 11, to: 255, mode: 'strobe', hzFrom: 1, hzTo: 20 }] }) } },
+  },
+];
+const knownOf = (def) => KNOWN.find((k) => k.match.test(`${def.manufacturer}|${def.name}`.trim())) || {};
 const COLOR_TYPES = new Set(['red', 'green', 'blue', 'white', 'amber', 'uv', 'lime', 'cyan', 'magenta', 'yellow', 'warmWhite', 'coldWhite']);
 
 function typeByName(name) {
@@ -435,6 +461,8 @@ function convertAttribute(a, def) {
   if (type === 'gobo') out.ranges = goboRanges(8);
   if (type === 'prism') out.ranges = [{ from: 0, to: 127, prism: 0 }, { from: 128, to: 255, prism: 3 }];
   if (type === 'goboRot' || type === 'prismRot') out.ranges = SS_ROTATION.map((r) => ({ ...r }));
+  const known = knownOf(def).ranges;
+  if (known && known[type]) out.ranges = known[type]();
   return out;
 }
 
@@ -456,7 +484,8 @@ export function ssProfile(def, modeIndex) {
     }
   }
   const count = Math.max(channels.length, mode.channelCount || 0);
-  for (let i = 0; i < count; i++) if (!channels[i]) channels[i] = { type: 'none', label: tr('Canal {n}', { n: i + 1 }) };
+  const missing = (knownOf(def).missing || {})[count] || {};
+  for (let i = 0; i < count; i++) if (!channels[i]) channels[i] = missing[i] ? missing[i]() : { type: 'none', label: tr('Canal {n}', { n: i + 1 }) };
 
   const has = (t) => channels.some((c) => c.type === t);
   const text = `${def.name} ${def.manufacturer}`;
@@ -468,6 +497,9 @@ export function ssProfile(def, modeIndex) {
   else if (has('fog')) kind = 'fog';
   else if (/strob/i.test(text) && !has('red')) kind = 'strobe';
   else if (/blinder/i.test(text)) kind = 'blinder';
+  // LED retro with RGB heads: its white is the warm "filament" LED, and LEDs have no tungsten lag.
+  const ledRetro = kind === 'retro' && has('red');
+  if (ledRetro) for (const c of channels) if (c.type === 'white') c.type = 'warmWhite';
   let style;
   if (kind === 'moving') style = /beam/i.test(text) ? 'beam' : /wash/i.test(text) ? 'wash' : has('gobo') ? 'spot' : (has('red') || has('cyan')) ? 'wash' : 'spot';
   const beamAngle = kind === 'moving' ? { beam: [4, 4], spot: [15, 15], wash: [20, 20] }[style]
@@ -482,6 +514,7 @@ export function ssProfile(def, modeIndex) {
     ...(style ? { style } : {}),
     pixels: pixels > 1 ? pixels : 1,
     ...(kind === 'retro' && !has('red') ? { defaultColor: '#ffb347' } : {}),
+    ...(ledRetro ? { tungsten: false } : {}),
     beamAngle,
     panRange: 540,
     tiltRange: 270,

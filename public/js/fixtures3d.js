@@ -209,7 +209,6 @@ class BaseModel {
   }
 
   createLight(angleDeg) {
-    if (!this.ctx.allocateLight()) return null;
     const light = new THREE.SpotLight(0xffffff, 0, 0, THREE.MathUtils.degToRad(Math.min(80, angleDeg / 2)), 0.45, 1.4);
     light.castShadow = false;
     light.position.set(0, 0, 0); // lights default to (0, 1, 0)
@@ -218,6 +217,7 @@ class BaseModel {
     light.add(target);
     light.target = target;
     this.light = light;
+    this.ctx.allocateLight(light);
     return light;
   }
 
@@ -258,7 +258,7 @@ class BaseModel {
   dispose() {
     this.disposed = true;
     for (const b of this.beams) b.dispose();
-    if (this.light) this.ctx.releaseLight();
+    if (this.light) this.ctx.releaseLight(this.light);
     this.root.traverse((o) => {
       if (o.isMesh && o.material && !isShared(o.material) && !o.material.isShaderMaterial && !o.material.userData?.cached) o.material.dispose?.();
       if (o.isCSS2DObject && o.element && o.element.parentNode) o.element.parentNode.removeChild(o.element);
@@ -655,7 +655,9 @@ class StrobeModel extends BaseModel {
     this.root.add(body, channel, tube, cover, parBracket(0.44, 0.0, steel()).translateY(-0.2));
     this.flash = new THREE.PointLight(0xffffff, 0, 0, 1.6);
     this.flash.position.y = 0.3;
-    if (ctx.allocateLight()) { this.root.add(this.flash); this.hasFlash = true; }
+    ctx.allocateLight(this.flash);
+    this.root.add(this.flash);
+    this.hasFlash = true;
     this.addLabel();
   }
 
@@ -667,7 +669,7 @@ class StrobeModel extends BaseModel {
 
   dispose() {
     super.dispose();
-    if (this.hasFlash) this.ctx.releaseLight();
+    if (this.hasFlash) this.ctx.releaseLight(this.flash);
   }
 }
 
@@ -691,11 +693,10 @@ class SparkModel extends BaseModel {
     this.sparks = new Particles(2500, { additive: true, hard: true });
     ctx.world.add(this.sparks.points);
     this.carry = 0;
-    if (ctx.allocateLight()) {
-      this.glow = new THREE.PointLight(0xffb060, 0, 0, 1.6);
-      this.glow.position.y = 1;
-      this.root.add(this.glow);
-    }
+    this.glow = new THREE.PointLight(0xffb060, 0, 0, 1.6);
+    this.glow.position.y = 1;
+    this.root.add(this.glow);
+    ctx.allocateLight(this.glow);
     this.addLabel();
     this.label.position.y = 0.5;
   }
@@ -731,7 +732,7 @@ class SparkModel extends BaseModel {
     super.dispose();
     this.ctx.world.remove(this.sparks.points);
     this.sparks.dispose();
-    if (this.glow) this.ctx.releaseLight();
+    if (this.glow) this.ctx.releaseLight(this.glow);
   }
 }
 

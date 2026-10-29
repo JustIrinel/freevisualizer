@@ -72,7 +72,7 @@ export class Visualizer {
     this.hoverInfo = () => null;   // (id) → { ids, locked, label } for the hover highlight
     this.lockedIds = new Set();
     this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true };
-    this.lightsUsed = 0;
+    this.lightPool = new Set();
     this.fogLevel = 0;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -150,9 +150,11 @@ export class Visualizer {
     this.ctx = {
       settings: this.settings,
       puffTexture: puffTexture(),
-      allocateLight: () => { if (this.lightsUsed >= MAX_LIGHTS) return false; this.lightsUsed++; return true; },
-      releaseLight: () => { this.lightsUsed = Math.max(0, this.lightsUsed - 1); },
-      goboLights: new GoboLightManager(MAX_GOBO_LIGHTS),
+      // Every fixture gets its light; only the MAX_LIGHTS brightest are on at any time (_updateLightPool).
+      allocateLight: (light) => { if (light) this.lightPool.add(light); return true; },
+      releaseLight: (light) => { if (light) this.lightPool.delete(light); },
+      // Each projected gobo uses a texture slot; weak GPUs have only 16 per shader.
+      goboLights: new GoboLightManager(Math.max(0, Math.min(MAX_GOBO_LIGHTS, renderer.capabilities.maxTextures - 8))),
       // World-space layer for effects that must not follow the fixture's rotation (sparks, low fog, reflections).
       world: new THREE.Group(),
       roomBox: new THREE.Box3(new THREE.Vector3(-12, 0, -10), new THREE.Vector3(12, 6, 10)),
@@ -815,6 +817,30 @@ export class Visualizer {
     h.tip.style.top = `${e.clientY - rect.top + 16}px`;
   }
 
+  /**
+   * More fixtures than lights: the brightest MAX_LIGHTS lights are on, re-chosen a few
+   * times per second. The number of lights on stays the same, so shaders don't recompile.
+   */
+  _updateLightPool(dt) {
+    this._poolTimer = (this._poolTimer || 0) - dt;
+    if (this.lightPool.size <= MAX_LIGHTS) {
+      if (this._poolCapped) { for (const l of this.lightPool) l.visible = true; this._poolCapped = false; }
+      return;
+    }
+    if (this._poolTimer > 0) return;
+    this._poolTimer = 0.15;
+    this._poolCapped = true;
+    // A light that is on gets a small bonus so the choice doesn't flicker.
+    const list = [...this.lightPool].map((l) => ({ l, k: l.intensity * (l.visible ? 1.15 : 1) }));
+    list.sort((a, b) => b.k - a.k);
+    list.forEach((e, i) => { e.l.visible = i < MAX_LIGHTS; });
+  }
+
+  /** How many fixture lights exist and how many can be on (for the settings / audit). */
+  lightBudget() {
+    return { lights: this.lightPool.size, max: MAX_LIGHTS };
+  }
+
   _objectIdOf(obj) {
     let o = obj;
     while (o && !o.userData.objectId) o = o.parent;
@@ -938,6 +964,7 @@ export class Visualizer {
     }
     if (this.selectedIds.length) this._updateSelectionHelpers();
     this._updateAxisHints();
+    this._updateLightPool(dt);
     this.ctx.goboLights.update(this.renderer);
     this.composer.render(dt);
     if (this.onAfterRender) this.onAfterRender(dt);
