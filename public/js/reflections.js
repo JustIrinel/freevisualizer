@@ -81,6 +81,9 @@ vec3 floorReflection( vec3 n, vec3 v, vec2 bump ) {
   return c * mix( 0.35, 1.0, fres );
 }`)
         .replace('#include <opaque_fragment>', `if ( uReflectOn > 0.5 && uStrength > 0.0 ) outgoingLight += floorReflection( normal, normalize( vViewPosition ), ( normal - nonPerturbedNormal ).xy ) * uStrength;
+// Soft knee: the mirror-like highlight of a spot on a glossy floor must not become a blinding bloom blob.
+float peak = max( outgoingLight.r, max( outgoingLight.g, outgoingLight.b ) );
+if ( peak > 2.0 ) outgoingLight *= ( 2.0 + ( peak - 2.0 ) / ( 1.0 + ( peak - 2.0 ) * 0.5 ) ) / peak;
 #include <opaque_fragment>`);
     };
     mat.customProgramCacheKey = () => 'floor-reflect';
@@ -94,7 +97,8 @@ vec3 floorReflection( vec3 n, vec3 v, vec2 bump ) {
   /** Render the mirrored scene (call before the main render). `hide` = objects to leave out. */
   render(renderer, scene, camera, hide = []) {
     for (const m of this.surfaces) if (!m.parent) this.surfaces.delete(m);
-    this.uniforms.uReflectOn.value = this.enabled && this.surfaces.size ? 1 : 0;
+    const active = [...this.surfaces].some((m) => m.visible && m.material?.userData.reflect?.uStrength.value > 0);
+    this.uniforms.uReflectOn.value = this.enabled && active ? 1 : 0;
     if (!this.uniforms.uReflectOn.value) return;
     const vc = this.camera;
     _reflPos.set(0, 0, 0);

@@ -4,8 +4,8 @@ import { seeded } from './prop-layout.js';
 
 // Clothing regions painted on the baked mannequins (tools/bake-guests.mjs). Each guest has
 // one colour per region; a negative roughness hides that part (alternative hair, skirt length).
-export const GUEST_REGIONS = { skin: 0, top: 1, bottom: 2, shoes: 3, shirt: 4, hair: 5, tie: 6, arms: 7, hairLong: 8, bun: 9, skirtShort: 10 };
-export const REGION_COUNT = 11;
+export const GUEST_REGIONS = { skin: 0, top: 1, bottom: 2, shoes: 3, shirt: 4, hair: 5, tie: 6, arms: 7, hairLong: 8, bun: 9, skirtShort: 10, hem: 11 };
+export const REGION_COUNT = 12;
 export const HIDDEN = -1;
 
 const SUITS = [0x15161a, 0x15161a, 0x1d2233, 0x26282e, 0x2f3238, 0x1b2438, 0x3a3d44, 0x4a4239, 0x8a8d93];
@@ -51,6 +51,7 @@ export function outfit(body, rnd, role = null) {
     const tie = role === 'groom' ? 0x0c0c0e : (shirt === 0x1a1b20 ? 0x8d8f96 : any(TIES, rnd));
     p[R.top] = [jacket ? suit : shirt, jacket ? 0.72 : 0.85];
     p[R.arms] = [jacket ? suit : shirt, jacket ? 0.72 : 0.85];
+    p[R.hem] = [suit, jacket ? 0.72 : HIDDEN]; // jacket skirt over the hips; shirts are tucked in
     p[R.bottom] = [suit, 0.74];
     p[R.shirt] = [shirt, 0.85];
     p[R.tie] = rnd() < 0.12 && role !== 'groom' ? [shirt, 0.85] : [tie, 0.5];

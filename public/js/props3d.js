@@ -43,7 +43,7 @@ function trussSection(length) {
   const size = 0.29;
   const h = size / 2;
   // Brushed aluminium (CC0 photo texture) on the chords.
-  const mat = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, roughness: 0.42, metalness: 0.9, ...pbrSet('metal', 0.3, length / PBR_TILE.metal) });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xccd2da, roughness: 0.38, metalness: 0.65, ...pbrSet('metal', 0.3, length / PBR_TILE.metal) });
   const chordGeo = new THREE.CylinderGeometry(0.024, 0.024, length, 8);
   chordGeo.rotateZ(Math.PI / 2);
   for (const [y, z] of [[h, h], [h, -h], [-h, h], [-h, -h]]) {

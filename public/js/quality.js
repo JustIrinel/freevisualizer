@@ -57,7 +57,7 @@ export function floorFinishLabels() {
   return { gloss: tr('lucioasă'), satin: tr('satinată'), matte: tr('mată') };
 }
 export function floorFinish(name, kind = 'room') {
-  if (kind === 'dance') return { strength: 0.85, blur: 0.12, roughness: 0.14 };
+  if (kind === 'dance') return { strength: 0.8, blur: 0.15, roughness: 0.24 };
   switch (name) {
     case 'gloss': return { strength: 0.7, blur: 0.18, roughness: 0.18 };
     case 'matte': return { strength: 0, blur: 1, roughness: 0.8 };

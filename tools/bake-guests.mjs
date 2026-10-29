@@ -342,7 +342,7 @@ function buildBody(gltf, female, target) {
   const hc = head.c; const hs = head.size;
   if (female) {
     geo = append(geo, skirt(geo, skeleton, dom, 0.02, 0.4, R.bottom, { rings: 12 }));
-    geo = append(geo, skirt(geo, skeleton, dom, 0.47, 0.27, R.skirtShort, { pull: 0.85 }));
+    geo = append(geo, skirt(geo, skeleton, dom, 0.5, 0.2, R.skirtShort, { pull: 0.85, hipRoom: 0.035 }));
     // Hair: a cap over the painted hair, a bun, and long hair down the back (alternatives per guest).
     geo = append(geo, blob(new THREE.Vector3(hc.x, hc.y + hs.y * 0.04, hc.z - hs.z * 0.04), new THREE.Vector3(hs.x * 0.56, hs.y * 0.52, hs.z * 0.57), R.hair, [headB], null, { t1: Math.PI * 0.5, tilt: 0.45 }));
     geo = append(geo, blob(new THREE.Vector3(hc.x, hc.y + hs.y * 0.12, hc.z - hs.z * 0.55), new THREE.Vector3(0.05, 0.05, 0.045), R.bun, [headB]));
@@ -350,7 +350,7 @@ function buildBody(gltf, female, target) {
       (y) => THREE.MathUtils.clamp((y - (hc.y - hs.y * 0.5)) / (hs.y * 0.5), 0, 1)));
   } else {
     // Jacket skirt over the hips: a suit, not a body suit.
-    geo = append(geo, skirt(geo, skeleton, dom, worldPos(skeleton, 'thigh_l').y - 0.13, 0, R.top, { top: 0.1, ease: 0.014, pull: 0.9, rings: 4, hipRoom: 0.012 }));
+    geo = append(geo, skirt(geo, skeleton, dom, worldPos(skeleton, 'thigh_l').y - 0.13, 0, R.hem, { top: 0.1, ease: 0.014, pull: 0.9, rings: 4, hipRoom: 0.012 }));
     geo = append(geo, blob(new THREE.Vector3(hc.x, hc.y + hs.y * 0.06, hc.z - hs.z * 0.05), new THREE.Vector3(hs.x * 0.54, hs.y * 0.48, hs.z * 0.56), R.hair, [headB], null, { t1: Math.PI * 0.42, tilt: 0.5 }));
   }
   void chestB;

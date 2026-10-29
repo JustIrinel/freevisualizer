@@ -332,7 +332,7 @@ function parStyle(profile) {
 }
 
 /** Emission colour of red / green / blue LED dies. */
-const LED_RGB = [[1, 0.06, 0.03], [0.1, 1, 0.18], [0.08, 0.2, 1]];
+const LED_RGB = [[1, 0.015, 0.01], [0.03, 1, 0.06], [0.02, 0.06, 1]];
 
 class ParModel extends BaseModel {
   constructor(fixture, profile, ctx) {
@@ -407,7 +407,7 @@ class ParModel extends BaseModel {
     this.lastState = s;
     if (this.ledMats) {
       // Each LED glows in its own colour, driven only by its channel.
-      const k = s.intensity * 3.2;
+      const k = s.intensity * 2.1;
       LED_RGB.forEach((tint, i) => {
         const v = s.color[i] * k;
         this.ledMats[i].emissive.setRGB(tint[0] * v, tint[1] * v, tint[2] * v);
@@ -712,6 +712,7 @@ class RetroModel extends BaseModel {
       const neck = cyl(0.012, 0.016, 0.022, retroGold(), 16);
       neck.position.set(x, RETRO_BULB_Y - 0.035, z);
       const mat = lensMaterial();
+      mat.color.setHex(0x5c4526); // tungsten-coloured wire, visible when off
       const filament = new THREE.Mesh(retroFilament(), mat);
       filament.position.set(x, RETRO_BULB_Y, z);
       filament.rotation.y = 0.5;
@@ -1063,11 +1064,12 @@ class FogModel extends BaseModel {
     // Puffs: soft sprites that grow and fade while the machine is firing.
     this.puffs = [];
     const tex = ctx.puffTexture;
-    for (let i = 0; i < 14; i++) {
+    const count = this.hazer ? 32 : 14; // a hazer's plume is a continuous, thin stream
+    for (let i = 0; i < count; i++) {
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, color: 0x9aa0aa });
       const sp = new THREE.Sprite(mat);
       sp.raycast = () => {};
-      sp.userData.t = i / 14;
+      sp.userData.t = i / count;
       this.root.add(sp);
       this.puffs.push(sp);
     }
@@ -1084,10 +1086,10 @@ class FogModel extends BaseModel {
       const n = this.nozzle;
       if (this.hazer) {
         // Haze: a thin jet from the nozzle that widens into a soft, faint cloud.
-        p.position.set(n.x + Math.sin(t * 7 + p.id) * 0.25 * t, n.y + t * t * 0.9, n.z + t * 2.8);
-        const size = 0.06 + t * 2.0;
-        p.scale.set(size, size * 0.8, 1);
-        p.material.opacity = this.output * 0.22 * Math.sin(Math.PI * Math.min(1, t * 1.3)) * (1 - t * 0.4);
+        p.position.set(n.x + Math.sin(t * 5 + p.id * 0.7) * 0.18 * t * t, n.y + t * t * 0.8, n.z + 0.02 + t * 2.6);
+        const size = 0.09 + t * 0.9 + t * t * 1.1; // overlapping puffs: one continuous plume
+        p.scale.set(size, size * 0.85, 1);
+        p.material.opacity = this.output * 0.16 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.12 + t)), 0.5) * (1 - t * 0.6);
       } else {
         p.position.set(n.x + 0.08 + Math.sin(t * 9 + p.id) * 0.15 * t, n.y + 0.03 + t * 0.6, n.z - 0.045 + t * 2.4);
         const size = 0.2 + t * 2.2;

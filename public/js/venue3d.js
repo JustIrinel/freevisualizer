@@ -27,7 +27,7 @@ function curtain(width, height, color, folds = 10, fabric = 'velvet') {
 /** A wall with plaster, wainscoting, rails and optional windows; built in local XY (facing +Z). */
 function wall(len, hgt, color, windows) {
   const g = new THREE.Group();
-  const plaster = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), roughness: 0.92 })));
+  const plaster = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.92 })));
   plaster.position.y = hgt / 2;
   g.add(plaster);
   const wh = 1.05;
@@ -182,7 +182,7 @@ export function buildVenue(r, group, ctx) {
 
 function plainWall(len, hgt, color) {
   const g = new THREE.Group();
-  const m = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), roughness: 0.95 })));
+  const m = room(new THREE.Mesh(new THREE.PlaneGeometry(len, hgt), new THREE.MeshStandardMaterial({ color, ...pbrSet('plaster', len / PBR_TILE.plaster, hgt / PBR_TILE.plaster), normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.95 })));
   m.position.y = hgt / 2;
   g.add(m);
   return g;

@@ -157,3 +157,18 @@ test('7 Vintage retro: overall size from the profile (default 475 mm), RGB ring 
   model.ring.getColorAt(12, c);
   assert.ok(c.r > 1 && c.g < 0.5, 'head 2 ring glows red');
 });
+
+test('QLC+ files of the same fixtures get the same look (beamZ Panther 60, Intimidator 250, Entour Faze)', async () => {
+  const { parseQxf, listQxfModes, qxfToProfile } = await import('../public/js/qxf-import.js');
+  const load = (n) => {
+    const root = parseQxf(fs.readFileSync(new URL(`./qxf/${n}`, import.meta.url), 'utf8'));
+    return qxfToProfile(root, listQxfModes(root).at(-1).index);
+  };
+  assert.deepEqual(load('beamZ-Panther-60-LED-Beam-RGBW.qxf').model, { type: 'builtin', file: 'panther-60.glb', height: 0.29 });
+  assert.equal(load('Chauvet-Intimidator-Spot-LED-250.qxf').style, 'intimidator');
+  const hazer = load('American-DJ-Entour-Faze.qxf');
+  assert.equal(hazer.style, 'entour');
+  // Other fixtures keep the generic look.
+  assert.equal(load('Chauvet-Intimidator-Spot-255-IRC.qxf').style, 'spot');
+  assert.equal(load('Chauvet-Intimidator-Spot-255-IRC.qxf').model, undefined);
+});

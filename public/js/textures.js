@@ -372,8 +372,9 @@ function loadInto(tex, file, base) {
   const done = () => { if (--base.pending === 0) base.clones = []; };
   new THREE.ImageLoader().load(new URL(file, TEX_URL).href, (img) => {
     tex.image = img; // the clones share the source, so they get the photo too
-    tex.needsUpdate = true;
-    for (const c of base.clones) c.needsUpdate = true;
+    // The photo is bigger than the stand-in: free the GPU copies so they are re-created at the
+    // new size (updating in place would overflow the old texture storage).
+    for (const t of [tex, ...base.clones]) { if (t.source === tex.source) { t.dispose(); t.needsUpdate = true; } }
     done();
   }, undefined, () => done()); // missing file: keep the stand-in
 }

@@ -392,8 +392,8 @@ export class Visualizer {
           mat.roughness = f.roughness;
           mat.envMapIntensity = mode === 'env' ? 2.5 * (1 - f.roughness) + 0.5 : 1;
         }
-        if (mode === 'planar' && f.strength > 0) this.reflection.attach(mesh, f);
-        else if (ud.reflect) ud.reflect.uStrength.value = 0;
+        // Always patched (highlight knee); the mirror image only on Înaltă / Clip.
+        this.reflection.attach(mesh, mode === 'planar' ? f : { strength: 0, blur: f.blur });
       }
     }
   }
@@ -512,7 +512,8 @@ export class Visualizer {
     // Glow only around real highlights (lenses, hot spots), not a veil over the whole picture.
     this.bloom.strength = s.bloom * 0.6 * (1 - h * 0.4);
     this.bloom.radius = 0.3;
-    this.bloom.threshold = 1.0 + h * 0.5;
+    // HDR threshold: lenses and very hot spots glow, ordinary light pools on the floor don't.
+    this.bloom.threshold = 2.0 + h * 0.5;
     this.bloom.enabled = s.bloom > 0.01;
     this.hemi.intensity = 0.03 + h * 0.8 + (s.workLights ? 0.45 : 0);
     this.workLight.intensity = s.workLights ? 1.5 : h * 0.25;

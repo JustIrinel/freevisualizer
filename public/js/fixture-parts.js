@@ -332,8 +332,7 @@ export function intimidator250(address) {
   panel.position.set(0, 0.006 + baseH * 0.38, D / 2 + 0.0015);
   base.add(panel);
   const logo = label('CHAUVET', 0.075, 0.014, { fg: '#d8dade', bg: '#2c2d31', font: 'bold 34px Arial, sans-serif', spacing: 4 });
-  logo.position.set(0, 0.006 + baseH * 0.62, D * 0.43 + 0.0015);
-  logo.rotation.x = -0.5;
+  logo.position.set(0, 0.006 + baseH * 0.78, D * 0.43 + 0.0015);
   base.add(logo);
   for (const s of [-1, 1]) {
     const grip = rbox(0.006, baseH * 0.3, D * 0.5, 0.003, rubber());
@@ -375,7 +374,7 @@ export function intimidator250(address) {
   // Tapered nose with the lens, a bright ring around it and the dark bezel.
   const noseH = front * 0.3;
   const lensR = 0.031;
-  const nose = cyl(lensR + 0.016, headW * 0.42, noseH, housing(), 40);
+  const nose = cyl(lensR + 0.016, headW * 0.42, noseH, trim(), 40);
   nose.position.y = front - noseH / 2;
   head.add(nose);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(lensR + 0.007, 0.004, 10, 40), alu());
@@ -449,13 +448,17 @@ export function flat36Body(address) {
     }
   }
   g.add(cups, ...meshes);
-  const cover = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.9, size * 0.9), glass());
+  // Clear front cover: mostly reflections, the LEDs stay visible.
+  const clear = cache.clearCover || (cache.clearCover = keep(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.07, depthWrite: false })));
+  const cover = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.9, size * 0.9), clear);
   cover.rotation.x = -Math.PI / 2;
   cover.position.y = thick / 2 + 0.0135;
   g.add(cover);
-  const coverRim = rbox(size * 0.94, 0.008, size * 0.94, 0.022, new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.25, metalness: 0.6, transparent: true, opacity: 0.35, depthWrite: false }));
-  coverRim.position.y = thick / 2 + 0.01;
-  g.add(coverRim);
+  for (const [w, d, x, z] of [[size * 0.94, 0.012, 0, size * 0.46], [size * 0.94, 0.012, 0, -size * 0.46], [0.012, size * 0.94, size * 0.46, 0], [0.012, size * 0.94, -size * 0.46, 0]]) {
+    const frame = rbox(w, 0.012, d, 0.004, trim());
+    frame.position.set(x, thick / 2 + 0.008, z);
+    g.add(frame);
+  }
   // Back: cooling slots, small LCD + 4 buttons, power switch and charging socket.
   const back = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.6, size * 0.34), grille());
   back.rotation.x = Math.PI / 2;
