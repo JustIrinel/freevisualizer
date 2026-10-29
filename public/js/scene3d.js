@@ -510,10 +510,11 @@ export class Visualizer {
     const h = this.houseLevel();
     // With the house lights up, only real light sources should glow, not white tablecloths.
     // Glow only around real highlights (lenses, hot spots), not a veil over the whole picture.
-    this.bloom.strength = s.bloom * 0.6 * (1 - h * 0.4);
-    this.bloom.radius = 0.3;
-    // HDR threshold: lenses and very hot spots glow, ordinary light pools on the floor don't.
-    this.bloom.threshold = 2.0 + h * 0.5;
+    // (v1.8 strength and radius: the glowing lenses stay; the floors' highlight knee in reflections.js
+    // keeps light pools on glossy floors from turning into blobs.)
+    this.bloom.strength = s.bloom * (1 - h * 0.4);
+    this.bloom.radius = 0.5;
+    this.bloom.threshold = 0.85 + h * 0.45;
     this.bloom.enabled = s.bloom > 0.01;
     this.hemi.intensity = 0.03 + h * 0.8 + (s.workLights ? 0.45 : 0);
     this.workLight.intensity = s.workLights ? 1.5 : h * 0.25;

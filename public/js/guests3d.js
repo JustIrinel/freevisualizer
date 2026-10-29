@@ -136,9 +136,11 @@ export function createAnimatedCrowd(people, dressed, guests, { lowDetail = false
     dressed.forEach((d, i) => { if (d.body === body) idx.push(i); });
     if (!idx.length) continue;
     const src = (lowDetail && guests.bodies[`${body}Lo`]) || guests.bodies[body];
-    const geo = new THREE.BufferGeometry(); // shares the body's buffers, own instanced attribute
-    for (const [k, a] of Object.entries(src.geometry.attributes)) geo.setAttribute(k, a);
-    geo.setIndex(src.geometry.index);
+    // Own attribute objects over the body's arrays (no copy in memory): each crowd has its own
+    // GPU buffers, so removing one crowd cannot free the buffers another one still draws.
+    const geo = new THREE.BufferGeometry();
+    for (const [k, a] of Object.entries(src.geometry.attributes)) geo.setAttribute(k, new THREE.BufferAttribute(a.array, a.itemSize, a.normalized));
+    geo.setIndex(new THREE.BufferAttribute(src.geometry.index.array, 1));
     geo.boundingBox = src.geometry.boundingBox;
     geo.boundingSphere = src.geometry.boundingSphere;
     const anim = new THREE.InstancedBufferAttribute(new Float32Array(idx.length * 4), 4);
