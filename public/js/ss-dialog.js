@@ -71,6 +71,7 @@ export async function venuesFromFile(file) {
     if (!v) throw new Error(tr('Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)'));
     return v;
   }
+  if (!/\.bin$/i.test(file.name)) throw new Error(tr('Alege arhiva .zip a proiectului SoundSwitch sau fișierul SoundSwitchVenues.bin din folderul .ssproj.'));
   return { name: projectName(file.webkitRelativePath || file.name), bytes: buf };
 }
 

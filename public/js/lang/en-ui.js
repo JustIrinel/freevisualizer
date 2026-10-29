@@ -206,6 +206,7 @@ export default {
   'Anulează': 'Cancel',
   'Continuă': 'Continue',
   'Arhiva nu conține un proiect SoundSwitch (SoundSwitchVenues.bin)': 'The archive does not contain a SoundSwitch project (SoundSwitchVenues.bin)',
+  'Alege arhiva .zip a proiectului SoundSwitch sau fișierul SoundSwitchVenues.bin din folderul .ssproj.': 'Choose the .zip archive of the SoundSwitch project or the SoundSwitchVenues.bin file from the .ssproj folder.',
   'Importă din SoundSwitch': 'Import from SoundSwitch',
   'FreeVisualizer citește proiectul tău SoundSwitch și pune în scenă ': 'FreeVisualizer reads your SoundSwitch project and puts on stage ',
   'aceleași fixturi, cu același mod și aceeași adresă DMX': 'the same fixtures, with the same mode and DMX address',
