@@ -407,7 +407,8 @@ class ParModel extends BaseModel {
     this.lastState = s;
     if (this.ledMats) {
       // Each LED glows in its own colour, driven only by its channel.
-      const k = s.intensity * 2.1;
+      // Bright enough (close to v1.8's lens boost of 5) for a bloom halo even on pure red / blue.
+      const k = s.intensity * 4.5;
       LED_RGB.forEach((tint, i) => {
         const v = s.color[i] * k;
         this.ledMats[i].emissive.setRGB(tint[0] * v, tint[1] * v, tint[2] * v);
@@ -951,7 +952,8 @@ class LowFogModel extends BaseModel {
     }
     // Lit by the room: neutral grey mixed with the current color of the show.
     const sc = g.showColor;
-    const lit = 0.6 + g.showLevel * 0.8;
+    // Fog only shows the light that falls on it: dimmer than a lit surface, or it veils the picture.
+    const lit = 0.4 + g.showLevel * 0.55;
     const tint = [(0.45 + sc[0] * 0.55) * lit, (0.45 + sc[1] * 0.55) * lit, (0.45 + sc[2] * 0.55) * lit];
     this.cloud.update(dt, { drag: 0.35, floor: 0.05 }, (i, t, o) => {
       o.alpha = Math.min(1, t * 8) * (1 - t) * 0.3;

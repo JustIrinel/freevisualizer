@@ -147,7 +147,7 @@ export class Particles {
       this.col[c + 1] = this.base[c + 1] * out.g;
       this.col[c + 2] = this.base[c + 2] * out.b;
       // Fewer particles (lower quality) each carry a little more, so the effect keeps its density.
-      this.col[c + 3] = this.scalable && Particles.budget < 1 ? Math.min(1, out.alpha / Math.sqrt(Math.max(0.1, Particles.budget))) : out.alpha;
+      this.col[c + 3] = this.scalable && Particles.budget < 1 ? Math.min(1, out.alpha / Math.pow(Math.max(0.1, Particles.budget), 0.3)) : out.alpha;
       this.size[i] = this.base[c + 3] * out.size;
       i++;
     }

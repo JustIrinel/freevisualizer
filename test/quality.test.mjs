@@ -92,3 +92,12 @@ test('floor finishes: glossy reflects most, matte not at all', () => {
   assert.ok(floorFinish('gloss').roughness < floorFinish('matte').roughness);
   assert.ok(floorFinish('matte', 'dance').strength > 0, 'the dance floor is always glossy');
 });
+
+test('lit surfaces get a soft highlight limit, emissive glow does not', async () => {
+  const { patchHighlightKnee } = await import('../public/js/shadows.js');
+  assert.equal(patchHighlightKnee(), true);
+  const C = THREE.ShaderChunk;
+  assert.match(C.lights_pars_begin, /vec3 fvLightKnee/);
+  assert.match(C.lights_fragment_end, /reflectedLight\.directDiffuse = fvLightKnee/);
+  assert.doesNotMatch(C.lights_fragment_end, /Emissive/);
+});

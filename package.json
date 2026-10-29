@@ -1,6 +1,6 @@
 {
   "name": "freevisualizer",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Vizualizator 3D pentru SoundSwitch (Art-Net / sACN) – adaugi fixturi și vezi show-ul live.",
   "main": "desktop/main.js",
   "author": "DJ Matei",

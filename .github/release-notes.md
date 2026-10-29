@@ -1,7 +1,25 @@
 Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 *English below.*
 
-## Ce e nou în 1.8
+## Ce e nou în 1.9
+
+- **Aparatele tale arată ca cele reale**, la dimensiunile lor:
+  - **BeamZ Panther 60**: model 3D realist (bază, braț, cap cu lentilă mare), pan/tilt pe piesele lui;
+  - **Chauvet Intimidator Spot LED 250**: display, logo, brațe cu panou, cap cu inel metalic și fante;
+  - **UKing ZQ01104**: 36 de LED-uri (12 roșii, 12 verzi, 12 albastre), fiecare se aprinde pe culoarea lui;
+  - **7 Vintage**: cupe aurii, becuri de sticlă cu filament (alb cald) și inel de LED-uri RGB pe fiecare cap; lățimea se poate seta în profil;
+  - **ADJ Entour Faze**: cutie cu suporturi și grilă, fumul iese din duză;
+  - la import (SoundSwitch, OFL, GDTF, Fixture.ID) fiecare primește automat modelul lui.
+- **Umbre reale**: oamenii, truss-ul și cabina blochează lumina; gobo-urile cad pe umeri, nu și pe podeaua din spatele lor; fasciculele din haze sunt tăiate de obiecte.
+- **Podea lucioasă**: ringul de dans și parchetul reflectă luminile (Scenă → „Finisaj podea”: lucioasă / satinată / mată).
+- **Texturi reale** (gratuite, CC0): parchet, pereți, catifea, aluminiu, mochetă, fețe de masă.
+- **Invitați animați**: bărbați la costum, femei în rochii, dansează pe ritmul show-ului, stau de vorbă când se opresc luminile; mirii în mijloc (opțional) și invitați așezați la mese.
+- **Calitate** (Setări → Imagine): **Scăzută** pentru laptopuri slabe, **Medie**, **Înaltă** (implicit) și **Clip video**, folosită automat cât înregistrezi. Poți afișa și FPS-ul în colțul imaginii.
+- Imaginea nu se mai albește la fasciculele care bat spre cameră; LED-urile și lentilele strălucesc mai frumos.
+
+Pe un laptop mai slab, dacă imaginea merge greu, pune **Setări → Imagine → Calitate: Medie** sau **Scăzută**.
+
+## Ce era nou în 1.8
 
 - **Retro-urile hexagonale (7 capete) se aprind din nou**: becurile cu filament și reflectoarele aurii se văd aprinse pe aparat, nu doar lumina de pe podea. Din 1.5 carcasa le acoperea din greșeală.
 - **Audit complet**: am verificat rigul tău din SoundSwitch canal cu canal și toate funcțiile principale. Ce am reparat:
@@ -74,14 +92,14 @@ Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din ri
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.8.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.9.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.8.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.9.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 
@@ -95,7 +113,17 @@ Descarcă **`FreeVisualizer-1.8.0-windows-setup.exe`** și rulează-l. Dacă apa
 
 A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your rig and watch the show live.
 
-### What's new in 1.8
+### What's new in 1.9
+
+- **Your fixtures look like the real ones**, at real size: BeamZ Panther 60 (realistic 3D model), Chauvet Intimidator Spot LED 250, UKing ZQ01104 (36 LEDs, each in its own colour), 7 Vintage (gold cups, filament bulbs and RGB LED rings), ADJ Entour Faze; applied automatically on import.
+- **Real shadows**: people, truss and booth block the light; gobos land on shoulders; haze beams are cut by objects.
+- **Glossy floors** with real reflections (Stage → floor finish: glossy / satin / matte).
+- **Real CC0 textures**: parquet, plaster, velvet, aluminium, carpet, linen.
+- **Animated guests**: suits and dresses, dancing on the beat, chatting when the lights stop; optional bride and groom; guests seated at tables.
+- **Quality** (Settings → Picture): Low, Medium, High (default) and Video clip (used automatically while recording); optional FPS counter.
+- No more washed-out white picture; LEDs and lenses glow better.
+
+### What was new in 1.8
 
 - **The hexagonal 7-head retro lights glow again**: the filament bulbs and gold reflectors light up on the fixture itself, not just on the floor. Since 1.5 the housing covered them by mistake.
 - **Full audit**: your SoundSwitch rig checked channel by channel and every main feature tested. Fixed:
@@ -162,10 +190,10 @@ A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your
 
 ### Install
 
-- **Mac:** download **`FreeVisualizer-1.8.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
+- **Mac:** download **`FreeVisualizer-1.9.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
   - First launch: **right-click → Open → Open**. On macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**.
   - Allow **Local Network** access when asked.
-- **Windows:** run **`FreeVisualizer-1.8.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
+- **Windows:** run **`FreeVisualizer-1.9.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
 
 ### Connect SoundSwitch
 

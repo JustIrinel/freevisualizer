@@ -17,12 +17,13 @@ import { tripodParams, tripodMount, caseTop } from './prop-layout.js';
 import { tr } from './i18n.js';
 import { GoboLightManager } from './gobos.js';
 import { qualityPreset, qualityLabels, shadowBudget, floorFinish, DEFAULT_QUALITY } from './quality.js';
-import { patchShadowChunks, ShadowAtlas, chooseCasters } from './shadows.js';
+import { patchShadowChunks, patchHighlightKnee, ShadowAtlas, chooseCasters } from './shadows.js';
 import { PlanarReflection } from './reflections.js';
 import { Particles } from './particles.js';
 
 // Shadow lookups read one atlas texture; patched before any material compiles.
 const SHADOWS_OK = patchShadowChunks();
+patchHighlightKnee();
 // Haze beams, particles, sprites and lines: drawn after the ambient occlusion so it doesn't darken them.
 const FX_LAYER = 1;
 
@@ -231,6 +232,9 @@ export class Visualizer {
     this.workLight = new THREE.DirectionalLight(0xfff4e6, 0);
     this.workLight.position.set(4, 10, 8);
     this.scene.add(this.workLight);
+    // Every light also lights the effects / fixtures pass (same lights = no shader switch).
+    this.hemi.layers.enable(FX_LAYER);
+    this.workLight.layers.enable(FX_LAYER);
     // Image-based lighting so metal, plastic and glass reflect like real materials.
     const pmrem = new THREE.PMREMGenerator(renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -252,6 +256,8 @@ export class Visualizer {
       walls: true,
     };
     this.scene.add(this.ctx.world);
+    // Effective quality for props (guests): 'clip' while recording, else the project's setting.
+    Object.defineProperty(this.ctx, 'quality', { get: () => this.qualityName(), enumerable: true });
 
     this.roomGroup = new THREE.Group();
     this.scene.add(this.roomGroup);
@@ -272,6 +278,7 @@ export class Visualizer {
     this.selHelpers = [];
 
     this.raycaster = new THREE.Raycaster();
+    this.raycaster.layers.enableAll(); // fixtures live on the effects layer (drawn after the AO)
     this._pointerDown = null;
 
     this._resize = () => this.resize();
@@ -316,6 +323,7 @@ export class Visualizer {
     this.qualityKey = name;
     const caps = this.renderer.capabilities;
     this.maxLights = q.lights;
+    this._scanTimer = 0;
     this._poolTimer = 0;
     if (this._poolCapped || this.lightPool.size > this.maxLights) this._poolCapped = true;
     beamQuality.uSteps.value = q.beamSteps;
@@ -335,7 +343,7 @@ export class Visualizer {
     this._applyFloors();
     const tone = q.toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
     this.renderer.toneMapping = tone;
-    this.renderer.toneMappingExposure = q.toneMapping === 'agx' ? 1.05 : 0.9;
+    this.renderer.toneMappingExposure = q.toneMapping === 'agx' ? 0.95 : 0.9;
     if (!prev || !this.composer || prev.msaa !== q.msaa || prev.ao !== q.ao || prev.aoScale !== q.aoScale) this._buildComposer(q);
     this._applyPixelRatio();
     this.resize();
@@ -514,7 +522,8 @@ export class Visualizer {
     // keeps light pools on glossy floors from turning into blobs.)
     this.bloom.strength = s.bloom * (1 - h * 0.4);
     this.bloom.radius = 0.5;
-    this.bloom.threshold = 0.85 + h * 0.45;
+    // Lit surfaces are soft-limited to ~2.4 (patchHighlightKnee): lenses / LEDs (emissive 4–12) glow, floors barely.
+    this.bloom.threshold = 1.3 + h * 0.45;
     this.bloom.enabled = s.bloom > 0.01;
     this.hemi.intensity = 0.03 + h * 0.8 + (s.workLights ? 0.45 : 0);
     this.workLight.intensity = s.workLights ? 1.5 : h * 0.25;
@@ -546,7 +555,9 @@ export class Visualizer {
       const fx = o.isPoints || o.isLine || o.isSprite || (m && (m.isShaderMaterial || m.blending === THREE.AdditiveBlending)) || (m && m.transparent && m.depthWrite === false);
       if (fx) { o.layers.set(FX_LAYER); o.castShadow = false; o.receiveShadow = false; return; }
       o.receiveShadow = true;
-      if (kind === 'fixture' || o.userData.floor || o.userData.reflective) { o.castShadow = false; return; }
+      // Fixtures are drawn after the AO too: glowing lenses and reflector cups must not be darkened.
+      if (kind === 'fixture') { o.layers.set(FX_LAYER); o.castShadow = false; return; }
+      if (o.userData.floor || o.userData.reflective) { o.castShadow = false; return; }
       const flat = o.geometry && o.geometry.type === 'PlaneGeometry';
       const glow = m && (m.isMeshBasicMaterial || m.transparent);
       // Room: walls, floor and ceiling don't need to cast (the lights are inside); decor does.
@@ -561,6 +572,13 @@ export class Visualizer {
     this._scanTimer = 1;
     for (const o of this.objects.values()) this._markShadows(o.model.root, o.type === 'fixture' ? 'fixture' : 'prop');
     this._markShadows(this.ctx.world, 'prop');
+    // Seated guests at the tables (low-detail bodies) cast shadows only on Clip video:
+    // every shadow light would redraw them, and they sit away from the show lights.
+    const seated = (this.quality?.shadows || 0) >= 20;
+    for (const o of this.objects.values()) {
+      if (o.type !== 'prop' || (o.data.type !== 'table' && o.data.type !== 'headtable')) continue;
+      o.model.root.traverse((m) => { if (m.userData.guests) m.castShadow = seated; });
+    }
   }
 
   // ------------------------------------------------------------ objects

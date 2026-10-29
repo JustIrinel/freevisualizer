@@ -217,3 +217,30 @@ export class ShadowAtlas {
     r.setClearColor(this._clearColor, alpha);
   }
 }
+
+let kneePatched = false;
+/**
+ * Soft limit for the light that surfaces reflect (not their own glow): a floor or a
+ * tablecloth in a strong spot stays bright but under the bloom threshold, so only
+ * lenses, LEDs and filaments glow and the picture doesn't wash out into a white veil.
+ * Values up to `knee` pass unchanged and approach `limit` smoothly above it.
+ */
+export function patchHighlightKnee(knee = 1.25, limit = 2.4) {
+  if (kneePatched) return true;
+  const C = THREE.ShaderChunk;
+  if (!C.lights_pars_begin.includes('uniform bool receiveShadow;') || !C.lights_fragment_end.includes('RE_IndirectSpecular(')) return false;
+  const k = knee.toFixed(3); const span = (limit - knee).toFixed(3);
+  C.lights_pars_begin = C.lights_pars_begin.replace('uniform bool receiveShadow;', `uniform bool receiveShadow;
+vec3 fvLightKnee( vec3 c, float k, float span ) {
+	float p = max( c.r, max( c.g, c.b ) );
+	if ( p <= k ) return c;
+	return c * ( k + span * ( 1.0 - exp( - ( p - k ) / span ) ) ) / p;
+}`);
+  C.lights_fragment_end += `
+reflectedLight.directDiffuse = fvLightKnee( reflectedLight.directDiffuse, ${k}, ${span} );
+// Mirror-like highlights of spots on glossy floors: a small glint, not a glowing blob.
+reflectedLight.directSpecular = fvLightKnee( reflectedLight.directSpecular, 0.9, 0.7 );
+`;
+  kneePatched = true;
+  return true;
+}

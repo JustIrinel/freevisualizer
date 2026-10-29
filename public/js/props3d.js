@@ -221,7 +221,7 @@ function crowdModel(root, p, seed, animated, ctx) {
   let show = null;
   if (people.length <= MAX_ANIMATED_GUESTS) loadGuests();
   animated.push((t, env) => {
-    const quality = (ctx && ctx.settings && ctx.settings.quality) || 'high';
+    const quality = (ctx && (ctx.quality || (ctx.settings && ctx.settings.quality))) || 'high';
     const asset = quality !== 'low' && people.length <= MAX_ANIMATED_GUESTS ? guestsReady() : null;
     // Medie: the low-detail bodies; Înaltă / Clip: the detailed ones.
     const lowDetail = quality === 'medium';
@@ -248,7 +248,7 @@ function seatedGuests(root, p, id, animated, ctx) {
   let live = null;
   loadGuests();
   animated.push((t) => {
-    const quality = (ctx && ctx.settings && ctx.settings.quality) || 'high';
+    const quality = (ctx && (ctx.quality || (ctx.settings && ctx.settings.quality))) || 'high';
     const asset = quality !== 'low' ? guestsReady() : null;
     if (asset && !live) { live = createAnimatedCrowd(people, dressed, asset, { lowDetail: true }); root.add(live.group); }
     if (!live) return;
