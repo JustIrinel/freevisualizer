@@ -4,14 +4,19 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { Particles } from './particles.js';
 import { tr } from './i18n.js';
 import { pbrSet, PBR_TILE } from './textures.js';
-import { seeded, crowdLayout, PERSON_HEIGHT, tripodParams, TRIPOD_BAR_R } from './prop-layout.js';
+import { seeded, crowdLayout, PERSON_HEIGHT, tripodParams, TRIPOD_BAR_R, totemParams, speakerStandParams } from './prop-layout.js';
 import { dressCrowd, showState, MAX_ANIMATED_GUESTS, seatLayout, dressSeated, chairCount, idSeed, CHAIR_OFFSET } from './guest-layout.js';
 import { loadGuests, guestsReady, createAnimatedCrowd } from './guests3d.js';
+import { djFigure, DJ_BEHIND } from './dj3d.js';
 
 export const PROP_TYPES = {
   truss: { label: tr('Truss (orizontal)'), params: { length: 6 } },
   column: { label: tr('Stâlp truss (vertical)'), params: { length: 3.5 } },
-  booth: { label: tr('Cabină DJ'), params: { width: 2, height: 1.1, depth: 0.7 } },
+  booth: {
+    label: tr('Cabină DJ'),
+    params: { width: 2, height: 1.1, depth: 0.7, dj: 1, djLook: 1 },
+    choices: { dj: [[0, tr('Fără')], [1, tr('DJ în spate')]], djLook: [[1, tr('Bărbat')], [2, tr('Femeie')]] },
+  },
   speaker: { label: tr('Boxă'), params: { width: 0.5, height: 1.0, depth: 0.45 } },
   sub: { label: 'Subwoofer', params: { width: 0.7, height: 0.6, depth: 0.7 } },
   platform: { label: tr('Podium / scenă'), params: { width: 4, height: 0.4, depth: 2 } },
@@ -23,6 +28,18 @@ export const PROP_TYPES = {
   mirrorball: { label: tr('Glob disco'), params: { diameter: 0.5, drop: 0.8, rpm: 2 } },
   case: { label: tr('Case (flight case)'), params: { width: 1.2, height: 0.75, depth: 0.6, wheels: 1 }, choices: { wheels: [[0, tr('Fără roți')], [1, tr('Cu roți')]] } },
   tripod: { label: tr('Stativ trepied'), params: { height: 2.5, bar: 1.2, legs: 1.2 }, limits: { height: [1, 4], bar: [0, 3], legs: [0.5, 2.5] } },
+  speakerstand: {
+    label: tr('Stativ boxă'),
+    params: { height: 1.8, speaker: 1, size: 12 },
+    limits: { height: [1, 2.4] },
+    choices: { speaker: [[0, tr('Fără boxă')], [1, tr('Cu boxă')]], size: [[10, '10"'], [12, '12"'], [15, '15"']] },
+  },
+  totem: {
+    label: tr('Totem lumini'),
+    params: { height: 2, plate: 0.5, cover: 1 },
+    limits: { height: [1, 3.5], plate: [0.3, 0.8] },
+    choices: { cover: [[0, tr('Fără husă')], [1, tr('Husă albă')], [2, tr('Husă neagră')]] },
+  },
   crowd: {
     label: tr('Public (invitați)'),
     params: { width: 8, depth: 6, count: 45, density: 2, size: 1, activity: 1, couple: 0 },
@@ -453,6 +470,101 @@ function tripodStand(params) {
   return g;
 }
 
+// ------------------------------------------------------------------ speaker stand
+// Pole stand: three folding legs, a Ø35 mm telescopic pole and the speaker sitting
+// on it (top-hat socket). `height` is the top of the pole = bottom of the speaker.
+function speakerStand(params) {
+  const { height: H, speaker, box } = speakerStandParams(params);
+  const g = new THREE.Group();
+  const tube = new THREE.MeshStandardMaterial({ color: 0x1a1b1e, roughness: 0.4, metalness: 0.6 });
+  const plastic = new THREE.MeshStandardMaterial({ color: 0x0d0d0f, roughness: 0.65, metalness: 0.05 });
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const rod = (a, b, r, mat, seg = 10) => { const m = new THREE.Mesh(limb(a, b, r, r, seg), mat); g.add(m); return m; };
+  const hub = Math.min(0.62, H * 0.42);
+  const lower = Math.max(0.12, hub * 0.3);
+  const R = 0.5;
+  rod(V(0, lower - 0.05, 0), V(0, H * 0.62, 0), 0.0175, tube, 14);
+  rod(V(0, H * 0.58, 0), V(0, H, 0), 0.0145, tube, 14);
+  for (const [y, r] of [[hub, 0.033], [lower, 0.028], [H * 0.6, 0.026]]) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.06, 14), plastic);
+    c.position.y = y;
+    g.add(c);
+  }
+  const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 6), plastic);
+  knob.rotation.z = Math.PI / 2;
+  knob.position.set(0.045, H * 0.6, 0);
+  g.add(knob);
+  for (let k = 0; k < 3; k++) {
+    const a = Math.PI / 2 + (k * Math.PI * 2) / 3; // one leg towards the audience
+    const c = Math.cos(a); const s = Math.sin(a);
+    const foot = V(c * R, 0.02, s * R);
+    rod(V(c * 0.035, hub, s * 0.035), foot, 0.012, tube, 8);
+    rod(V(c * 0.03, lower, s * 0.03), V(c * 0.035, hub, s * 0.035).lerp(foot, 0.45), 0.007, tube, 6);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.03, 10), plastic);
+    pad.position.set(c * R, 0.015, s * R);
+    g.add(pad);
+  }
+  if (speaker) {
+    const sp = standSpeaker(box.width, box.height, box.depth);
+    sp.position.y = H;
+    g.add(sp);
+  }
+  return g;
+}
+
+/** Active PA speaker for a pole: slightly tapered cabinet, metal grille, top handle. */
+function standSpeaker(w, h, d) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.55, metalness: 0.05 });
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(0.03, w * 0.08)), shell);
+  cab.position.y = h / 2;
+  g.add(cab);
+  const grille = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.86, h * 0.9), new THREE.MeshStandardMaterial({ color: 0x2a2b2f, roughness: 0.45, metalness: 0.7, ...pbrSet('metal', 0.4, 1) }));
+  grille.position.set(0, h / 2, d / 2 + 0.003);
+  g.add(grille);
+  const logo = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.28, h * 0.035), new THREE.MeshStandardMaterial({ color: 0xbfc4ca, roughness: 0.3, metalness: 0.9 }));
+  logo.position.set(0, h * 0.08, d / 2 + 0.005);
+  g.add(logo);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(w * 0.4, 0.025, 0.05), shell);
+  handle.position.y = h + 0.012;
+  g.add(handle);
+  const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 14), shell);
+  socket.position.y = 0.02;
+  g.add(socket);
+  return g;
+}
+
+// ------------------------------------------------------------------ light totem
+// Square truss column between a heavy base plate and a top plate for the fixtures,
+// optionally dressed in a stretch-lycra cover (white takes the colour of the lights).
+function lightTotem(params) {
+  const { height: H, plate, cover } = totemParams(params);
+  const g = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.45, metalness: 0.6 });
+  const base = new THREE.Mesh(new RoundedBoxGeometry(plate, 0.012, plate, 2, 0.004), steel);
+  base.position.y = 0.006;
+  const top = new THREE.Mesh(new RoundedBoxGeometry(plate, 0.012, plate, 2, 0.004), steel);
+  top.position.y = H - 0.006;
+  g.add(base, top);
+  if (cover) {
+    const white = cover === 1;
+    const mat = new THREE.MeshStandardMaterial({
+      color: white ? 0xf4f4f6 : 0x0f0f11, roughness: white ? 0.75 : 0.9, metalness: 0,
+      ...pbrSet('linen', plate / 0.5, H / 0.5), normalScale: new THREE.Vector2(0.3, 0.3),
+    });
+    const sock = new THREE.Mesh(new THREE.BoxGeometry(plate - 0.015, H - 0.03, plate - 0.015), mat);
+    sock.position.y = H / 2;
+    g.add(sock);
+  } else {
+    const t = trussSection(H - 0.024);
+    t.rotation.z = Math.PI / 2;
+    t.scale.set(1, 0.76, 0.76); // 22 cm square truss
+    t.position.y = H / 2;
+    g.add(t);
+  }
+  return g;
+}
+
 export function createPropModel(prop, ctx) {
   const p = { ...(PROP_TYPES[prop.type] || {}).params, ...(prop.params || {}) };
   const root = new THREE.Group();
@@ -503,6 +615,8 @@ export function createPropModel(prop, ctx) {
       screen.rotation.x = -0.25;
       screen.material.side = THREE.DoubleSide;
       root.add(stand, laptopBase, screen);
+      // The DJ behind the desk, hands on the controller (animated on the show's BPM).
+      if (Number(p.dj) > 0) extra = djFigure(root, { x: 0, z: -(p.depth / 2 + DJ_BEHIND), heading: 0, look: Number(p.djLook) || 1, desk: p.height }, animated, ctx);
       break;
     }
     case 'speaker': case 'sub': root.add(speakerFront(p.width, p.height, p.depth)); break;
@@ -578,6 +692,8 @@ export function createPropModel(prop, ctx) {
     case 'crowd': extra = crowdModel(root, p, prop.seed || 7, animated, ctx); break;
     case 'case': root.add(roadCase(p)); break;
     case 'tripod': root.add(tripodStand(p)); break;
+    case 'speakerstand': root.add(speakerStand(p)); break;
+    case 'totem': root.add(lightTotem(p)); break;
     case 'headtable': {
       const cloth = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9, ...pbrSet('linen', p.width / PBR_TILE.linen, 0.76 / PBR_TILE.linen) });
       const top = new THREE.Mesh(new THREE.BoxGeometry(p.width, 0.76, p.depth), cloth);

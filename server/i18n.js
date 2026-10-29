@@ -20,6 +20,8 @@ const EN = {
   'Cerere respinsă de Claude: {err}': 'Request rejected by Claude: {err}',
   'Nu mă pot conecta la Claude. Verifică internetul.': "Can't connect to Claude. Check your internet connection.",
   'Eroare Claude ({status}): {err}': 'Claude error ({status}): {err}',
+  'Poza trebuie să fie JPEG, PNG sau WebP.': 'The photo must be a JPEG, PNG or WebP.',
+  'Poza e prea mare (maxim 5 MB).': 'The photo is too large (5 MB at most).',
 };
 
 function langOf(req) {

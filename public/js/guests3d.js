@@ -235,6 +235,13 @@ export function createAnimatedCrowd(people, dressed, guests, { lowDetail = false
         for (const part of parts) place(part, time, dancing);
       }
     },
+    /** Switch one person (index into `people`) to another clip, e.g. the DJ's routine. */
+    setClip(i, name) {
+      const d = dressed[i];
+      if (!d || (d.clip === name && d.rest === name)) return;
+      d.clip = name; d.rest = name;
+      for (const part of parts) if (part.idx.includes(i)) part.state = null;
+    },
     dispose() {
       for (const p of parts) {
         p.mesh.geometry.dispose();

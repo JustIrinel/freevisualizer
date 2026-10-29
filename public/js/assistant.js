@@ -1,15 +1,34 @@
 // "✨ Asistent": chat with Claude, who edits the open project through tools
-// (search fixtures, read the rig, add / move / remove fixtures).
+// (search fixtures, read the scene, add / move / remove fixtures and scene objects,
+// change the room) and can recreate a setup from a photo of a real venue.
 // The server holds the API key; this page runs the tools and the loop.
 import { h, toast } from './dom.js';
 import { KINDS, uid } from './profiles.js';
 import { nextFreeAddress } from './project.js';
 import { oflToProfile, listModes } from './ofl-import.js';
 import { aimRotation } from './aim.js';
-import { tripodParams, tripodMount, caseMount, spreadOver } from './prop-layout.js';
+import { tripodParams, tripodMount, caseMount, spreadOver, totemParams, totemMount } from './prop-layout.js';
 import { tr, tp } from './i18n.js';
 
-const MAX_STEPS = 14;
+const MAX_STEPS = 20;
+const MAX_PHOTOS = 3;
+const PHOTO_EDGE = 1568; // longest side sent to Claude (bigger photos are scaled down by the API anyway)
+
+/** Photo file → downscaled JPEG for an Anthropic image block ({ media_type, data, url }). */
+export async function shrinkPhoto(file) {
+  const bitmap = await createImageBitmap(file);
+  const k = Math.min(1, PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * k));
+  canvas.height = Math.max(1, Math.round(bitmap.height * k));
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const url = canvas.toDataURL('image/jpeg', 0.85);
+  return { media_type: 'image/jpeg', data: url.slice(url.indexOf(',') + 1), url };
+}
 const r2 = (v) => Math.round(v * 100) / 100;
 
 // ------------------------------------------------------------------ tools
@@ -55,6 +74,152 @@ function getRig(app) {
     }),
     objects: p.props.map((o) => ({ id: o.id, type: o.type, name: o.name, position: o.position, rotation: o.rotation, params: o.params })),
   };
+}
+
+/** get_scene: get_rig + the room in full, props with lock / group, and the profiles the user owns. */
+function getScene(app) {
+  const p = app.project;
+  const rig = getRig(app);
+  const used = new Set(p.fixtures.map((f) => f.profileId));
+  const profiles = [...p.profiles, ...app.builtins.filter((b) => used.has(b.id))].map((pr) => ({
+    profile_id: pr.id, name: `${pr.manufacturer ? `${pr.manufacturer} ` : ''}${pr.name}`, kind: pr.kind, channels: pr.channels.length,
+    in_use: p.fixtures.filter((f) => f.profileId === pr.id).length,
+  }));
+  return {
+    room: {
+      style: p.room.style || 'dark', width: p.room.width, depth: p.room.depth, height: p.room.height,
+      floor_finish: p.room.floorFinish || 'satin', floor_color: p.room.floorColor, wall_color: p.room.wallColor,
+      walls: p.room.walls !== false, back_wall_z: -p.room.depth / 2,
+    },
+    props: p.props.map((o) => ({
+      id: o.id, type: o.type, name: o.name, position: o.position, rotation: o.rotation, params: o.params,
+      ...(o.locked ? { locked: true } : {}), ...(o.groupId ? { group: o.groupId } : {}),
+    })),
+    fixtures: rig.fixtures,
+    profiles,
+  };
+}
+
+// ------------------------------------------------------------------ scene tools
+const ROOM_STYLES = ['banquet', 'plain', 'dark'];
+const FINISHES = ['gloss', 'satin', 'matte'];
+const HEX = /^#[0-9a-f]{6}$/i;
+const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+function setRoom(app, input) {
+  const patch = {};
+  if (input.style != null) {
+    if (!ROOM_STYLES.includes(input.style)) throw new Error(`style must be one of ${ROOM_STYLES.join(', ')}`);
+    patch.style = input.style;
+  }
+  if (isNum(input.width)) patch.width = r2(clampNum(input.width, 4, 200));
+  if (isNum(input.depth)) patch.depth = r2(clampNum(input.depth, 4, 200));
+  if (isNum(input.height)) patch.height = r2(clampNum(input.height, 2, 40));
+  if (input.floor_finish != null) {
+    if (!FINISHES.includes(input.floor_finish)) throw new Error(`floor_finish must be one of ${FINISHES.join(', ')}`);
+    patch.floorFinish = input.floor_finish;
+  }
+  if (input.floor_color != null && HEX.test(input.floor_color)) patch.floorColor = input.floor_color;
+  if (input.wall_color != null && HEX.test(input.wall_color)) patch.wallColor = input.wall_color;
+  if (!Object.keys(patch).length) throw new Error('Nothing to change: give style, width, depth, height, floor_finish, floor_color or wall_color.');
+  app.updateRoom(patch);
+  return { room: getScene(app).room };
+}
+
+async function propTypes(app) {
+  return app.propTypes || (await import('./props3d.js')).PROP_TYPES;
+}
+
+const vec3 = (v, fallback) => (v && isNum(v.x) && isNum(v.y) && isNum(v.z) ? { x: r2(v.x), y: r2(v.y), z: r2(v.z) } : fallback);
+
+/** Only the parameters this prop type has, as numbers, within its limits. */
+function cleanParams(def, params, ignored) {
+  const out = {};
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v == null) continue;
+    if (!(k in (def.params || {})) || !isNum(Number(v))) { ignored.push(k); continue; }
+    let n = Number(v);
+    const lim = def.limits && def.limits[k];
+    if (lim) n = clampNum(n, lim[0], lim[1]);
+    const choices = def.choices && def.choices[k];
+    if (choices && !choices.some(([c]) => Number(c) === n)) { ignored.push(k); continue; }
+    out[k] = r2(n);
+  }
+  return out;
+}
+
+async function addProps(app, input) {
+  const types = await propTypes(app);
+  const list = input.props || [];
+  if (!list.length) throw new Error('props is empty.');
+  const unknown = list.filter((x) => !types[x.type]).map((x) => x.type);
+  if (unknown.length) throw new Error(`Unknown prop type(s): ${unknown.join(', ')}. Known: ${Object.keys(types).join(', ')}.`);
+  app.checkpoint();
+  const added = [];
+  const ignored = [];
+  for (const x of list) {
+    const def = types[x.type];
+    const prop = {
+      id: uid('pr'), type: x.type, name: (x.name && String(x.name).trim()) || def.label,
+      position: vec3(x.position, { x: 0, y: 0, z: 0 }),
+      rotation: vec3(x.rotation, { x: 0, y: 0, z: 0 }),
+      params: { ...def.params, ...cleanParams(def, x.params, ignored) },
+    };
+    prop.position.y = Math.max(0, prop.position.y);
+    app.project.props.push(prop);
+    app.vis.addProp(prop);
+    added.push({ id: prop.id, type: prop.type, name: prop.name, position: prop.position });
+  }
+  app.saveSoon();
+  return { added, ...(ignored.length ? { ignored_params: [...new Set(ignored)] } : {}) };
+}
+
+function findProp(app, ref) {
+  return app.project.props.find((o) => o.id === ref) || app.project.props.find((o) => o.name === ref) || null;
+}
+
+async function updateProps(app, input) {
+  const types = await propTypes(app);
+  const done = []; const locked = []; const missing = []; const ignored = [];
+  for (const x of input.props || []) {
+    const prop = findProp(app, x.id);
+    if (!prop) { missing.push(x.id); continue; }
+    if (prop.locked) { locked.push(prop.id); continue; }
+    const def = types[prop.type] || { params: prop.params || {} };
+    const patch = {};
+    const pos = vec3(x.position, null);
+    if (pos) patch.position = { ...pos, y: Math.max(0, pos.y) };
+    const rot = vec3(x.rotation, null);
+    if (rot) patch.rotation = rot;
+    if (x.name && String(x.name).trim()) patch.name = String(x.name).trim();
+    const params = cleanParams(def, x.params, ignored);
+    if (Object.keys(params).length) patch.params = { ...prop.params, ...params };
+    if (!Object.keys(patch).length) continue;
+    app.updateItems([prop.id], () => patch, { rebuild: !!patch.params });
+    done.push(prop.id);
+  }
+  if (!done.length && !locked.length) throw new Error(missing.length ? `Props not found: ${missing.join(', ')}. Use the ids from get_scene.` : 'Nothing to change.');
+  return {
+    updated: done.length,
+    ...(locked.length ? { locked_not_changed: locked } : {}),
+    ...(missing.length ? { not_found: missing } : {}),
+    ...(ignored.length ? { ignored_params: [...new Set(ignored)] } : {}),
+  };
+}
+
+function removeProps(app, input) {
+  const ids = []; const missing = [];
+  for (const ref of input.ids || []) {
+    const prop = findProp(app, ref);
+    if (prop) ids.push(prop.id); else missing.push(ref);
+  }
+  if (!ids.length) throw new Error(`Props not found: ${missing.join(', ')}. Use the ids from get_scene (remove_fixtures deletes fixtures).`);
+  const locked = ids.filter((id) => app.isLocked(id));
+  const free = ids.filter((id) => !app.isLocked(id));
+  if (!free.length) throw new Error('These objects are locked by the user (🔒). Ask the user to unlock them first.');
+  app.removeItems(free);
+  return { removed: free.length, ...(locked.length ? { locked_not_removed: locked } : {}), ...(missing.length ? { not_found: missing } : {}) };
 }
 
 /** Profile from a project/builtin id or an OFL key (+ mode by name or channel count). */
@@ -114,14 +279,21 @@ export function placementFor(app, n, placement) {
       const half = ((t.params?.length || 6) / 2) * 0.85;
       return line(t.position.x, half).map((x) => ({ position: v(x, t.position.y - 0.17, t.position.z), rotation: { x: 180, y: 0, z: 0 } }));
     }
-    case 'stand': case 'case': {
-      // Spread over the tripods / cases (or only the one named in truss_id), left to right.
-      const type = surface === 'stand' ? 'tripod' : 'case';
+    case 'stand': case 'case': case 'totem': {
+      // Spread over the tripods / cases / totems (or only the one named in truss_id), left to right.
+      const type = surface === 'stand' ? 'tripod' : surface;
       let targets = app.project.props.filter((o) => o.type === type);
       if (placement.truss_id) targets = targets.filter((o) => o.id === placement.truss_id || o.name === placement.truss_id);
-      if (!targets.length) throw new Error(surface === 'stand' ? tr('Nu există stative trepied în scenă. Adaugă unul sau folosește alt surface.') : tr('Nu există caseuri în scenă. Adaugă unul sau folosește alt surface.'));
-      const lengthOf = (o) => (surface === 'stand' ? tripodParams(o.params).bar : Math.max(0, (o.params?.width || 1.2) - 0.3));
-      return spreadOver(targets, n, lengthOf).map(({ target, offset }) => (surface === 'stand' ? tripodMount(target, offset) : caseMount(target, offset)));
+      if (!targets.length) {
+        throw new Error(surface === 'stand' ? tr('Nu există stative trepied în scenă. Adaugă unul sau folosește alt surface.')
+          : surface === 'totem' ? tr('Nu există totemuri în scenă. Adaugă unul (add_props, type totem) sau folosește alt surface.')
+            : tr('Nu există caseuri în scenă. Adaugă unul sau folosește alt surface.'));
+      }
+      const lengthOf = (o) => (surface === 'stand' ? tripodParams(o.params).bar
+        : surface === 'totem' ? Math.max(0, totemParams(o.params).plate - 0.24)
+          : Math.max(0, (o.params?.width || 1.2) - 0.3));
+      const mount = surface === 'stand' ? tripodMount : surface === 'totem' ? totemMount : caseMount;
+      return spreadOver(targets, n, lengthOf).map(({ target, offset }) => mount(target, offset));
     }
     case 'floor_back_wall':
       return line(0, Math.min(w / 2 - 1.5, Math.max(2, n * 1.2))).map((x) => ({ position: v(x, 0, -d / 2 + 0.4), rotation: { x: -12, y: 0, z: 0 } }));
@@ -187,7 +359,7 @@ function idsFrom(app, list) {
     const f = app.project.fixtures.find((it) => it.id === x) || app.project.fixtures.find((it) => it.name === x);
     if (f) out.push(f.id); else missing.push(x);
   }
-  if (!out.length) throw new Error(tr('Nu găsesc fixturile: {list}. Folosește id-urile din get_rig.', { list: missing.join(', ') }));
+  if (!out.length) throw new Error(tr('Nu găsesc fixturile: {list}. Folosește id-urile din get_scene.', { list: missing.join(', ') }));
   return { ids: out, missing };
 }
 
@@ -226,7 +398,12 @@ function removeFixtures(app, input) {
 export async function runTool(app, name, input) {
   switch (name) {
     case 'search_fixtures': return searchFixtures(app, input);
-    case 'get_rig': return getRig(app);
+    case 'get_scene': return getScene(app);
+    case 'get_rig': return getScene(app); // older conversations
+    case 'set_room': return setRoom(app, input);
+    case 'add_props': return addProps(app, input);
+    case 'update_props': return updateProps(app, input);
+    case 'remove_props': return removeProps(app, input);
     case 'add_fixtures': return addFixtures(app, input);
     case 'move_fixtures': return moveFixtures(app, input);
     case 'remove_fixtures': return removeFixtures(app, input);
@@ -237,6 +414,11 @@ export async function runTool(app, name, input) {
 const TOOL_LABEL = {
   search_fixtures: (i) => tr('🔎 Caut „{q}”', { q: i.query }),
   get_rig: () => tr('📋 Citesc rigul'),
+  get_scene: () => tr('📋 Citesc scena'),
+  set_room: () => tr('🏛 Schimb sala'),
+  add_props: (i) => tp((i.props || []).length, '🧱 Adaug un element de scenă', '🧱 Adaug {n} elemente de scenă'),
+  update_props: (i) => tp((i.props || []).length, '↔ Modific un element de scenă', '↔ Modific {n} elemente de scenă'),
+  remove_props: (i) => tp((i.ids || []).length, '🗑 Șterg un element de scenă', '🗑 Șterg {n} elemente de scenă'),
   add_fixtures: (i) => tp(i.quantity || 1, '➕ Adaug o fixtură', '➕ Adaug {n} fixturi'),
   move_fixtures: (i) => tp((i.fixture_ids || []).length, '↔ Mut / rotesc o fixtură', '↔ Mut / rotesc {n} fixturi'),
   remove_fixtures: (i) => tp((i.fixture_ids || []).length, '🗑 Șterg o fixtură', '🗑 Șterg {n} fixturi'),
@@ -267,6 +449,35 @@ export class AssistantPanel {
     this.input = this.el.querySelector('textarea');
     this.sendBtn = this.el.querySelector('.as-send');
     this.setup = this.el.querySelector('.as-setup');
+    this.photos = []; // photos waiting to be sent: { media_type, data, url }
+    this.tray = this.el.querySelector('.as-photos');
+    this.fileInput = this.el.querySelector('.as-file');
+    this.el.querySelector('.as-photo').addEventListener('click', () => this.fileInput.click());
+    this.fileInput.addEventListener('change', () => { this.addPhotos(this.fileInput.files); this.fileInput.value = ''; });
+    this.input.addEventListener('paste', (e) => {
+      const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+      if (files.length) { e.preventDefault(); this.addPhotos(files); }
+    });
+    // Drag & drop on the panel: handled here and kept away from the window's
+    // fixture / project drop (its overlay hides while the pointer is over the panel).
+    const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    for (const type of ['dragenter', 'dragover', 'dragleave']) {
+      this.el.addEventListener(type, (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (type !== 'dragleave') this.el.classList.add('as-drop');
+        else if (!this.el.contains(e.relatedTarget)) this.el.classList.remove('as-drop');
+      });
+    }
+    this.el.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.el.classList.remove('as-drop');
+      document.getElementById('dropOverlay')?.classList.add('hidden');
+      this.addPhotos(e.dataTransfer.files);
+    });
     this.el.querySelector('.as-close').addEventListener('click', () => this.toggle(false));
     this.el.querySelector('.as-new').addEventListener('click', () => this.reset());
     this.sendBtn.addEventListener('click', () => this.send());
@@ -310,18 +521,49 @@ export class AssistantPanel {
     this.setup.classList.toggle('hidden', !!this.status.configured);
     if (!this.log.children.length && this.status.configured) {
       this.bubble('assistant', tr('Salut! Spune-mi ce să adaug sau să mut. De exemplu: „Pune 4 BeamZ Panther 60 pe truss, de la adresa 200” sau „Adaugă 6 par-uri RGBW pe peretele din spate”.'));
+      this.note(tr('📷 Poți trimite și o poză dintr-o sală: refac setup-ul (boxe, lumini, cabină, ring) cu aparatele tale.'));
     }
   }
 
   reset() {
     this.messages = [];
     this.log.innerHTML = '';
+    this.photos = [];
+    this.renderPhotos();
     this.refreshStatus();
   }
 
-  bubble(role, text) {
+  /** Add photos to the next message (downscaled JPEG, at most MAX_PHOTOS). */
+  async addPhotos(fileList) {
+    const files = [...(fileList || [])];
+    const images = files.filter((f) => /^image\//.test(f.type));
+    if (files.length && !images.length) { toast(tr('Aici merg doar poze (JPEG, PNG, WebP…).'), 'error'); return; }
+    for (const file of images) {
+      if (this.photos.length >= MAX_PHOTOS) { toast(tp(MAX_PHOTOS, 'Maxim o poză pe mesaj.', 'Maxim {n} poze pe mesaj.'), 'error'); break; }
+      try {
+        this.photos.push(await shrinkPhoto(file));
+      } catch (_) {
+        toast(tr('Nu pot citi poza {name}.', { name: file.name }), 'error');
+      }
+    }
+    this.renderPhotos();
+    this.input.focus();
+  }
+
+  renderPhotos() {
+    this.tray.innerHTML = '';
+    this.tray.classList.toggle('hidden', !this.photos.length);
+    this.photos.forEach((ph, i) => {
+      this.tray.append(h('span', { class: 'as-thumb' },
+        h('img', { src: ph.url, alt: '' }),
+        h('button', { class: 'icon', title: tr('Scoate poza'), onclick: () => { this.photos.splice(i, 1); this.renderPhotos(); } }, '✕')));
+    });
+  }
+
+  bubble(role, text, photos = []) {
     const b = h('div', { class: `as-msg as-${role}` });
-    b.textContent = text;
+    if (photos.length) b.append(h('div', { class: 'as-msg-photos' }, photos.map((ph) => h('img', { src: ph.url, alt: '' }))));
+    if (text) b.append(document.createTextNode(text));
     this.log.append(b);
     this.log.scrollTop = this.log.scrollHeight;
     return b;
@@ -335,13 +577,22 @@ export class AssistantPanel {
   }
 
   async send() {
-    const text = this.input.value.trim();
-    if (!text || this.busy) return;
+    const photos = this.photos;
+    let text = this.input.value.trim();
+    if ((!text && !photos.length) || this.busy) return;
     if (!this.status?.configured) { toast(tr('Adaugă întâi cheia API Claude.'), 'error'); return; }
     this.input.value = '';
-    this.bubble('user', text);
+    this.photos = [];
+    this.renderPhotos();
+    this.bubble('user', text, photos);
+    if (!text) text = tr('Recreează în proiect setup-ul din poză (sală, ring, cabină, boxe, lumini), cu aparatele mele.');
     const startLen = this.messages.length;
-    this.messages.push({ role: 'user', content: text });
+    this.messages.push({
+      role: 'user',
+      content: photos.length
+        ? [...photos.map((ph) => ({ type: 'image', source: { type: 'base64', media_type: ph.media_type, data: ph.data } })), { type: 'text', text }]
+        : text,
+    });
     this.busy = true;
     this.sendBtn.disabled = true;
     const thinking = this.note(tr('Claude lucrează…'), 'as-wait');
@@ -387,6 +638,8 @@ export class AssistantPanel {
     } finally {
       thinking.remove();
       this.app.endBatch();
+      // Room and prop changes show in the side panels too.
+      import('./ui.js').then((ui) => ui.renderAll(this.app)).catch(() => {});
       this.busy = false;
       this.sendBtn.disabled = false;
     }

@@ -83,7 +83,7 @@ test('assistant: tool schemas are strict-compatible', () => {
     if (schema.type === 'array') check(schema.items, where);
     for (const bad of ['minimum', 'maximum', 'minLength', 'maxLength']) assert.ok(!(bad in schema), `${where} uses ${bad}`);
   };
-  for (const t of TOOLS) check(t.input_schema, t.name);
+  for (const t of TOOLS) if (t.strict !== false) check(t.input_schema, t.name);
   const cleaned = cleanContent([{ type: 'thinking' }, { type: 'tool_use' }, { type: 'fallback' }, { type: 'text', text: 'ok' }, { type: 'tool_use' }]);
   assert.deepStrictEqual(cleaned.map((b) => b.type), ['fallback', 'text', 'tool_use']);
 });

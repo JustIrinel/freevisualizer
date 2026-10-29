@@ -12,12 +12,14 @@
 // - samples every clip at 30 fps into bone matrices (3×4, half floats). A few dances are
 //   layered on the real "Dance_Loop" (arms up, fist pump, slow sway) so the dance floor
 //   does not move like one person. Beat-locked clips last a whole number of beats at 120 BPM.
+// - the DJ behind the booth (djMix / djHand / djHeadphone): a still pose, hands on the
+//   controller by two-bone IK, nodding on the beat (see DJ_* in guest-layout.js).
 // Runtime: public/js/guests3d.js (one InstancedMesh per body, skinning in the vertex shader).
 import fs from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { GUEST_REGIONS as R } from '../public/js/guest-layout.js';
+import { GUEST_REGIONS as R, DJ_HEIGHT, DJ_DESK, DJ_REACH } from '../public/js/guest-layout.js';
 
 const [ual1Path, ual2Path, femPath, outPath = 'public/models/guests.bin'] = process.argv.slice(2);
 if (!femPath) { console.error('usage: bake-guests.mjs UAL1_Standard.glb UAL2_Standard.glb Mannequin_F.glb [out.bin]'); process.exit(1); }
@@ -405,6 +407,11 @@ const CLIPS = [
   { name: 'phone', src: 'Idle_TalkingPhone_Loop' },
   { name: 'sit', src: 'Sitting_Idle_Loop' },
   { name: 'sitTalk', src: 'Sitting_Talking_Loop' },
+  // The DJ behind the booth: a still standing pose with everything else procedural (hands on
+  // the controller by IK, nodding on the beat). 20 fps is plenty for these slow moves.
+  { name: 'djMix', src: 'Idle_Loop', beats: 2, hit: 0, layer: 'djMix', still: true, fps: 20 },
+  { name: 'djHand', src: 'Idle_Loop', beats: 4, hit: 0, layer: 'djHand', still: true, fps: 20 },
+  { name: 'djHeadphone', src: 'Idle_Loop', beats: 4, hit: 0, layer: 'djHeadphone', still: true, fps: 20 },
 ];
 
 function bakeClips(body, female, usedBones) {
@@ -414,6 +421,8 @@ function bakeClips(body, female, usedBones) {
   skeleton.pose();
   root.updateMatrixWorld(true);
   const chestBind = get('spine_03').getWorldQuaternion(new THREE.Quaternion());
+  // DJ clips are posed in metres of the app: the runtime scales this body to DJ_HEIGHT.
+  const djScale = (female ? DJ_HEIGHT.female : DJ_HEIGHT.male) / new THREE.Box3().setFromBufferAttribute(body.geometry.attributes.position).max.y * 1.02;
   const rows = [];
   const meta = [];
   const mixer = new THREE.AnimationMixer(root);
@@ -424,7 +433,7 @@ function bakeClips(body, female, usedBones) {
       clip = new THREE.AnimationClip(clip.name, clip.duration, clip.tracks.filter((t) => !t.name.endsWith('.position') || /^(root|pelvis)\./.test(t.name)));
     }
     const seconds = def.beats ? def.beats * 0.5 : clip.duration;
-    const frames = Math.max(2, Math.round(seconds * FPS));
+    const frames = Math.max(2, Math.round(seconds * (def.fps || FPS)));
     const action = mixer.clipAction(clip);
     action.play();
     const start = rows.length;
@@ -432,9 +441,10 @@ function bakeClips(body, female, usedBones) {
       const u = f / frames; // loop fraction
       const srcLen = def.srcLen || clip.duration;
       skeleton.pose();
-      mixer.setTime((def.beats ? u * Math.min(srcLen, clip.duration) : u * clip.duration) % clip.duration);
+      mixer.setTime(def.still ? 0 : (def.beats ? u * Math.min(srcLen, clip.duration) : u * clip.duration) % clip.duration);
       root.updateMatrixWorld(true);
-      if (def.layer) applyLayer(def.layer, u, def.beats, get, chestBind);
+      if (def.layer && def.layer.startsWith('dj')) djLayer(def.layer, u, def.beats, get, djScale);
+      else if (def.layer) applyLayer(def.layer, u, def.beats, get, chestBind);
       root.updateMatrixWorld(true);
       const row = new Float32Array(usedBones.length * 12);
       const m = new THREE.Matrix4();
@@ -481,6 +491,91 @@ function applyLayer(layer, u, beats, get, chestBind) {
     const ch = get('spine_03').getWorldQuaternion(new THREE.Quaternion());
     poseArm(get, 'l', [-62 + 5 * rock, 40], [-8, 115], ch, chestBind);
     poseArm(get, 'r', [-62 - 5 * rock, 40], [-8, 115], ch, chestBind);
+  }
+}
+
+// ------------------------------------------------------------------ the DJ
+/** Rotate a bone by `angle` around a world axis (parents may be rotated). */
+function turnWorld(bone, axis, angle) {
+  const world = bone.getWorldQuaternion(new THREE.Quaternion());
+  const target = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(world);
+  const parentQ = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+  bone.quaternion.copy(parentQ.invert().multiply(target));
+  bone.updateWorldMatrix(false, true);
+}
+
+/** Two-bone IK: wrist of `side` to `target` (world), elbow bending towards `pole`. */
+function reach(get, side, target, pole) {
+  const up = get(`upperarm_${side}`); const lo = get(`lowerarm_${side}`); const hand = get(`hand_${side}`);
+  up.updateWorldMatrix(true, true);
+  const A = up.getWorldPosition(new THREE.Vector3());
+  const B = lo.getWorldPosition(new THREE.Vector3());
+  const C = hand.getWorldPosition(new THREE.Vector3());
+  const l1 = A.distanceTo(B); const l2 = B.distanceTo(C);
+  const toT = target.clone().sub(A);
+  const d = THREE.MathUtils.clamp(toT.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
+  const dir = toT.normalize();
+  const cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
+  const perp = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+  const elbow = A.clone().addScaledVector(dir, l1 * cosA).addScaledVector(perp, l1 * Math.sqrt(Math.max(0, 1 - cosA * cosA)));
+  const wrist = A.clone().addScaledVector(dir, d);
+  pointBone(up, lo, elbow.clone().sub(A));
+  pointBone(lo, hand, wrist.sub(elbow));
+}
+
+const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const X = new THREE.Vector3(1, 0, 0);
+const Z = new THREE.Vector3(0, 0, 1);
+
+/**
+ * DJ poses (the figure faces +z, its left hand is +x). Positions are in app metres and
+ * divided by `scale` (the runtime scale of this body), so the wrists land on a controller
+ * on a DJ_DESK-high booth, DJ_REACH in front of the DJ, whatever the body.
+ */
+function djLayer(layer, u, beats, get, scale) {
+  const beat = u * beats;
+  const ph = beat % 1;
+  const nod = 0.5 + 0.5 * Math.cos(ph * Math.PI * 2); // 1 on the beat
+  const V = (x, y, z) => new THREE.Vector3(x / scale, y / scale, z / scale);
+  // Lean over the decks, knees give a little on the beat, head nods.
+  const pelvis = get('pelvis');
+  pelvis.position.y -= (0.012 * nod) / scale;
+  pelvis.updateWorldMatrix(true, true);
+  turnWorld(get('spine_01'), X, 0.1);
+  turnWorld(get('spine_02'), X, 0.05 + 0.03 * nod);
+  turnWorld(get('neck_01'), X, 0.14 + 0.12 * nod);
+  // Wrist height and distance for hands resting on the controller.
+  const wy = DJ_DESK + 0.15; const wz = DJ_REACH;
+  // Left hand on the left jog wheel (slow circles), right hand on the mixer / right jog.
+  const a = beat * Math.PI;
+  const left = V(0.2 + 0.025 * Math.cos(a), wy + 0.01 * nod, wz + 0.02 * Math.sin(a));
+  let right = V(-0.07 - 0.06 * Math.sin(beat * Math.PI * 0.5) ** 2, wy + 0.012 * (1 - nod), wz - 0.02);
+  const poleDesk = (sgn) => new THREE.Vector3(sgn * 0.7, -0.6, -0.4);
+  let poleR = poleDesk(-1);
+  let handDirR = new THREE.Vector3(0, -0.25, 1);
+  if (layer === 'djHand') {
+    // Right hand up (beats 0–0.8), pumping on beats 1–3, back on the decks by beat 4.
+    const w = smooth(0, 0.8, beat) * (1 - smooth(3.2, 3.95, beat));
+    const pump = beat > 0.8 && beat < 3.2 ? Math.pow(1 - ph, 3) : 0;
+    const up = V(-0.24, 2.02 + 0.07 * pump, 0.22 + 0.04 * pump);
+    right = right.lerp(up, w);
+    poleR = poleR.lerp(new THREE.Vector3(-0.9, -0.1, -0.3), w);
+    handDirR = handDirR.lerp(new THREE.Vector3(0, 1, 0.15), w);
+  } else if (layer === 'djHeadphone') {
+    // Right hand to the right ear (holding a headphone cup), head tilted into it.
+    const w = smooth(0, 0.8, beat) * (1 - smooth(3.2, 3.95, beat));
+    turnWorld(get('Head'), Z, 0.16 * w);
+    const head = get('Head').getWorldPosition(new THREE.Vector3());
+    const ear = head.clone().add(V(-0.12, 0.01, 0.01));
+    right = right.lerp(ear, w);
+    poleR = poleR.lerp(new THREE.Vector3(-0.55, -0.75, 0.45), w);
+    handDirR = handDirR.lerp(new THREE.Vector3(0.35, 1, -0.05), w);
+  }
+  reach(get, 'l', left, poleDesk(1));
+  reach(get, 'r', right, poleR);
+  // Fingers forward over the controller (or up for the raised hand).
+  for (const [side, dir] of [['l', new THREE.Vector3(0, -0.25, 1)], ['r', handDirR]]) {
+    pointBone(get(`hand_${side}`), get(`middle_01_${side}`), dir);
   }
 }
 

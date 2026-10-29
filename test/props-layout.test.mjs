@@ -88,3 +88,28 @@ test('assistant placement: "stand" spreads over the tripods, "case" goes on the 
   const onCase = placementFor(app, 2, { surface: 'case', truss_id: null, position: null, spacing: null });
   assert.deepStrictEqual(onCase.map((s) => s.position), [{ x: 0.75, y: 0.75, z: 2 }, { x: 1.25, y: 0.75, z: 2 }]);
 });
+
+test('light totem: fixtures stand on the top plate, cover / sizes clamped', async () => {
+  const { totemParams, totemTop, totemMount } = await import('../public/js/prop-layout.js');
+  const totem = { position: { x: 2, y: 0, z: -3 }, rotation: { x: 0, y: 90, z: 0 }, params: { height: 2.2, plate: 0.5 } };
+  assert.equal(totemTop(totem), 2.2);
+  const at = totemMount(totem, 0);
+  assert.deepEqual(at.position, { x: 2, y: 2.2, z: -3 });
+  assert.equal(at.rotation.y, 90);
+  // Offsets stay on the plate (±0.13 m for a 0.5 m plate).
+  const edge = totemMount({ ...totem, rotation: { x: 0, y: 0, z: 0 } }, 5);
+  assert.equal(edge.position.x, 2.13);
+  assert.deepEqual(totemParams({ height: 9, plate: 0.1, cover: 7 }), { height: 3.5, plate: 0.3, cover: 2 });
+  assert.equal(totemParams({ cover: 0 }).cover, 0);
+});
+
+test('speaker stand: pole height, speaker on / off and size', async () => {
+  const { speakerStandParams, speakerStandTop } = await import('../public/js/prop-layout.js');
+  const p = speakerStandParams({ height: 1.9, speaker: 1, size: 15 });
+  assert.equal(p.height, 1.9);
+  assert.equal(p.box.height, 0.72);
+  assert.equal(speakerStandParams({ size: 99 }).size, 12);
+  assert.equal(speakerStandParams({ speaker: 0 }).speaker, 0);
+  assert.equal(speakerStandParams({ height: 5 }).height, 2.4);
+  assert.equal(speakerStandTop({ position: { x: 0, y: 0.2, z: 0 }, params: { height: 1.5 } }), 1.7);
+});

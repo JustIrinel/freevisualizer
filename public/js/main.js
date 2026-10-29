@@ -65,6 +65,12 @@ class App {
     };
     this.vis.onTransformEnd = () => this.saveSoon();
     this.vis.onGizmoInfo = (text) => ui.showGizmoInfo(text);
+    // Alt + wheel: one undo step per burst of wheel turns.
+    this.vis.onWheelRotate = (deg) => {
+      const now = performance.now();
+      this.rotateSelection('y', deg, { record: now - (this._wheelAt || 0) > 700, quiet: true });
+      this._wheelAt = now;
+    };
 
     // Presentation window (desktop app, 2nd monitor): no panels, follows the main window's project.
     this.presentMode = new URLSearchParams(location.search).has('present');
@@ -730,8 +736,15 @@ class App {
       const fine = e.shiftKey;
       const step = fine ? 0.05 : 0.25;
       const turn = fine ? 5 : 15;
-      switch (e.key) {
+      switch (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD' || e.code === 'KeyQ' || e.code === 'KeyE' ? e.code : e.key) {
         case 'Delete': case 'Backspace': this.removeItems(this.selectedIds); break;
+        // W A S D move like the arrows (by key position, so it works on any keyboard layout); Q / E turn.
+        case 'KeyW': this.nudge('away', step); break;
+        case 'KeyA': this.nudge('left', step); break;
+        case 'KeyS': this.nudge('toward', step); break;
+        case 'KeyD': this.nudge('right', step); break;
+        case 'KeyQ': this.rotateSelection('y', -turn); break;
+        case 'KeyE': this.rotateSelection('y', turn); break;
         case 'Escape': this.vis.cancelAim(); this.vis.cancelPlacement(); this.select(null); break;
         // Arrows move relative to the view: left/right on screen, up = away from you.
         case 'ArrowLeft': this.nudge('left', step); break;
@@ -742,12 +755,12 @@ class App {
         case 'PageDown': this.nudge('down', step); break;
         case '[': case '{': this.rotateSelection('y', -turn); break;
         case ']': case '}': this.rotateSelection('y', turn); break;
-        case 'w': case 'W': ui.setTransformMode(this, 'translate'); break;
-        case 'e': case 'E': ui.setTransformMode(this, 'rotate'); break;
+        case 'm': case 'M': ui.setTransformMode(this, 'translate'); break;
+        case 'r': case 'R': ui.setTransformMode(this, 'rotate'); break;
         case 'f': case 'F': this.vis.focusSelected(); break;
         case 'k': case 'K': this.setLocked(this.selectedIds); break;
         case 'h': case 'H': document.body.classList.toggle('ui-hidden'); this.vis.resize(); break;
-        case 'd': case 'D': this.toggleDemo(); break;
+        case 'p': case 'P': this.toggleDemo(); break;
         case 'l': case 'L': ui.toggleLabels(this); break;
         case '1': this.vis.setView('perspective'); break;
         case '2': this.vis.setView('front'); break;

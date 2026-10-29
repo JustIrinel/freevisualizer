@@ -189,3 +189,52 @@ export function idSeed(id = '') {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return h % 100000;
 }
+
+// ------------------------------------------------------------------ the DJ behind the booth
+// The DJ clips (tools/bake-guests.mjs) put the hands on a controller at this booth height,
+// `DJ_REACH` m in front of the DJ, for a DJ of DJ_HEIGHT. dj3d.js stands the figure
+// DJ_BEHIND m behind the booth's back face.
+export const DJ_HEIGHT = { male: 1.78, female: 1.68 };
+export const DJ_DESK = 1.1; // booth height the clips are made for (wrist ≈ DJ_DESK + 0.15)
+export const DJ_REACH = 0.5; // wrist distance in front of the DJ's origin
+export const DJ_BEHIND = 0.2; // DJ origin behind the booth's back face
+export const DJ_CLIPS = ['djMix', 'djHand', 'djHeadphone'];
+const DJ_SEGMENT = 4; // beats per scheduling slot (djHand / djHeadphone last 4 beats)
+
+/** Outfit for the DJ: look 1 = man (black shirt, dark jeans), 2 = woman (black top and long skirt). */
+export function dressDj(look = 1, seed = 1) {
+  const rnd = seeded(seed * 71 + 29);
+  const body = Number(look) === 2 ? 'female' : 'male';
+  const R = GUEST_REGIONS;
+  const p = outfit(body, rnd);
+  const black = [0x121215, 0.86];
+  p[R.top] = black; p[R.arms] = black; p[R.shirt] = black; p[R.shoes] = [0x0b0b0d, 0.4];
+  if (body === 'male') {
+    p[R.tie] = black;
+    p[R.hem] = [black[0], HIDDEN];
+    p[R.bottom] = [0x1f2633, 0.9];
+  } else {
+    p[R.bottom] = [0x121215, 0.8];
+    p[R.skirtShort] = [0x121215, HIDDEN];
+  }
+  return { body, role: 'dj', clip: 'djMix', rest: 'djMix', beatOffset: 0, phase: 0, palette: p, height: DJ_HEIGHT[body], turn: 0 };
+}
+
+/**
+ * Which DJ clip plays at `beat`: 4-beat slots, mostly mixing with a hand in the air or a
+ * hand on the headphones now and then (never twice in a row). Deterministic per seed.
+ */
+export function djClipAt(beat, seed = 1) {
+  const slot = Math.floor(Math.max(0, beat) / DJ_SEGMENT);
+  const pickAt = (k) => {
+    if (k < 1) return 'djMix';
+    // Integer hash of (seed, slot): an LCG's first output would repeat in a pattern.
+    let h = Math.imul(k + 0x9e3779b9, 0x85ebca6b) ^ Math.imul(seed, 0xc2b2ae35);
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    const r = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    return r < 0.14 ? 'djHand' : r < 0.26 ? 'djHeadphone' : 'djMix';
+  };
+  const c = pickAt(slot);
+  return c !== 'djMix' && pickAt(slot - 1) !== 'djMix' ? 'djMix' : c;
+}

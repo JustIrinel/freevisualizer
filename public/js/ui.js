@@ -451,7 +451,9 @@ function movePad(app) {
       h('span'), h('span'),
       h('span'), holdButton(tr('⇣ Spre tine'), tr('Mai aproape de tine (în față)'), mv('toward'), app), h('span'),
       h('span'), holdButton(tr('▼ Jos'), tr('Mai jos'), mv('down'), app)),
+    h('div', { class: 'muted small pad-hint' }, tr('Cu mouse-ul: trage de obiectul selectat (Shift = o singură direcție, Alt = sus / jos). Tastele W A S D mută.')),
     h('div', { class: 'pad-title' }, tr('Rotește'), stepRow('turn', [1, 5, 15, 45, 90], (v) => `${v}°`)),
+    h('div', { class: 'muted small pad-hint' }, tr('Cu mouse-ul: Alt + rotița (Shift = pas fin). Tastele Q / E rotesc.')),
     h('div', { class: 'pad-rot' },
       holdButton(tr('⟲ Rotire stânga'), tr('Rotește în jurul axei verticale'), rt('y', -1), app), holdButton(tr('Rotire dreapta ⟳'), tr('Rotește în jurul axei verticale'), rt('y', 1), app),
       holdButton(tr('⤒ Înclină înainte'), tr('Apleacă fixtura înainte'), rt('x', 1), app), holdButton(tr('Înclină înapoi ⤓'), tr('Apleacă fixtura înapoi'), rt('x', -1), app),
@@ -542,7 +544,7 @@ function renderGroupInspector(app, el) {
     movePad(app),
     h('details', { class: 'exact' }, h('summary', {}, tr('Poziția grupului (mijlocul)')), centre),
     commonParams ? h('h4', {}, tr('Dimensiuni (pentru toate)')) : null,
-    commonParams ? h('div', { class: 'grid2' }, Object.entries(commonParams).map(([k, v]) => field(PARAM_LABELS()[k] || k, paramInput(sameType, k, v, (nv) => app.updateItems(props.map((p) => p.id), (p) => ({ params: { ...p.params, [k]: nv } }), { rebuild: true }))))) : null,
+    commonParams ? h('div', { class: 'grid2' }, Object.entries(commonParams).map(([k, v]) => field(PARAM_LABELS(sameType)[k] || k, paramInput(sameType, k, v, (nv) => app.updateItems(props.map((p) => p.id), (p) => ({ params: { ...p.params, [k]: nv } }), { rebuild: true }))))) : null,
     moving.length ? h('div', { class: 'grid2' },
       h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertPan), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertPan: v }))), tr('Inversează pan')),
       h('label', { class: 'inline' }, checkbox(moving.every((f) => f.invertTilt), (v) => app.updateItems(moving.map((f) => f.id), () => ({ invertTilt: v }))), tr('Inversează tilt'))) : null,
@@ -585,7 +587,7 @@ export function renderInspector(app) {
     el.append(h('div', { class: 'inspector-empty' },
       h('p', {}, tr('Selectează o fixtură sau un element (click în scenă sau în listă).')),
       h('p', { class: 'small' }, tr('Mai multe deodată: Ctrl/Cmd+click, sau Shift + trage cu mouse-ul un dreptunghi în scenă. Ctrl/Cmd+A selectează toate fixturile.')),
-      h('p', { class: 'small' }, tr('Scurtături: W mută · E rotește · săgeți / PageUp / PageDown mută · [ ] rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · D demo · 1–6 camere')),
+      h('p', { class: 'small' }, tr('Scurtături: W A S D / săgeți mută · PageUp / PageDown sus / jos · Q E rotesc · Alt + rotiță rotește · M mută · R rotește · F focus · Ctrl+D duplică · Del șterge · H ascunde panourile · P demo · 1–6 camere')),
       h('p', { class: 'small' }, tr('Grupuri și blocare: Ctrl+G grupează · Ctrl+Shift+G desface · Alt+click sau dublu-click = un singur obiect din grup · K blochează / deblochează'))));
     return;
   }
@@ -674,11 +676,17 @@ function renderFaders(app, f, p) {
     box);
 }
 
-function PARAM_LABELS() {
+function PARAM_LABELS(type) {
+  const byType = {
+    speakerstand: { height: tr('Înălțime stâlp (m)'), size: tr('Mărime boxă'), speaker: tr('Boxă') },
+    totem: { height: tr('Înălțime (m)'), plate: tr('Placă (m)'), cover: tr('Husă') },
+    booth: { dj: tr('DJ'), djLook: tr('Look DJ') },
+  };
   return {
     length: tr('Lungime (m)'), width: tr('Lățime (m)'), height: tr('Înălțime (m)'), depth: tr('Adâncime (m)'), count: tr('Număr persoane'), diameter: tr('Diametru (m)'), drop: tr('Tijă (m)'), rpm: tr('Rotații / minut'),
     wheels: tr('Roți'), bar: tr('Bară T (m, 0 = fără)'), legs: tr('Deschidere picioare (m)'), density: tr('Densitate'), size: tr('Mărime oameni'),
     activity: tr('Ce fac invitații'), couple: tr('Mirii'), guests: tr('Invitați la masă'),
+    ...(byType[type] || {}),
   };
 }
 
@@ -699,7 +707,7 @@ function renderPropInspector(app, el, pr) {
   const def = PROP_TYPES[pr.type] || { params: {} };
   const nameInput = h('input', { value: pr.name });
   nameInput.addEventListener('change', () => app.updateItem(pr.id, { name: nameInput.value.trim() || pr.name }));
-  const labels = PARAM_LABELS();
+  const labels = PARAM_LABELS(pr.type);
   const params = { ...def.params, ...pr.params };
   el.append(
     h('h3', {}, def.label || pr.type),

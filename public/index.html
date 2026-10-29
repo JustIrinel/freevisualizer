@@ -104,8 +104,8 @@
           <button data-view="crowd" title="Din public (6)">Public</button>
         </div>
         <div class="group">
-          <button data-tmode="translate" class="active" title="Mută (W): trage de săgețile colorate. Săgețile de la tastatură mută cu 25 cm (Shift = 5 cm), PageUp/PageDown = sus/jos">✥ Mută</button>
-          <button data-tmode="rotate" title="Rotește (E): trage de cercuri. [ și ] rotesc cu 15° (Shift = 5°). Sau folosește sliderele / 🎯 Țintește din dreapta">⟳ Rotește</button>
+          <button data-tmode="translate" class="active" title="Mută (M): trage direct de obiect (alunecă pe podea, sub mouse) sau de săgețile colorate. W A S D / săgețile mută cu 25 cm (Shift = 5 cm), PageUp/PageDown = sus/jos">✥ Mută</button>
+          <button data-tmode="rotate" title="Rotește (R): trage de cercuri sau Alt + rotița mouse-ului peste obiect. Q / E sau [ ] rotesc cu 15° (Shift = 5°). Sau folosește sliderele / 🎯 Țintește din dreapta">⟳ Rotește</button>
           <button id="snapBtn" class="active" title="Pași fixi: 10 cm la mutare, 5° la rotire">Snap</button>
           <button id="labelsBtn" title="Arată numele și adresele">Etichete</button>
         </div>
@@ -136,7 +136,10 @@
       <button class="as-close icon" title="Închide">✕</button></header>
     <div class="as-setup hidden"></div>
     <div class="as-log"></div>
-    <footer><textarea rows="2" placeholder="Ex: Pune 4 BeamZ Panther 60 pe truss, de la adresa 200"></textarea>
+    <div class="as-photos hidden"></div>
+    <footer><button class="as-photo icon" title="Adaugă poză dintr-o sală: Claude reface setup-ul (poți și lipi cu Ctrl+V sau trage poza aici)">📷</button>
+      <input class="as-file hidden" type="file" accept="image/*" multiple>
+      <textarea rows="2" placeholder="Ex: Pune 4 BeamZ Panther 60 pe truss, de la adresa 200 – sau trimite o poză din sală"></textarea>
       <button class="as-send primary">Trimite</button></footer>
   </section>
   <div id="dropOverlay" class="drop-overlay hidden"><div>Eliberează aici proiectul SoundSwitch (.ssproj) sau fișierul de fixtură (.d4, .gdtf, .zip, .json)</div></div>

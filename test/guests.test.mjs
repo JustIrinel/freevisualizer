@@ -156,6 +156,61 @@ test('baked guests: both bodies with every clip, valid skinning and regions', ()
   assert.ok(!has('male', R.skirtShort) && has('male', R.shirt) && has('male', R.tie));
 });
 
+test('DJ: dark outfit per look, mostly mixing with a hand up or on the headphones', () => {
+  const man = G.dressDj(1, 4); const woman = G.dressDj(2, 4);
+  assert.equal(man.body, 'male'); assert.equal(woman.body, 'female');
+  assert.equal(man.height, G.DJ_HEIGHT.male); assert.equal(woman.height, G.DJ_HEIGHT.female);
+  for (const d of [man, woman]) {
+    assert.equal(d.palette.length, G.REGION_COUNT);
+    assert.equal(d.palette[R.top][0], 0x121215, 'black top');
+    assert.ok(visible(d.palette, R.skin) && visible(d.palette, R.shoes));
+    assert.equal(d.turn, 0, 'stays facing the audience');
+  }
+  assert.equal(visible(woman.palette, R.bottom) + visible(woman.palette, R.skirtShort), 1, 'one skirt length');
+  assert.ok(visible(man.palette, R.bottom) && !visible(man.palette, R.hem), 'jeans, no jacket');
+  // Schedule: 4-beat slots, deterministic, starts mixing, specials never back to back.
+  const slots = Array.from({ length: 400 }, (_, k) => G.djClipAt(k * 4 + 1.5, 7));
+  assert.deepEqual(slots, Array.from({ length: 400 }, (_, k) => G.djClipAt(k * 4 + 0.2, 7)), 'same clip for the whole slot');
+  assert.equal(slots[0], 'djMix');
+  assert.ok(slots.every((c) => G.DJ_CLIPS.includes(c)));
+  const mix = slots.filter((c) => c === 'djMix').length / slots.length;
+  assert.ok(mix > 0.6 && mix < 0.9, `mostly mixing (${mix})`);
+  assert.ok(slots.includes('djHand') && slots.includes('djHeadphone'));
+  for (let k = 1; k < slots.length; k++) assert.ok(slots[k] === 'djMix' || slots[k - 1] === 'djMix', `slot ${k}`);
+  assert.notDeepEqual(slots, Array.from({ length: 400 }, (_, k) => G.djClipAt(k * 4 + 1, 8)), 'seed changes the routine');
+});
+
+test('DJ: baked clips on both bodies, beat-locked, loop back onto the mixing pose', () => {
+  const buf = fs.readFileSync(new URL('../public/models/guests.bin', import.meta.url));
+  const asset = parseGuests(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  for (const name of ['male', 'female']) {
+    const { clips, bones } = asset.bodies[name];
+    for (const c of G.DJ_CLIPS) {
+      assert.ok(clips[c], `${name}: ${c}`);
+      assert.ok(clips[c].beats > 0 && clips[c].row + clips[c].frames <= bones.image.height);
+    }
+    // A hand up / headphone slot starts and ends on the mixing pose (no pop when switching).
+    const row = (r) => Array.from(new Uint16Array(bones.image.data.buffer, bones.image.data.byteOffset + r * bones.image.width * 8, bones.image.width * 4));
+    const mix0 = row(clips.djMix.row);
+    for (const c of ['djHand', 'djHeadphone']) assert.deepEqual(row(clips[c].row), mix0, `${name}: ${c} starts like djMix`);
+  }
+});
+
+test('DJ figure: silhouette until the animated mannequin is there, behind the booth', async () => {
+  const THREE = await import('three');
+  const { djFigure, DJ_BEHIND } = await import('../public/js/dj3d.js');
+  const root = new THREE.Group();
+  const animated = [];
+  const dj = djFigure(root, { x: 0, z: -(0.35 + DJ_BEHIND), heading: 0, look: 1, desk: 1.1 }, animated, { quality: 'high', bpm: 124 });
+  assert.equal(animated.length, 1);
+  animated[0](1, {});
+  const box = new THREE.Box3().setFromObject(root);
+  assert.ok(box.max.y > 1.6 && box.max.y < 1.9, `height ${box.max.y}`);
+  assert.ok(box.min.z < -0.6 && box.max.z > -0.15 && box.max.z < 0.1, `hands reach the controller (${box.min.z}..${box.max.z})`);
+  dj.dispose();
+  assert.equal(root.children.length, 0);
+});
+
 test('PBR sets: own repeat per material, stand-ins without the browser', () => {
   const a = pbrSet('parquet', 13, 10);
   const b = pbrSet('parquet', 2, 2);

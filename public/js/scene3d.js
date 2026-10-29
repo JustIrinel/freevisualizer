@@ -13,7 +13,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildVenue } from './venue3d.js';
 import { createFixtureModel, roomUniforms, beamQuality } from './fixtures3d.js';
 import { createPropModel } from './props3d.js';
-import { tripodParams, tripodMount, caseTop } from './prop-layout.js';
+import { tripodParams, tripodMount, caseTop, totemParams, totemMount } from './prop-layout.js';
+import { viewAxes, chooseLockAxis, dragDelta, wheelTurn } from './drag-math.js';
 import { tr } from './i18n.js';
 import { GoboLightManager } from './gobos.js';
 import { qualityPreset, qualityLabels, shadowBudget, floorFinish, DEFAULT_QUALITY } from './quality.js';
@@ -152,6 +153,7 @@ export class Visualizer {
     this.onTransformStart = () => {};
     this.onTransformEnd = () => {};
     this.onGizmoInfo = () => {};   // (text | null) – live position / rotation readout
+    this.onWheelRotate = () => {}; // (degrees) – Alt + mouse wheel over the scene
     this.hoverInfo = () => null;   // (id) → { ids, locked, label } for the hover highlight
     this.lockedIds = new Set();
     this.settings = { haze: 0.5, bloom: 0.9, ambient: 0.25, houseLight: 0.3, workLights: false, lightPower: 1, showLabels: false, snap: true, quality: DEFAULT_QUALITY, showFps: false };
@@ -223,7 +225,18 @@ export class Visualizer {
       }
     });
     this.transform.addEventListener('objectChange', () => this._onGizmoChange());
+    // Only the three arrows / three rings: the plane squares, the centre handle and the
+    // trackball moved things on two axes at once (dragging "right" also went back).
+    const giz = this.transform._gizmo;
+    if (giz) {
+      const strip = (group, names) => { for (const c of [...group.children]) if (names.includes(c.name)) group.remove(c); };
+      for (const set of [giz.gizmo, giz.picker]) {
+        strip(set.translate, ['XY', 'YZ', 'XZ', 'XYZ']);
+        strip(set.rotate, ['XYZE', 'E']);
+      }
+    }
     this.scene.add(this.transform.getHelper());
+    renderer.domElement.addEventListener('wheel', (e) => this._onWheel(e), { capture: true, passive: false });
     this.setSnap(true);
 
     this.hemi = new THREE.HemisphereLight(0xfff1dd, 0x3a3430, 0.25);
@@ -719,13 +732,14 @@ export class Visualizer {
     }
     if (ids.length < this.selectedIds.length) this.onGizmoInfo(tr('🔒 Obiectele blocate rămân pe loc'));
     else this.onGizmoInfo(null);
-    if (ids.length === 1) {
+    if (ids.length === 1 && this.transform.mode === 'rotate') {
       this.transform.attach(this.objects.get(ids[0]).model.root);
     } else {
-      const box = new THREE.Box3();
-      for (const id of ids) box.union(computeBounds(this.objects.get(id).model.root, new THREE.Box3()));
-      box.getCenter(this.pivot.position);
+      // Moving: the arrows follow the camera (left/right on screen, towards/away from you),
+      // so dragging the "right" arrow never slides the object backwards.
+      this._placePivot(ids);
       this.pivot.quaternion.identity();
+      if (this.transform.mode === 'translate') this.pivot.rotation.y = this.cameraYaw();
       this.pivot.scale.set(1, 1, 1);
       this.pivot.updateMatrix();
       this.pivot.updateMatrixWorld(true);
@@ -734,15 +748,53 @@ export class Visualizer {
     this._applySpace();
   }
 
-  /** A single object rotates around its own axes; moving stays aligned with the room. */
+  /** Pivot at the object's origin (one object) or the middle of the group. */
+  _placePivot(ids) {
+    if (ids.length === 1) {
+      this.objects.get(ids[0]).model.root.getWorldPosition(this.pivot.position);
+      return;
+    }
+    const box = new THREE.Box3();
+    for (const id of ids) box.union(computeBounds(this.objects.get(id).model.root, new THREE.Box3()));
+    box.getCenter(this.pivot.position);
+  }
+
+  /**
+   * Camera heading around Y: the pivot's +X then points right on screen and +Z towards
+   * the camera. Within 12° of a room axis it snaps to it, so normal views stay on the grid.
+   */
+  cameraYaw() {
+    const f = new THREE.Vector3();
+    this.camera.getWorldDirection(f);
+    if (f.x * f.x + f.z * f.z < 1e-6) return 0;
+    let yaw = Math.atan2(-f.x, -f.z);
+    const q = Math.PI / 2;
+    const near = Math.round(yaw / q) * q;
+    if (Math.abs(yaw - near) < D2R(12)) yaw = near;
+    return yaw;
+  }
+
+  /** Moving: arrows in the pivot's (camera) frame. Rotating: one object around its own axes, a group around the room's. */
   _applySpace() {
-    this.transform.setSpace(this.transform.mode === 'rotate' && this._movableIds().length === 1 ? 'local' : 'world');
+    const local = this.transform.mode === 'translate' || this._movableIds().length === 1;
+    this.transform.setSpace(local ? 'local' : 'world');
+  }
+
+  /** Every frame while not dragging: the pivot follows the objects (keys, pad) and the camera. */
+  _syncPivot() {
+    if (this.transform.object !== this.pivot || this.transform.dragging) return;
+    const ids = this._movableIds();
+    if (!ids.length) return;
+    if (ids.length === 1 || ids.length <= 12) this._placePivot(ids);
+    if (this.transform.mode === 'translate') this.pivot.rotation.set(0, this.cameraYaw(), 0);
+    this.pivot.updateMatrix();
+    this.pivot.updateMatrixWorld(true);
   }
 
   _onGizmoChange() {
     const ids = this._movableIds();
     if (!ids.length) return;
-    if (ids.length > 1 && this._dragStart) {
+    if (this.transform.object === this.pivot && this._dragStart) {
       // Apply the pivot's change since the drag started to every member.
       this.pivot.updateMatrix();
       const delta = this.pivot.matrix.clone().multiply(this._dragStart.pivot.clone().invert());
@@ -791,7 +843,7 @@ export class Visualizer {
 
   setTransformMode(mode) {
     this.transform.setMode(mode);
-    this._applySpace();
+    this._attachGizmo();
   }
 
   setSnap(on) {
@@ -827,16 +879,24 @@ export class Visualizer {
         return div;
       });
     }
-    const show = this.selectedIds.length && this.transform.object && this.transform.mode === 'translate' && !this._placing;
+    const show = this.selectedIds.length && this.transform.object && !this._placing;
     if (!show) { for (const d of this._hints) d.style.display = 'none'; return; }
-    const origin = this.transform.object.getWorldPosition(new THREE.Vector3());
+    const obj = this.transform.object;
+    const origin = obj.getWorldPosition(new THREE.Vector3());
     const dist = origin.distanceTo(this.camera.position);
     const len = dist * 0.16;
-    const labels = this.hintLabels || { x: tr('⟷ stânga / dreapta'), y: tr('↕ sus / jos'), z: tr('⤢ față / spate') };
+    const rotate = this.transform.mode === 'rotate';
+    const labels = rotate
+      ? { x: '', y: tr('⟳ rotire: trage de cercul verde (sau Alt + rotița)'), z: '' }
+      : this.hintLabels || { x: tr('⟷ stânga / dreapta'), y: tr('↕ sus / jos'), z: tr('⤢ față / spate') };
+    const q = this.transform.space === 'local' ? obj.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
     const w = this.container.clientWidth; const h = this.container.clientHeight;
     ['x', 'y', 'z'].forEach((axis, i) => {
-      const p = origin.clone();
-      p[axis] += len;
+      if (!labels[axis]) { this._hints[i].style.display = 'none'; return; }
+      const dir = new THREE.Vector3(axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, axis === 'z' ? 1 : 0).applyQuaternion(q);
+      // Rotate mode: the label sits beside the horizontal ring, not on the up axis.
+      if (rotate) dir.set(1, 0, 0).applyQuaternion(q).multiplyScalar(1.1);
+      const p = origin.clone().addScaledVector(dir, len);
       p.project(this.camera);
       const div = this._hints[i];
       if (p.z > 1) { div.style.display = 'none'; return; }
@@ -913,7 +973,24 @@ export class Visualizer {
       ray.distanceSqToSegment(new THREE.Vector3(-half, height, 0), new THREE.Vector3(half, height, 0), null, onBar);
       stand = { dist, o, offset: Number.isFinite(onBar.x) ? onBar.x : 0 };
     }
+    // Light totems: anywhere on (or just above) the top plate puts the fixture on it.
+    for (const o of props) {
+      if (o.data.type !== 'totem') continue;
+      const { height, plate } = totemParams(o.data.params);
+      const inv = o.model.root.matrixWorld.clone().invert();
+      const ray = this.raycaster.ray.clone().applyMatrix4(inv);
+      const box = new THREE.Box3(new THREE.Vector3(-plate / 2 - 0.05, height - 0.3, -plate / 2 - 0.05), new THREE.Vector3(plate / 2 + 0.05, height + 0.25, plate / 2 + 0.05));
+      const pt = ray.intersectBox(box, new THREE.Vector3());
+      if (!pt) continue;
+      const dist = pt.clone().applyMatrix4(o.model.root.matrixWorld).distanceTo(this.raycaster.ray.origin);
+      if (stand && dist >= stand.dist) continue;
+      stand = { dist, o, offset: pt.x, totem: true };
+    }
     if (stand && (!hit || stand.dist <= hit.distance + 0.3) && (!best || stand.dist <= best.dist)) {
+      if (stand.totem) {
+        const at = totemMount(stand.o.data, stand.offset);
+        return { surface: 'totem', position: at.position, rotation: at.rotation };
+      }
       const at = tripodMount(stand.o.data, stand.offset, !!(e && e.altKey));
       return { surface: 'stand', position: at.position, rotation: at.rotation };
     }
@@ -963,6 +1040,90 @@ export class Visualizer {
     this.renderer.domElement.style.cursor = '';
   }
 
+  /**
+   * Drag of the selected objects with the mouse: they slide on a horizontal plane and stay
+   * under the cursor (right on screen = right). Shift = only in the direction the move
+   * started, Alt = only up / down. A single fixture dragged over a truss, stand, case or
+   * totem snaps onto it. Locked objects stay put.
+   */
+  _dragObjects(e) {
+    const d = this._objDrag;
+    if (!d.started) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= 4) return;
+      const ids = this._movableIds();
+      if (!ids.length) { this._objDrag = null; this.orbit.enabled = true; return; }
+      d.started = true;
+      d.members = ids.map((id) => ({ id, start: this.objects.get(id).model.root.position.clone(), rot: this.objects.get(id).model.root.rotation.clone() }));
+      d.axes = viewAxes(this.cameraYaw());
+      try { this.renderer.domElement.setPointerCapture(d.pointerId); } catch (_) { /* old browsers */ }
+      this.renderer.domElement.style.cursor = 'grabbing';
+      this._setHover(null);
+      this.onTransformStart(ids);
+    }
+    this.raycaster.setFromCamera(this._ndc(e), this.camera);
+    const ray = this.raycaster.ray;
+    const vertical = e.altKey;
+    let raw = null;
+    if (vertical) {
+      // Plane through the grab point facing the camera (horizontally): only its height is used.
+      const n = new THREE.Vector3();
+      this.camera.getWorldDirection(n);
+      n.y = 0;
+      if (n.lengthSq() < 1e-6) n.set(0, 0, -1);
+      const pt = ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n.normalize(), d.grab), new THREE.Vector3());
+      if (pt) raw = { x: 0, y: pt.y - d.grab.y, z: 0 };
+    } else {
+      const pt = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -d.grab.y), new THREE.Vector3());
+      // Looking almost along the floor the plane point runs away: keep the move within 40 m.
+      if (pt && pt.distanceTo(d.grab) < 40) raw = { x: pt.x - d.grab.x, y: 0, z: pt.z - d.grab.z };
+    }
+    if (!raw) return;
+    if (e.shiftKey && !vertical) d.lock = d.lock || chooseLockAxis(raw, d.axes);
+    else d.lock = null;
+    const delta = dragDelta(raw, { axes: d.axes, lock: d.lock, vertical, snap: this.settings.snap ? 0.05 : 0 });
+    // One fixture over a mounting point: it goes onto it (like placing with the mouse).
+    let mount = null;
+    if (d.members.length === 1 && !vertical && !e.shiftKey && this.objects.get(d.members[0].id)?.type === 'fixture') {
+      const at = this._placementAt(e);
+      if (at && ['truss', 'stand', 'case', 'totem'].includes(at.surface)) mount = at;
+    }
+    for (const m of d.members) {
+      const root = this.objects.get(m.id)?.model.root;
+      if (!root) continue;
+      if (mount) {
+        root.position.set(mount.position.x, mount.position.y, mount.position.z);
+        root.rotation.set(D2R(mount.rotation.x), D2R(mount.rotation.y), D2R(mount.rotation.z), 'YXZ');
+      } else {
+        root.position.set(m.start.x + delta.x, Math.max(0, m.start.y + delta.y), m.start.z + delta.z);
+        if (d.mounted) root.rotation.copy(m.rot);
+      }
+    }
+    d.mounted = !!mount;
+    this._updateSelectionHelpers();
+    const changes = d.members.filter((m) => this.objects.has(m.id)).map((m) => this._readTransform(m.id));
+    this.onTransform(changes);
+    const last = changes[changes.length - 1];
+    if (last) {
+      const f = (v) => v.toFixed(2);
+      this.onGizmoInfo(vertical ? tr('Înălțime {y} m (Alt)', { y: f(last.position.y) })
+        : d.lock ? tr('Doar {dir} (Shift) · X {x} m · Z {z} m', { dir: d.lock === 'right' ? tr('stânga / dreapta') : tr('față / spate'), x: f(last.position.x), z: f(last.position.z) })
+          : tr('X {x} m · Înălțime {y} m · Z {z} m', { x: f(last.position.x), y: f(last.position.y), z: f(last.position.z) }));
+    }
+  }
+
+  /** Alt + mouse wheel turns the selection (Shift = fine steps); the plain wheel still zooms. */
+  _onWheel(e) {
+    if (!e.altKey || !this._movableIds().length || this._placing) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const raw = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    const delta = e.deltaMode === 1 ? raw * 33 : e.deltaMode === 2 ? raw * 400 : raw;
+    const { deg, acc } = wheelTurn(this._wheelAcc || 0, delta, e.shiftKey);
+    this._wheelAcc = acc;
+    // Wheel down / towards you = clockwise seen from above.
+    if (deg) this.onWheelRotate(-deg);
+  }
+
   _ndc(e) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     return new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
@@ -970,6 +1131,18 @@ export class Visualizer {
 
   _onPointerDown(e) {
     this._pointerDown = { x: e.clientX, y: e.clientY };
+    // Press on an object that is already selected: dragging moves it (see _dragObjects).
+    if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey && !this.transform.axis && !this._aim && !this._placing && this._movableIds().length) {
+      this.raycaster.setFromCamera(this._ndc(e), this.camera);
+      const id = this._pickId();
+      if (id && this.selectedIds.includes(id)) {
+        const hit = this.raycaster.intersectObject(this.objects.get(id).model.root, true)[0];
+        const grab = hit ? hit.point.clone() : this.objects.get(id).model.root.getWorldPosition(new THREE.Vector3());
+        this._objDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, grab, started: false };
+        this.orbit.enabled = false; // the camera stays put while an object is dragged
+        return;
+      }
+    }
     if (e.button === 0 && e.shiftKey && !this.transform.axis && !this._aim && !this._placing) {
       // Rectangle selection.
       this.orbit.enabled = false;
@@ -983,6 +1156,7 @@ export class Visualizer {
   }
 
   _onPointerMove(e) {
+    if (this._objDrag) { this._dragObjects(e); return; }
     if (this._placing) { this._updatePlacementGhost(e); return; }
     const m = this._marquee;
     if (!m) {
@@ -1024,6 +1198,19 @@ export class Visualizer {
   }
 
   _onPointerUp(e) {
+    if (this._objDrag) {
+      const d = this._objDrag;
+      this._objDrag = null;
+      this.orbit.enabled = true;
+      this.renderer.domElement.style.cursor = '';
+      try { this.renderer.domElement.releasePointerCapture(d.pointerId); } catch (_) { /* not captured */ }
+      if (d.started) {
+        this._pointerDown = null;
+        this.onGizmoInfo(null);
+        this.onTransformEnd(this.selectedIds);
+        return;
+      }
+    }
     if (this._marquee) {
       const m = this._marquee;
       this._marquee = null;
@@ -1301,6 +1488,7 @@ export class Visualizer {
       o.model.update(time, { dt, globals, emitters });
     }
     if (this.selectedIds.length) this._updateSelectionHelpers();
+    this._syncPivot();
     this._updateAxisHints();
     this._updateLightPool(dt);
     this.ctx.goboLights.update(this.renderer);

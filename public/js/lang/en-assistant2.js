@@ -1,0 +1,22 @@
+// English for the v1.9.1 assistant strings (Romanian key → English): photos, scene tools.
+export default {
+  'Aici merg doar poze (JPEG, PNG, WebP…).': 'Only photos go here (JPEG, PNG, WebP…).',
+  'Maxim o poză pe mesaj.': 'One photo per message at most.',
+  'Maxim {n} poze pe mesaj.': '{n} photos per message at most.',
+  'Nu pot citi poza {name}.': "Can't read the photo {name}.",
+  'Scoate poza': 'Remove the photo',
+  'Recreează în proiect setup-ul din poză (sală, ring, cabină, boxe, lumini), cu aparatele mele.': 'Recreate the setup from the photo in the project (room, dance floor, booth, speakers, lights), with my fixtures.',
+  '📷 Poți trimite și o poză dintr-o sală: refac setup-ul (boxe, lumini, cabină, ring) cu aparatele tale.': '📷 You can also send a photo of a venue: I recreate the setup (speakers, lights, booth, dance floor) with your fixtures.',
+  'Nu există totemuri în scenă. Adaugă unul (add_props, type totem) sau folosește alt surface.': 'There are no totems in the scene. Add one (add_props, type totem) or use another surface.',
+  '📋 Citesc scena': '📋 Reading the scene',
+  '🏛 Schimb sala': '🏛 Changing the room',
+  '🧱 Adaug un element de scenă': '🧱 Adding a stage element',
+  '🧱 Adaug {n} elemente de scenă': '🧱 Adding {n} stage elements',
+  '↔ Modific un element de scenă': '↔ Changing a stage element',
+  '↔ Modific {n} elemente de scenă': '↔ Changing {n} stage elements',
+  '🗑 Șterg un element de scenă': '🗑 Deleting a stage element',
+  '🗑 Șterg {n} elemente de scenă': '🗑 Deleting {n} stage elements',
+  'Adaugă poză dintr-o sală: Claude reface setup-ul (poți și lipi cu Ctrl+V sau trage poza aici)': 'Add a photo of a venue: Claude recreates the setup (you can also paste with Ctrl+V or drag the photo here)',
+  'Ex: Pune 4 BeamZ Panther 60 pe truss, de la adresa 200 – sau trimite o poză din sală': 'E.g. Put 4 BeamZ Panther 60 on the truss, from address 200 – or send a photo of the venue',
+  'Nu găsesc fixturile: {list}. Folosește id-urile din get_scene.': "Can't find the fixtures: {list}. Use the ids from get_scene.",
+};

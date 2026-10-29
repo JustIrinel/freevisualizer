@@ -173,3 +173,50 @@ export function spreadOver(targets, n, lengthOf) {
   }
   return out;
 }
+
+// ------------------------------------------------------------------ light totems
+// Square truss column on a base plate with a top plate for fixtures, optional lycra cover.
+export const TOTEM_DEFAULTS = { height: 2, plate: 0.5, cover: 1 };
+
+export function totemParams(p = {}) {
+  return {
+    height: clamp(Number(p.height) || TOTEM_DEFAULTS.height, 1, 3.5),
+    plate: clamp(Number(p.plate) || TOTEM_DEFAULTS.plate, 0.3, 0.8),
+    cover: clamp(Math.round(Number(p.cover ?? TOTEM_DEFAULTS.cover)), 0, 2),
+  };
+}
+
+/** Height of the top plate's surface (world y). */
+export function totemTop(prop) {
+  return r2(((prop.position && prop.position.y) || 0) + totemParams(prop.params).height);
+}
+
+/** A fixture standing on the top plate, `offset` metres across it (x) from the centre. */
+export function totemMount(prop, offset = 0) {
+  const half = Math.max(0, totemParams(prop.params).plate / 2 - 0.12);
+  const pt = local(prop, clamp(offset, -half, half), 0);
+  return { position: { ...pt, y: totemTop(prop) }, rotation: { x: 0, y: (prop.rotation && prop.rotation.y) || 0, z: 0 } };
+}
+
+// ------------------------------------------------------------------ speaker stands
+// Pole stand (Ø35 mm top hat) with the speaker sitting on it; `height` = speaker bottom.
+export const SPEAKER_SIZES = {
+  10: { width: 0.3, height: 0.5, depth: 0.28 },
+  12: { width: 0.36, height: 0.6, depth: 0.34 },
+  15: { width: 0.44, height: 0.72, depth: 0.4 },
+};
+
+export function speakerStandParams(p = {}) {
+  const size = SPEAKER_SIZES[Number(p.size)] ? Number(p.size) : 12;
+  return {
+    height: clamp(Number(p.height) || 1.8, 1, 2.4),
+    speaker: Number(p.speaker ?? 1) > 0 ? 1 : 0,
+    size,
+    box: SPEAKER_SIZES[size],
+  };
+}
+
+/** Top of the pole (where the speaker sits), world y. */
+export function speakerStandTop(prop) {
+  return r2(((prop.position && prop.position.y) || 0) + speakerStandParams(prop.params).height);
+}
