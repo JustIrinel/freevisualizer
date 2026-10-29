@@ -57,7 +57,7 @@ test('SoundSwitch profiles: channel types, wheel colours, strobe ranges, pixels'
   assert.strictEqual(retro.kind, 'retro');
   assert.strictEqual(retro.pixels, 7);
   assert.deepStrictEqual([retro.channels[0].type, retro.channels[1].type], ['dimmer', 'strobe']);
-  assert.deepStrictEqual([retro.channels[2].type, retro.channels[2].pixel, retro.channels[29].type, retro.channels[29].pixel], ['red', 0, 'white', 6]);
+  assert.deepStrictEqual([retro.channels[2].type, retro.channels[2].pixel, retro.channels[29].type, retro.channels[29].pixel], ['red', 0, 'warmWhite', 6]);
 
   assert.strictEqual(ssProfile(def('Entour'), 2).kind, 'fog');
   assert.strictEqual(ssProfile(def('ZQ01104'), 0).kind, 'par');

@@ -931,7 +931,8 @@ export class Visualizer {
       }
     }
     this.fogLevel = Math.min(1, Math.max(0, this.fogLevel + (fogOut > 0.05 ? dt * 0.25 * fogOut : -dt * 0.02)));
-    const haze = Math.min(1.2, this.settings.haze + this.fogLevel * 0.6);
+    // The hazer adds to the haze set by the slider, but never past the slider's maximum (more washes the picture out).
+    const haze = Math.min(1, this.settings.haze + this.fogLevel * 0.6 * (1 - this.settings.haze * 0.5));
     // Average color of the show: tints low fog and other "lit by the room" effects.
     const show = [0, 0, 0];
     for (const o of this.objects.values()) {
