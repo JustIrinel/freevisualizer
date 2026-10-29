@@ -6,8 +6,6 @@ Rulează ca **aplicație pe Mac** (Apple Silicon și Intel) și pe Windows. Inte
 
 Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: SoundSwitch, rekordbox lighting, QLC+, Lightjams, grandMA onPC etc.
 
-**Licență:** primele **24 de ore sunt gratuite**, cu toate funcțiile. Apoi deblocarea completă costă **10$**, o singură plată, pentru până la **2 calculatoare**. Fără licență, aplicația rămâne în mod limitat: proiectele și editarea merg, dar DMX-ul live, clipurile video și fereastra de prezentare cer activarea (**Ajutor → Licență**).
-
 ## Ce știe să facă
 
 - **Primește DMX live** prin Art-Net (UDP 6454) și sACN (UDP 5568). Răspunde la ArtPoll, așa că SoundSwitch îl găsește ca nod Art-Net cu numele „FreeVisualizer”.
@@ -66,7 +64,7 @@ Funcționează cu orice software care trimite **Art-Net** sau **sACN (E1.31)**: 
 
 ## Instalare pe Mac (recomandat)
 
-1. Descarcă `FreeVisualizer-…-mac.dmg` de pe pagina de download: <https://github.com/JustIrinel/freevisualizer-download/releases/latest>.
+1. Descarcă `FreeVisualizer-…-mac.dmg` de la **Releases** pe GitHub: <https://github.com/JustIrinel/freevisualizer/releases/latest> (logat pe GitHub dacă repo-ul e privat).
 2. Deschide `.dmg`-ul și trage **FreeVisualizer** în **Applications**.
 3. **Prima pornire**. Aplicația nu e semnată cu un cont Apple Developer, așa că macOS o blochează o dată:
    - click dreapta pe FreeVisualizer → **Deschide** → **Deschide**;
@@ -83,14 +81,6 @@ Din meniul **Vizualizare → Fereastră de prezentare** (Cmd+P) deschizi show-ul
 
 Descarcă `FreeVisualizer-…-windows-setup.exe` de pe aceeași pagină și rulează-l. Dacă apare SmartScreen: **Mai multe informații → Rulează oricum**.
 
-## Licență și activare
-
-1. La prima pornire ai **24 de ore** cu toate funcțiile. Bannerul galben din bara de sus arată câte ore mai ai.
-2. Ca să activezi: **Ajutor → Licență** (sau click pe banner). Plătești **10$** cu PayPal sau Revolut, apoi trimiți **codul calculatorului** (FV-XXXX-XXXX-XXXX) cu butonul WhatsApp / email.
-3. Primești o **cheie de licență** (un text care începe cu `FVL1.`). O lipești în același ecran și apeși **Activează**.
-4. O licență merge pe **2 calculatoare**: pentru al doilea trimiți și codul lui și primești încă o cheie. Ți-ai schimbat laptopul? Scrie-ne și mutăm licența.
-
-Cheia e legată de calculator, așa că nu merge pe altul. Reinstalarea aplicației nu șterge activarea.
 
 ## Conectare cu SoundSwitch
 
@@ -201,10 +191,8 @@ Ai două surse pentru show:
 ```
 server/            Node.js: Art-Net, sACN, SSE către browser, proxy OFL, proiecte, modele 3D,
                    asistentul Claude (assistant.js, singura dependență: @anthropic-ai/sdk)
-desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereastră de prezentare,
-                   ecranul generatorului de licențe (license-admin.html, Ctrl/Cmd+Shift+Alt+L)
-server/license.js  trial 24 h, codul calculatorului, verificarea cheilor (Ed25519); license-admin.js = generatorul
-.github/workflows/ build .dmg (universal) + .exe la cerere; Release în freevisualizer-download
+desktop/           aplicația Electron (Mac/Windows): fereastră, meniu, fereastră de prezentare
+.github/workflows/ build .dmg (universal) + .exe la cerere (Actions → Run workflow), cu Release opțional
 public/js/         aplicația (ES modules, Three.js r170 inclus în public/vendor)
   fixture-state.js DMX → culoare/intensitate/pan/tilt (pur, testat)
   ofl-import.js    Open Fixture Library → profil FreeVisualizer (pur, testat)
@@ -226,7 +214,7 @@ test/              teste (npm test)
 - `npm test` rulează testele (parsere Art-Net/sACN, ArtPoll, import OFL, logica DMX).
 - `npm run test-signal` trimite un curcubeu Art-Net către vizualizator, fără SoundSwitch.
 - `npm install && npm run app` pornește aplicația desktop din cod.
-- `npm start` pornește doar serverul + pagina în browser (fără licență, pentru dezvoltare).
+- `npm start` pornește doar serverul + pagina în browser (pentru dezvoltare).
 - `npm run dist:mac` construiește `.dmg`-ul; merge doar pe un Mac, altfel îl face GitHub Actions.
 
 ---
@@ -259,13 +247,8 @@ It runs as a **Mac app** (Apple Silicon and Intel) and on Windows, and works wit
 
 - **Mac:** download `FreeVisualizer-…-mac.dmg` from **Releases**, drag the app to **Applications**. First launch: **right-click → Open → Open** (the app is not signed with an Apple Developer account); on macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**. Allow **Local Network** access when asked.
 - **Windows:** download and run `FreeVisualizer-…-windows-setup.exe`.
-- Downloads: <https://github.com/JustIrinel/freevisualizer-download/releases/latest>
+- Downloads: <https://github.com/JustIrinel/freevisualizer/releases/latest>
 
-### License
-
-The first **24 hours are free** with every feature. After that, a full unlock is **$10**, one-time, for up to **2 computers**. Without a license the app stays in limited mode: projects and editing work, live DMX, video clips and the presentation window need activation.
-
-To activate: **Help → License** (or click the banner) → pay with PayPal or Revolut → send your **computer code** (FV-XXXX-XXXX-XXXX) → paste the **license key** you get back (it starts with `FVL1.`) → **Activate**.
 
 ### Connect SoundSwitch
 
@@ -312,4 +295,4 @@ Everything one message does is undone with a single **Ctrl+Z**. The key stays on
 - **Wrong colors or movement**: the DMX mode (channel count) differs between the profile and SoundSwitch. Check each channel with the “Channel test” faders.
 - **Moving head moves the wrong way**: tick “Invert pan” or “Invert tilt” in the inspector.
 
-© 2026 DJ Matei – toate drepturile rezervate / all rights reserved (vezi `LICENSE`). Three.js, Open Fixture Library, Electron și @anthropic-ai/sdk sunt distribuite sub licența MIT.
+© 2026 DJ Matei – uz personal, toate drepturile rezervate / personal use, all rights reserved (vezi `LICENSE`). Three.js, Open Fixture Library, Electron și @anthropic-ai/sdk sunt distribuite sub licența MIT.

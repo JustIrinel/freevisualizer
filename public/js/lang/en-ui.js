@@ -233,5 +233,4 @@ export default {
   'Am importat o fixtură din SoundSwitch. Mut-o unde e în sala ta.': 'Imported 1 fixture from SoundSwitch. Move it to where it is in your venue.',
   'Am importat {n} fixturi din SoundSwitch. Mută-le unde sunt în sala ta.': 'Imported {n} fixtures from SoundSwitch. Move them to where they are in your venue.',
   'Limba: română / English': 'Language: English / română',
-  'Licență FreeVisualizer': 'FreeVisualizer license',
 };

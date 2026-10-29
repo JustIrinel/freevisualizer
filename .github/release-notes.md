@@ -1,13 +1,11 @@
 Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din rigul tău și vezi show-ul live.
 *English below.*
 
-## Ce e nou în 1.7
+## Ce e nou în 1.8
 
-- **Licență**: primele **24 de ore sunt gratuite**, cu toate funcțiile. Apoi deblocarea completă costă **10$**, o singură plată, pentru până la **2 calculatoare**.
-  - Activarea: **Ajutor → Licență** (sau click pe bannerul din bara de sus) → plătești cu PayPal sau Revolut → trimiți **codul calculatorului** → lipești **cheia** primită.
-  - Fără licență, aplicația merge în **mod limitat**: proiectele, editarea și Demo-ul funcționează, dar DMX-ul live, clipurile video și fereastra de prezentare cer activarea.
-  - Cheia e legată de calculator și rămâne activă și după reinstalare.
-- Mulțumesc tuturor celor care susțin dezvoltarea FreeVisualizer!
+- **Retro-urile hexagonale (7 capete) se aprind din nou**: becurile cu filament și reflectoarele aurii se văd aprinse pe aparat, nu doar lumina de pe podea. Din 1.5 carcasa le acoperea din greșeală.
+- **Audit complet**: am verificat rigul tău din SoundSwitch canal cu canal, toate funcțiile principale și am reparat ce am găsit (detalii în lista de mai jos).
+- Fără perioadă de probă și fără licență: aplicația merge mereu complet.
 
 ## Ce era nou în 1.6
 
@@ -66,14 +64,14 @@ Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din ri
 
 ## Instalare pe Mac
 
-1. Descarcă **`FreeVisualizer-1.7.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
+1. Descarcă **`FreeVisualizer-1.8.0-mac.dmg`** de mai jos, deschide-l și trage FreeVisualizer în **Applications**.
 2. La prima pornire: **click dreapta pe aplicație → Deschide → Deschide**.
    Pe macOS 15 sau mai nou, dacă tot e blocată, mergi la **Setări sistem → Confidențialitate și securitate** și apasă **Deschide oricum**.
 3. Când apare întrebarea despre **Rețea locală**, apasă **Permite**.
 
 ## Instalare pe Windows
 
-Descarcă **`FreeVisualizer-1.7.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
+Descarcă **`FreeVisualizer-1.8.0-windows-setup.exe`** și rulează-l. Dacă apare SmartScreen, alege **Mai multe informații → Rulează oricum**.
 
 ## Conectare cu SoundSwitch
 
@@ -87,12 +85,11 @@ Descarcă **`FreeVisualizer-1.7.0-windows-setup.exe`** și rulează-l. Dacă apa
 
 A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your rig and watch the show live.
 
-### What's new in 1.7
+### What's new in 1.8
 
-- **License**: the first **24 hours are free** with every feature. After that, a full unlock is **$10**, one-time, for up to **2 computers**.
-  - To activate: **Help → License** (or click the banner in the top bar) → pay with PayPal or Revolut → send your **computer code** → paste the **key** you get back.
-  - Without a license the app runs in **limited mode**: projects, editing and the Demo work; live DMX, video clips and the presentation window need activation.
-  - The key is tied to the computer and stays active after reinstalling.
+- **The hexagonal 7-head retro lights glow again**: the filament bulbs and gold reflectors light up on the fixture itself, not just on the floor. Since 1.5 the housing covered them by mistake.
+- **Full audit**: your SoundSwitch rig checked channel by channel and every main feature tested; fixes listed below.
+- No trial and no licence: the app always runs fully unlocked.
 
 ### What was new in 1.6
 
@@ -147,10 +144,10 @@ A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your
 
 ### Install
 
-- **Mac:** download **`FreeVisualizer-1.7.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
+- **Mac:** download **`FreeVisualizer-1.8.0-mac.dmg`**, drag FreeVisualizer to **Applications**.
   - First launch: **right-click → Open → Open**. On macOS 15+, if it is still blocked: **System Settings → Privacy & Security → Open Anyway**.
   - Allow **Local Network** access when asked.
-- **Windows:** run **`FreeVisualizer-1.7.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
+- **Windows:** run **`FreeVisualizer-1.8.0-windows-setup.exe`**. If SmartScreen appears: **More info → Run anyway**.
 
 ### Connect SoundSwitch
 

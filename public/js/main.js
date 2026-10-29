@@ -13,7 +13,6 @@ import { toast, pickFile } from './dom.js';
 import * as ui from './ui.js';
 import * as dialogs from './dialogs.js';
 import { AssistantPanel } from './assistant.js';
-import { LicenseUI } from './license-ui.js';
 import { DmxMonitor } from './dmx-monitor.js';
 import { ClipRecorder } from './recorder.js';
 import { aimRotation } from './aim.js';
@@ -41,7 +40,6 @@ class App {
     this.demoBpm = 126;
     this.recorder = new ClipRecorder(this);
     this.assistant = new AssistantPanel(this);
-    this.license = new LicenseUI(this);
 
     // A click selects the whole group; Alt+click or double-click selects one object.
     this.vis.onPick = (id, { toggle, single }) => {

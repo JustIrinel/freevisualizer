@@ -35,9 +35,8 @@ export function bindStatic(app) {
     fullscreen: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()),
     'hide-ui': () => { document.body.classList.toggle('ui-hidden'); app.vis.resize(); if (document.body.classList.contains('ui-hidden')) toast(tr('Apasă H ca să revii la panouri.')); },
     demo: () => app.toggleDemo(),
-    record: () => app.license.guard('clips', () => recordDialog(app)),
-    license: () => app.license.open(),
-    present: () => app.license.guard('present', () => window.freevisDesktop && window.freevisDesktop.togglePresent()),
+    record: () => recordDialog(app),
+    present: () => window.freevisDesktop && window.freevisDesktop.togglePresent(),
   };
   app.actions = actions;
   document.body.addEventListener('click', (e) => {
@@ -730,19 +729,7 @@ export function updateStatus(app) {
   pill.title = err ? tr('Eroare: {err}', { err }) : tr('Starea intrării DMX');
 
   const showHint = dmx.connected && !dmx.useDemo && !dmx.receiving && app.project.fixtures.length > 0 && performance.now() - app.startedAt > 4000;
-  const box = $('noSignal');
-  if (!box.dataset.html) box.dataset.html = box.innerHTML;
-  box.classList.toggle('hidden', !showHint);
-  // Trial over: the box explains why there is no live DMX instead of pointing at SoundSwitch.
-  const limited = !app.license.allows('dmx');
-  if (showHint && box.dataset.limited !== String(limited)) {
-    box.dataset.limited = String(limited);
-    if (limited) {
-      box.replaceChildren(h('strong', {}, tr('DMX-ul live e oprit: perioada de probă s-a terminat.')),
-        h('span', {}, tr('Activează FreeVisualizer ca să vezi din nou show-ul din SoundSwitch. Demo-ul merge în continuare.')),
-        h('button', { onclick: () => app.license.open() }, tr('Activează')));
-    } else box.innerHTML = box.dataset.html;
-  }
+  $('noSignal').classList.toggle('hidden', !showHint);
 
   // Live color swatches
   document.querySelectorAll('[data-swatch]').forEach((s) => {

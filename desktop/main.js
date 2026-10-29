@@ -2,14 +2,10 @@
 // FreeVisualizer desktop app (macOS / Windows). Runs the same server as
 // `npm start` inside Electron and shows the visualizer in a native window.
 
-const { app, BrowserWindow, Menu, dialog, shell, screen, ipcMain, session, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, screen, ipcMain, session } = require('electron');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const { createApp, ipv4Interfaces } = require('../server/app');
-const { createLicense, deviceCode } = require('../server/license');
-const { createAdminStore, MAX_DEVICES } = require('../server/license-admin');
 
 const isMac = process.platform === 'darwin';
 let server = null;
@@ -17,8 +13,6 @@ let baseUrl = null;
 let mainWindow = null;
 let presentWindow = null;
 let fixtureIdWindow = null;
-let adminWindow = null;
-let license = null;
 
 const FIXTURE_ID_URL = process.env.FREEVIS_FIXTURE_ID_URL || 'https://www.fixture.id/';
 // Downloads from the Fixture.ID window that we import instead of saving.
@@ -78,11 +72,7 @@ const EN = {
   'Portul Art-Net 6454 este ocupat': 'Art-Net port 6454 is in use',
   'Alt program (SoundSwitch pornit înainte, Capture sau alt vizualizator) folosește deja portul. Închide FreeVisualizer și SoundSwitch, pornește întâi FreeVisualizer, apoi SoundSwitch.\n\nDetalii: {err}': 'Another program (SoundSwitch started first, Capture or another visualizer) is already using the port. Quit FreeVisualizer and SoundSwitch, start FreeVisualizer first, then SoundSwitch.\n\nDetails: {err}',
   'FreeVisualizer nu a putut porni': "FreeVisualizer couldn't start",
-  'Licență…': 'License…',
   'Vizualizator 3D pentru SoundSwitch (Art-Net / sACN)': '3D visualizer for SoundSwitch (Art-Net / sACN)',
-  'Generator licențe': 'License generator',
-  'Salvează backup-ul generatorului': 'Save the generator backup',
-  'Alege backup-ul generatorului': 'Choose the generator backup',
 };
 
 const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
@@ -114,107 +104,6 @@ app.on('second-instance', () => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
-});
-
-// ------------------------------------------------------------------ licence
-/** A stable id of this computer (survives reinstalling the app). */
-function machineId() {
-  const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', timeout: 4000, windowsHide: true });
-  try {
-    if (isMac) {
-      const m = /"IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(run('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice']));
-      if (m) return m[1];
-    } else if (process.platform === 'win32') {
-      const m = /MachineGuid\s+REG_SZ\s+(\S+)/i.exec(run('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid']));
-      if (m) return m[1];
-    } else {
-      const id = fs.readFileSync('/etc/machine-id', 'utf8').trim();
-      if (id) return id;
-    }
-  } catch (_) { /* fall back to a stored random id */ }
-  const file = path.join(app.getPath('userData'), '.device-id');
-  try { return fs.readFileSync(file, 'utf8').trim(); } catch (_) { /* first run */ }
-  const id = require('crypto').randomUUID();
-  try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, id); } catch (_) { /* read-only */ }
-  return id;
-}
-
-/** Second copy of the trial start, outside the app's data folder. */
-function trialAltFile() {
-  if (isMac) return path.join(os.homedir(), 'Library', 'Preferences', '.ro.djmatei.freevisualizer.dat');
-  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || os.homedir(), 'FreeVisualizerCache', '.fv.dat');
-  return path.join(os.homedir(), '.config', '.freevisualizer.dat');
-}
-
-function licenseConfig() {
-  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'license-config.json'), 'utf8')); } catch (_) { return {}; }
-}
-
-function setupLicense() {
-  // Test hooks for development only (npm run app); ignored in the installed app.
-  const dev = !app.isPackaged;
-  const shift = dev ? Number(process.env.FREEVIS_CLOCK_SHIFT_H || 0) * 3600000 : 0;
-  license = createLicense({
-    dir: app.getPath('userData'),
-    altFile: dev && process.env.FREEVIS_TRIAL_ALT ? process.env.FREEVIS_TRIAL_ALT : trialAltFile(),
-    device: deviceCode(machineId()),
-    config: licenseConfig(),
-    ...(dev && process.env.FREEVIS_LICENSE_PUBKEY ? { publicKey: fs.readFileSync(process.env.FREEVIS_LICENSE_PUBKEY, 'utf8') } : {}),
-    now: () => Date.now() + shift,
-  });
-  return license;
-}
-
-// License generator (DJ Matei only): opened with Ctrl/Cmd+Shift+Alt+L.
-const adminStore = () => createAdminStore(path.join(app.getPath('userData'), 'license-admin'));
-
-function openAdminWindow() {
-  if (adminWindow && !adminWindow.isDestroyed()) { adminWindow.focus(); return; }
-  adminWindow = new BrowserWindow({
-    width: 1040,
-    height: 800,
-    title: L('Generator licențe'),
-    backgroundColor: '#0e0e14',
-    webPreferences: { preload: path.join(__dirname, 'admin-preload.js'), contextIsolation: true, nodeIntegration: false },
-  });
-  adminWindow.setMenuBarVisibility(false);
-  adminWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  adminWindow.webContents.on('will-navigate', (e) => e.preventDefault());
-  adminWindow.loadFile(path.join(__dirname, 'license-admin.html'));
-  adminWindow.on('closed', () => { adminWindow = null; });
-}
-
-/** Admin IPC answers only the generator window. */
-function adminHandle(channel, fn) {
-  ipcMain.handle(channel, async (e, ...args) => {
-    if (!adminWindow || e.sender !== adminWindow.webContents) return { error: 'denied' };
-    try { return await fn(...args); } catch (err) { return { error: err.message }; }
-  });
-}
-
-adminHandle('admin:status', () => {
-  const st = adminStore();
-  return st.exists() ? { configured: true, publicKey: st.publicKey(), ledger: st.ledger(), max: MAX_DEVICES } : { configured: false };
-});
-adminHandle('admin:setup', () => ({ publicKey: adminStore().setup() }));
-adminHandle('admin:issue', (input) => adminStore().issue(input || {}));
-adminHandle('admin:release', (licenseId, code) => ({ ok: adminStore().release(licenseId, code) }));
-adminHandle('admin:copy', (text) => { clipboard.writeText(String(text || '')); return { ok: true }; });
-adminHandle('admin:backup', async () => {
-  const r = await dialog.showSaveDialog(adminWindow, { title: L('Salvează backup-ul generatorului'), defaultPath: path.join(app.getPath('documents'), 'FreeVisualizer-generator-licente.json') });
-  if (r.canceled || !r.filePath) return {};
-  fs.writeFileSync(r.filePath, adminStore().backup(), { mode: 0o600 });
-  return { ok: true, file: r.filePath };
-});
-adminHandle('admin:restore', async () => {
-  const r = await dialog.showOpenDialog(adminWindow, { title: L('Alege backup-ul generatorului'), properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
-  if (r.canceled || !r.filePaths.length) return {};
-  adminStore().restore(fs.readFileSync(r.filePaths[0], 'utf8'));
-  return { ok: true };
-});
-
-ipcMain.on('open-license-admin', (e) => {
-  if (mainWindow && e.sender === mainWindow.webContents) openAdminWindow();
 });
 
 function sendMenu(action) {
@@ -362,8 +251,6 @@ function openFixtureIdWindow() {
 /** Full-screen view without panels, on the external display when there is one. */
 function togglePresentWindow() {
   if (presentWindow && !presentWindow.isDestroyed()) { presentWindow.close(); return; }
-  // Limited mode (trial over, no key): show the licence screen instead.
-  if (license && !license.allows('present')) { sendMenu('license'); return; }
   const displays = screen.getAllDisplays();
   const primary = screen.getPrimaryDisplay();
   const target = displays.find((d) => d.id !== primary.id) || primary;
@@ -460,9 +347,6 @@ function buildMenu() {
       role: 'help',
       label: L('Ajutor'),
       submenu: [
-        item('Licență…', 'license'),
-        { label: L('Generator licențe'), accelerator: 'CmdOrCtrl+Shift+Alt+L', visible: false, acceleratorWorksWhenHidden: true, click: openAdminWindow },
-        { type: 'separator' },
         item('Conectare SoundSwitch', 'help'),
         { label: L('Fixture.ID (fișiere .d4)'), click: openFixtureIdWindow },
         { label: 'Open Fixture Library', click: () => shell.openExternal('https://open-fixture-library.org') },
@@ -489,7 +373,7 @@ ipcMain.on('set-language', (_e, next) => {
 });
 
 app.whenReady().then(async () => {
-  server = createApp({ dataDir: app.getPath('userData'), port: 8080, license: setupLicense() });
+  server = createApp({ dataDir: app.getPath('userData'), port: 8080 });
   try {
     const { port, stats } = await server.start();
     baseUrl = `http://localhost:${port}`;
