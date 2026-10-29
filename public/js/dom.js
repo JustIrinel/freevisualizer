@@ -101,6 +101,13 @@ export function pickFile(accept = '.json') {
   });
 }
 
+/** File name without diacritics or symbols some browsers refuse in downloads ("Nuntă – clip" → "Nunta - clip"). */
+export function safeFileName(name, fallback = 'freevisualizer') {
+  const s = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[–—]/g, '-')
+    .replace(/[^A-Za-z0-9 _.()-]/g, '').replace(/\s+/g, ' ').trim();
+  return s || fallback;
+}
+
 export function rgbCss(rgb, k = 1) {
   return `rgb(${Math.round(Math.min(1, rgb[0] * k) * 255)},${Math.round(Math.min(1, rgb[1] * k) * 255)},${Math.round(Math.min(1, rgb[2] * k) * 255)})`;
 }

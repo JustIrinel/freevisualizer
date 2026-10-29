@@ -1,6 +1,7 @@
 // Project model: fixtures, props, room, custom profiles and view settings.
 import { uid } from './profiles.js';
 import { tr } from './i18n.js';
+import { safeFileName } from './dom.js';
 import { pruneGroups } from './groups.js';
 import { tripodMount, barSlots } from './prop-layout.js';
 import { aimRotation } from './aim.js';
@@ -216,7 +217,7 @@ export function downloadJson(obj, filename) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.download = safeFileName(filename);
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

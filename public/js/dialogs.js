@@ -465,7 +465,8 @@ export async function profileEditor(app, source) {
   };
   render();
 
-  await openModal(source && source.source !== 'builtin' ? tr('Editează: {name}', { name: source.name }) : tr('Profil nou'), body, [
+  const editName = source && (source.source === 'builtin' ? p.name : source.name);
+  await openModal(source ? tr('Editează: {name}', { name: editName }) : tr('Profil nou'), body, [
     { label: tr('Anulează'), value: null },
     { label: tr('Salvează profilul'), primary: true, onClick: () => {
       if (!p.channels.length) { toast(tr('Profilul trebuie să aibă cel puțin un canal'), 'error'); return false; }
@@ -852,6 +853,7 @@ export async function helpDialog(app) {
       h('li', {}, h('b', {}, tr('Portul 6454 e ocupat: ')), tr('închide alte vizualizatoare / SoundSwitch, pornește FreeVisualizer, apoi SoundSwitch.'))),
     h('h4', {}, tr('Scurtături')),
     h('p', { class: 'small' }, tr('Ctrl/Cmd+click sau Shift+trage = selecție multiplă · Ctrl/Cmd+A toate · W mută · E rotește · săgeți/PageUp/PageDown mută · [ ] rotesc · F centrează pe selecție · Ctrl+D duplică · Del șterge · Ctrl+Z / Ctrl+Y anulează/refă · Ctrl+S salvează · H ascunde panourile (mod prezentare) · D demo · L etichete · 1–6 camere')),
+    h('p', { class: 'small' }, tr('Grupuri și blocare: Ctrl+G grupează · Ctrl+Shift+G desface · Alt+click sau dublu-click = un singur obiect din grup · K blochează / deblochează')),
   );
   await openModal(tr('Conectare SoundSwitch'), content, [{ label: tr('Am înțeles'), primary: true, value: null }]);
 }

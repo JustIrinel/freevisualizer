@@ -95,6 +95,8 @@ export class DmxMonitor {
       const v = buf ? buf[this.hover] : 0;
       const where = m ? `${m.f.name} → ${channelLabel(m.c)} (ch ${m.i + 1})${m.conflict ? ` ${tr('⚠ suprapus')}` : ''}` : tr('nepatchuit');
       this.hoverEl.textContent = `${tr('Canal {ch} = {v}', { ch: this.hover + 1, v })} · ${where}`;
+    } else {
+      this.hoverEl.textContent = tr('Treci cu mouse-ul peste un canal.');
     }
 
     const now = Date.now();

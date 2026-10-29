@@ -1,6 +1,6 @@
 // Records the 3D show as a video clip (MP4 when the browser supports it, WebM
 // otherwise) with the DJ's logo and text on top and optional music.
-import { h, openModal, toast, numberInput, field } from './dom.js';
+import { h, openModal, toast, numberInput, field, safeFileName } from './dom.js';
 import { tr } from './i18n.js';
 
 const BRAND_KEY = 'freevis.brand.v1';
@@ -214,7 +214,7 @@ export class ClipRecorder {
     const name = `${(app.project.name || 'show').replace(/[^\p{L}\p{N} _.-]/gu, '').trim() || 'show'} – clip ${opts.format === 'vertical' ? '9x16' : opts.format === 'square' ? '1x1' : '16x9'}.${mime.ext}`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = name;
+    a.download = safeFileName(name, 'clip');
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);

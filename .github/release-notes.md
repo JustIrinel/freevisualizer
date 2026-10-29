@@ -4,7 +4,17 @@ Vizualizator 3D pentru **SoundSwitch** (Art-Net / sACN): adaugi fixturile din ri
 ## Ce e nou în 1.8
 
 - **Retro-urile hexagonale (7 capete) se aprind din nou**: becurile cu filament și reflectoarele aurii se văd aprinse pe aparat, nu doar lumina de pe podea. Din 1.5 carcasa le acoperea din greșeală.
-- **Audit complet**: am verificat rigul tău din SoundSwitch canal cu canal, toate funcțiile principale și am reparat ce am găsit (detalii în lista de mai jos).
+- **Audit complet**: am verificat rigul tău din SoundSwitch canal cu canal și toate funcțiile principale. Ce am reparat:
+  - **Intimidator Spot LED 250**: gobo-urile și prisma apar acum exact ca la preset-urile tale din SoundSwitch (de exemplu CERC, SPIRALA, PRIMA STATICA);
+  - **UKing ZQ01104**: strobe-ul de pe canalul 5 se vede;
+  - **7 Vintage**: canalul de alb dă alb cald, iar culorile RGB nu mai au întârzierea becului cu filament;
+  - **mai mult de 40 de lumini**: până acum, fixturile de peste limită nu luminau deloc podeaua; acum se aprind cele mai puternice, schimbate de câteva ori pe secundă;
+  - **duplicarea** fixturilor din universuri diferite păstrează fiecare univers;
+  - **proiectele vechi** sau editate de mână se deschid fără poziții sau adrese greșite;
+  - **fumul de la hazer** nu mai albește toată imaginea;
+  - fișierele salvate (clipuri, export proiect) nu mai au probleme cu diacriticele în nume;
+  - monitorul DMX revine la textul inițial când iei mouse-ul de pe canale;
+  - importul din SoundSwitch spune clar ce fișier trebuie ales.
 - Fără perioadă de probă și fără licență: aplicația merge mereu complet.
 
 ## Ce era nou în 1.6
@@ -88,7 +98,15 @@ A 3D visualizer for **SoundSwitch** (Art-Net / sACN): add the fixtures from your
 ### What's new in 1.8
 
 - **The hexagonal 7-head retro lights glow again**: the filament bulbs and gold reflectors light up on the fixture itself, not just on the floor. Since 1.5 the housing covered them by mistake.
-- **Full audit**: your SoundSwitch rig checked channel by channel and every main feature tested; fixes listed below.
+- **Full audit**: your SoundSwitch rig checked channel by channel and every main feature tested. Fixed:
+  - Intimidator Spot LED 250 gobos and prism now match your SoundSwitch presets;
+  - UKing ZQ01104 strobe on channel 5;
+  - 7 Vintage: the white channel is warm white, RGB no longer lags like a filament;
+  - more than 40 lights: the brightest are lit (before, fixtures past the limit never lit the floor);
+  - duplicating fixtures from several universes keeps each universe;
+  - old or hand-edited projects open without wrong positions or addresses;
+  - the hazer can't wash the whole picture out;
+  - saved file names with diacritics; DMX monitor hover text; clearer SoundSwitch import errors.
 - No trial and no licence: the app always runs fully unlocked.
 
 ### What was new in 1.6
