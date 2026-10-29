@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node server/index.js",
     "app": "electron .",
-    "test": "node --test",
+    "test": "node --import ./test/helpers/three-loader.mjs --test",
     "test-signal": "node tools/send-test-artnet.js",
     "dist:mac": "electron-builder --mac --universal --publish never",
     "dist:win": "electron-builder --win --x64 --publish never"

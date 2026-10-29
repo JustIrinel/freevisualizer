@@ -165,7 +165,7 @@ export async function applyModel(model, profile) {
   if (model.disposed) return;
   const root = model.root;
   // Hide the procedural housing (beams, lights and labels stay).
-  root.traverse((o) => { if (o.isMesh && !o.material?.isShaderMaterial) o.visible = false; });
+  root.traverse((o) => { if (o.isMesh && !o.material?.isShaderMaterial && !o.userData.glow) o.visible = false; });
   const saved = model.yoke ? { pan: model.yoke.rotation.y, tilt: model.head.rotation.x } : null;
   if (model.yoke) { model.yoke.rotation.y = 0; model.head.rotation.x = 0; }
   asm.root.traverse((o) => { if (o.isMesh) o.userData.imported = true; });

@@ -522,6 +522,10 @@ class PixelModel extends BaseModel {
 }
 
 // ------------------------------------------------------------------ Retro hexagonal 7 heads
+/** Front face of the retro housing (local y); cups reach down to −0.055, bulbs sit at −0.03. */
+export const RETRO_HOUSING_FRONT = -0.058;
+export const RETRO_BULB_Y = -0.03;
+
 /** Head positions: rows of 2-3-2 (numbered left→right, top→bottom), in the face plane. */
 export function hex7Layout(pitch = 0.17) {
   const h = pitch * Math.sqrt(3) / 2;
@@ -536,13 +540,15 @@ class RetroModel extends BaseModel {
   constructor(fixture, profile, ctx) {
     super(fixture, profile, ctx);
     const pitch = 0.17;
-    // Black hexagonal housing with bevelled edges, gold front rim, U bracket behind.
+    // Black hexagonal housing with bevelled edges behind the reflector cups (its
+    // front face must stay behind the cup bottoms, or it hides the bulbs), a gold
+    // rim around the cups, U bracket behind.
     const body = hexBody(0.285, 0.1);
     body.rotation.y = Math.PI / 6;
-    body.position.y = -0.012;
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.035, 6, 1, true), retroGold());
+    body.position.y = RETRO_HOUSING_FRONT - 0.012;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.075, 6, 1, true), retroGold());
     rim.rotation.y = Math.PI / 6;
-    rim.position.y = -0.005;
+    rim.position.y = -0.022;
     this.root.add(body, rim);
     for (const sx of [-1, 1]) {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.2, 0.04), steel());
@@ -563,13 +569,16 @@ class RetroModel extends BaseModel {
       const cup = reflector(0.074, 0.055, cupMat);
       cup.position.set(x, 0.0, z);
       const bulbGlass = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 14), glass());
-      bulbGlass.position.set(x, -0.03, z);
+      bulbGlass.position.set(x, RETRO_BULB_Y, z);
       const mat = lensMaterial();
       const filament = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.028, 8), mat);
       filament.rotation.z = Math.PI / 2;
-      filament.position.set(x, -0.03, z);
+      filament.position.set(x, RETRO_BULB_Y, z);
       const glow = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), mat);
-      glow.position.set(x, -0.03, z);
+      glow.position.set(x, RETRO_BULB_Y, z);
+      // Stay visible when a 3D model replaces the housing (models3d.applyModel).
+      filament.userData.glow = true;
+      glow.userData.glow = true;
       const beam = new Beam();
       beam.mesh.position.set(x, 0, z);
       this.root.add(cup, bulbGlass, filament, glow, beam.mesh);
